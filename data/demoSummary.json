@@ -1,0 +1,13 @@
+{
+  "totalInvoices": 128,
+  "highRisk": 14,
+  "plnSaved": 27400,
+  "weeklySummary": "Last week we scanned 128 invoices and detected 14 high-risk items. Most issues were related to new bank accounts and duplicate invoice numbers.",
+  "chartData": [
+    { "week": "Mar W1", "low": 18, "medium": 5, "high": 2 },
+    { "week": "Mar W2", "low": 22, "medium": 6, "high": 3 },
+    { "week": "Mar W3", "low": 15, "medium": 4, "high": 4 },
+    { "week": "Mar W4", "low": 20, "medium": 7, "high": 3 },
+    { "week": "Apr W1", "low": 19, "medium": 5, "high": 2 }
+  ]
+}
