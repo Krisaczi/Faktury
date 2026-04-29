@@ -1,24 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
     const { token } = await request.json();
 
-    if (!token || typeof token !== "string" || token.trim().length === 0) {
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
       return NextResponse.json(
-        { valid: false, error: "Token is required" },
-        { status: 400 },
+        { valid: false, error: 'Token is required' },
+        { status: 400 }
       );
     }
 
     const ksefBase =
-      process.env.KSEF_API_BASE_URL ??
-      "https://api.ksef.mf.gov.pl/v2/auth/challenge";
+      process.env.KSEF_API_BASE_URL ?? 'https://ksef.mf.gov.pl/api/v2';
 
     const ksefRes = await fetch(`${ksefBase}/auth/walidujToken`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${token.trim()}`,
       },
       body: JSON.stringify({ token: token.trim() }),
@@ -29,31 +28,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ valid: true });
     }
 
-    const body = await ksefRes.text().catch(() => "");
+    const body = await ksefRes.text().catch(() => '');
     return NextResponse.json(
       {
         valid: false,
         error:
           ksefRes.status === 401
-            ? "Token is invalid or expired"
+            ? 'Token is invalid or expired'
             : `KSeF returned ${ksefRes.status}`,
         detail: body,
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    const isTimeout = message.includes("timeout") || message.includes("abort");
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    const isTimeout = message.includes('timeout') || message.includes('abort');
 
     return NextResponse.json(
       {
         valid: false,
         error: isTimeout
-          ? "KSeF did not respond in time — please try again"
-          : "Could not reach KSeF API",
+          ? 'KSeF did not respond in time — please try again'
+          : 'Could not reach KSeF API',
         detail: message,
       },
-      { status: 200 },
+      { status: 200 }
     );
   }
 }
