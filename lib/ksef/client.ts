@@ -19,7 +19,8 @@ import type {
 } from "./types";
 
 const DEFAULT_BASE_URL =
-  process.env.KSEF_API_BASE_URL ?? "https://ksef.mf.gov.pl/api/v2";
+  process.env.KSEF_API_BASE_URL ??
+  "https://api.ksef.mf.gov.pl/v2/auth/challenge";
 
 const SESSION_POLL_INTERVAL_MS = 1_000;
 const SESSION_POLL_MAX_ATTEMPTS = 20;

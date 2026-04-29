@@ -12,7 +12,8 @@ export async function POST(request: Request) {
     }
 
     const ksefBase =
-      process.env.KSEF_API_BASE_URL ?? "https://ksef.mf.gov.pl/api/v2";
+      process.env.KSEF_API_BASE_URL ??
+      "https://api.ksef.mf.gov.pl/v2/auth/challenge";
 
     const ksefRes = await fetch(`${ksefBase}/auth/walidujToken`, {
       method: "POST",
