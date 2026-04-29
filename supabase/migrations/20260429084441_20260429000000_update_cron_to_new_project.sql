@@ -15,7 +15,7 @@ SELECT cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://vnjtyfchataaqkgqumwt.supabase.co/functions/v1/weekly-summary-email',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuanR5ZmNoYXRhYXFrZ3F1bXd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyOTE3NTYsImV4cCI6MjA5MTg2Nzc1Nn0.9g8_bXf4rL97Z9kMapA9KUcpuaLvpqcthAxhsh0kPnI"}'::jsonb,
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuZnRocXhsZ2xsc3p5eWhmc252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NDM0MTksImV4cCI6MjA5MzAxOTQxOX0.-CaCPRj00_KX4a4HtZJXZL71VtWkKVfgWMsPteNo7m8"}'::jsonb,
     body := '{}'::jsonb
   )
   $$

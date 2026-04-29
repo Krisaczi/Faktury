@@ -18,6 +18,14 @@ async function fetchPublicKey(baseUrl: string): Promise<string> {
     );
   }
 
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    const preview = (await res.text()).slice(0, 120).trim();
+    throw new KSeFEncryptionError(
+      `KSeF public key endpoint returned non-JSON response (${contentType || 'unknown content-type'}): ${preview}`
+    );
+  }
+
   const data = (await res.json()) as KSeFPublicKeyResponse;
   if (!data?.publicKey) {
     throw new KSeFEncryptionError('KSeF public key response was empty or malformed');
