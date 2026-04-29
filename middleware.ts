@@ -66,7 +66,9 @@ export async function middleware(request: NextRequest) {
       return supabaseResponse;
     }
 
-    const needsOnboarding = !userRecord?.onboarded || !userRecord?.company_id;
+    const needsOnboarding =
+      userRecord?.role !== 'admin' &&
+      (!userRecord?.onboarded || !userRecord?.company_id);
 
     if (needsOnboarding && !pathname.startsWith('/onboarding')) {
       const url = request.nextUrl.clone();
