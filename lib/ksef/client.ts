@@ -1,5 +1,5 @@
-import { encryptTokenForKSeF } from './crypto';
-import { getInvoiceMetadata as parseXML } from './parser';
+import { encryptTokenForKSeF } from "./crypto";
+import { getInvoiceMetadata as parseXML } from "./parser";
 import {
   KSeFError,
   KSeFNetworkError,
@@ -7,7 +7,7 @@ import {
   KSeFSessionTimeoutError,
   KSeFNotFoundError,
   classifyHttpError,
-} from './errors';
+} from "./errors";
 import type {
   KSeFSession,
   KSeFInitTokenResponse,
@@ -16,10 +16,10 @@ import type {
   KSeFInvoiceListResponse,
   KSeFFilteredListRequest,
   KSeFInvoiceMetadata,
-} from './types';
+} from "./types";
 
 const DEFAULT_BASE_URL =
-  process.env.KSEF_API_BASE_URL ?? 'https://ksef-test.mf.gov.pl/api';
+  process.env.KSEF_API_BASE_URL ?? "https://ksef.mf.gov.pl/api/v2";
 
 const SESSION_POLL_INTERVAL_MS = 1_000;
 const SESSION_POLL_MAX_ATTEMPTS = 20;
@@ -28,7 +28,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 async function ksefFetch(
   url: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -38,8 +38,10 @@ async function ksefFetch(
     return res;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('abort') || msg.includes('timeout')) {
-      throw new KSeFNetworkError(`Request to ${url} timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    if (msg.includes("abort") || msg.includes("timeout")) {
+      throw new KSeFNetworkError(
+        `Request to ${url} timed out after ${REQUEST_TIMEOUT_MS}ms`,
+      );
     }
     throw new KSeFNetworkError(msg);
   } finally {
@@ -49,24 +51,24 @@ async function ksefFetch(
 
 async function assertOk(res: Response): Promise<void> {
   if (res.ok) return;
-  const body = await res.text().catch(() => '');
+  const body = await res.text().catch(() => "");
   throw classifyHttpError(res.status, body);
 }
 
 async function pollForSession(
   referenceNumber: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<string> {
   for (let attempt = 0; attempt < SESSION_POLL_MAX_ATTEMPTS; attempt++) {
     await new Promise((r) => setTimeout(r, SESSION_POLL_INTERVAL_MS));
 
     const res = await ksefFetch(
       `${baseUrl}/online/Auth/Status/${referenceNumber}`,
-      { method: 'GET' }
+      { method: "GET" },
     );
 
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
+      const body = await res.text().catch(() => "");
       throw classifyHttpError(res.status, body);
     }
 
@@ -87,52 +89,53 @@ async function pollForSession(
 
 async function terminateSession(
   sessionToken: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<void> {
   try {
     await ksefFetch(`${baseUrl}/online/Auth/Terminate`, {
-      method: 'GET',
+      method: "GET",
       headers: { SessionToken: sessionToken },
     });
-  } catch {
-  }
+  } catch {}
 }
 
 export async function authenticateWithToken(
   token: string,
   nip: string,
-  baseUrl: string = DEFAULT_BASE_URL
+  baseUrl: string = DEFAULT_BASE_URL,
 ): Promise<KSeFSession> {
   if (!token?.trim()) {
-    throw new KSeFError('Token must not be empty', 'INVALID_TOKEN');
+    throw new KSeFError("Token must not be empty", "INVALID_TOKEN");
   }
   if (!nip?.trim()) {
-    throw new KSeFError('NIP must not be empty', 'INVALID_TOKEN');
+    throw new KSeFError("NIP must not be empty", "INVALID_TOKEN");
   }
 
   const encryptedToken = await encryptTokenForKSeF(token, baseUrl);
 
   const res = await ksefFetch(`${baseUrl}/online/Auth/InitToken`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contextIdentifier: {
-        type: 'onip',
-        identifier: nip.replace(/[^0-9]/g, ''),
+        type: "onip",
+        identifier: nip.replace(/[^0-9]/g, ""),
       },
       token: encryptedToken,
     }),
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
+    const body = await res.text().catch(() => "");
     throw classifyHttpError(res.status, body);
   }
 
   const initData = (await res.json()) as KSeFInitTokenResponse;
 
   if (!initData?.referenceNumber) {
-    throw new KSeFSessionInitError('InitToken response missing referenceNumber');
+    throw new KSeFSessionInitError(
+      "InitToken response missing referenceNumber",
+    );
   }
 
   const sessionToken = await pollForSession(initData.referenceNumber, baseUrl);
@@ -151,14 +154,14 @@ export async function listInvoices(
   nip: string,
   options: {
     baseUrl?: string;
-    subjectType?: 'subject1' | 'subject2' | 'subject3';
+    subjectType?: "subject1" | "subject2" | "subject3";
     pageSize?: number;
     pageOffset?: number;
-  } = {}
+  } = {},
 ): Promise<KSeFInvoiceHeader[]> {
   const {
     baseUrl = DEFAULT_BASE_URL,
-    subjectType = 'subject1',
+    subjectType = "subject1",
     pageSize = 100,
     pageOffset = 0,
   } = options;
@@ -177,13 +180,13 @@ export async function listInvoices(
     const res = await ksefFetch(
       `${baseUrl}/online/Invoice/GetFilteredList?PageSize=${pageSize}&PageOffset=${pageOffset}`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           SessionToken: sessionToken,
         },
         body: JSON.stringify(body),
-      }
+      },
     );
 
     await assertOk(res);
@@ -199,10 +202,10 @@ export async function downloadInvoiceXML(
   token: string,
   referenceNumber: string,
   nip: string,
-  baseUrl: string = DEFAULT_BASE_URL
+  baseUrl: string = DEFAULT_BASE_URL,
 ): Promise<string> {
   if (!referenceNumber?.trim()) {
-    throw new KSeFError('referenceNumber must not be empty', 'NOT_FOUND');
+    throw new KSeFError("referenceNumber must not be empty", "NOT_FOUND");
   }
 
   const { sessionToken } = await authenticateWithToken(token, nip, baseUrl);
@@ -211,9 +214,9 @@ export async function downloadInvoiceXML(
     const res = await ksefFetch(
       `${baseUrl}/online/Invoice/Get/${encodeURIComponent(referenceNumber.trim())}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: { SessionToken: sessionToken },
-      }
+      },
     );
 
     if (res.status === 404) {
@@ -222,9 +225,9 @@ export async function downloadInvoiceXML(
 
     await assertOk(res);
 
-    const contentType = res.headers.get('content-type') ?? '';
+    const contentType = res.headers.get("content-type") ?? "";
 
-    if (contentType.includes('zip') || contentType.includes('octet-stream')) {
+    if (contentType.includes("zip") || contentType.includes("octet-stream")) {
       const buffer = await res.arrayBuffer();
       return await extractXMLFromZip(buffer);
     }
@@ -241,22 +244,22 @@ async function extractXMLFromZip(buffer: ArrayBuffer): Promise<string> {
   const isZip = PK_SIG.every((b, i) => bytes[i] === b);
 
   if (!isZip) {
-    return new TextDecoder('utf-8').decode(bytes);
+    return new TextDecoder("utf-8").decode(bytes);
   }
 
-  const text = new TextDecoder('latin1').decode(bytes);
-  const xmlStart = text.indexOf('<?xml');
-  const xmlAlt = text.indexOf('<Faktura');
+  const text = new TextDecoder("latin1").decode(bytes);
+  const xmlStart = text.indexOf("<?xml");
+  const xmlAlt = text.indexOf("<Faktura");
 
   const start = xmlStart !== -1 ? xmlStart : xmlAlt;
   if (start === -1) {
     throw new KSeFError(
-      'Could not locate XML content inside the ZIP archive returned by KSeF',
-      'PARSE_ERROR'
+      "Could not locate XML content inside the ZIP archive returned by KSeF",
+      "PARSE_ERROR",
     );
   }
 
-  return new TextDecoder('utf-8').decode(bytes.slice(start));
+  return new TextDecoder("utf-8").decode(bytes.slice(start));
 }
 
 export function getInvoiceMetadata(xml: string): KSeFInvoiceMetadata {
@@ -268,13 +271,11 @@ export class KSeFClient {
   private readonly nip: string;
   private readonly baseUrl: string;
 
-  constructor(config: {
-    token: string;
-    nip: string;
-    baseUrl?: string;
-  }) {
-    if (!config.token?.trim()) throw new KSeFError('token is required', 'INVALID_TOKEN');
-    if (!config.nip?.trim()) throw new KSeFError('nip is required', 'INVALID_TOKEN');
+  constructor(config: { token: string; nip: string; baseUrl?: string }) {
+    if (!config.token?.trim())
+      throw new KSeFError("token is required", "INVALID_TOKEN");
+    if (!config.nip?.trim())
+      throw new KSeFError("nip is required", "INVALID_TOKEN");
     this.token = config.token;
     this.nip = config.nip;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
@@ -288,10 +289,10 @@ export class KSeFClient {
     fromDate: string,
     toDate: string,
     options: {
-      subjectType?: 'subject1' | 'subject2' | 'subject3';
+      subjectType?: "subject1" | "subject2" | "subject3";
       pageSize?: number;
       pageOffset?: number;
-    } = {}
+    } = {},
   ): Promise<KSeFInvoiceHeader[]> {
     return listInvoices(this.token, fromDate, toDate, this.nip, {
       baseUrl: this.baseUrl,
@@ -300,7 +301,12 @@ export class KSeFClient {
   }
 
   async downloadInvoiceXML(referenceNumber: string): Promise<string> {
-    return downloadInvoiceXML(this.token, referenceNumber, this.nip, this.baseUrl);
+    return downloadInvoiceXML(
+      this.token,
+      referenceNumber,
+      this.nip,
+      this.baseUrl,
+    );
   }
 
   getInvoiceMetadata(xml: string): KSeFInvoiceMetadata {
