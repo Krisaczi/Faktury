@@ -83,9 +83,9 @@ export function useVendorProfile(id: string | null) {
         .order('issue_date', { ascending: false, nullsFirst: false }),
     ]);
 
-    if (vendorRes.error) throw vendorRes.error;
+    if (vendorRes.error) throw new Error(vendorRes.error.message ?? 'Failed to fetch vendor');
     if (!vendorRes.data) throw new Error('Vendor not found');
-    if (invoicesRes.error) throw invoicesRes.error;
+    if (invoicesRes.error) throw new Error(invoicesRes.error.message ?? 'Failed to fetch invoices');
 
     const invoices = (invoicesRes.data ?? []) as VendorInvoice[];
     const stats = computeStats(invoices);
