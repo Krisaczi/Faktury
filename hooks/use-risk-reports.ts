@@ -11,7 +11,7 @@ export function useRiskReports() {
       .select('*, vendors(name)')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? 'Failed to fetch risk reports');
     return data as (RiskReport & { vendors: { name: string } | null })[];
   };
 

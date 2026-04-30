@@ -50,7 +50,7 @@ export function useInvoiceDetail(id: string | null) {
       .eq('id', id!)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? 'Failed to fetch invoice');
     if (!data) throw new Error('Invoice not found');
     return data as InvoiceDetail;
   };

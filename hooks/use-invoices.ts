@@ -46,7 +46,7 @@ export function useInvoices() {
       .eq('company_id', companyId)
       .order('issue_date', { ascending: false, nullsFirst: false });
 
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? 'Failed to fetch invoices');
     return (data ?? []) as CompanyInvoice[];
   };
 

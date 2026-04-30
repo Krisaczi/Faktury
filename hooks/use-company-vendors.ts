@@ -37,7 +37,7 @@ export function useCompanyVendors() {
       .eq('company_id', companyId)
       .order('name', { ascending: true });
 
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? 'Failed to fetch vendors');
     return (data ?? []) as CompanyVendor[];
   };
 
