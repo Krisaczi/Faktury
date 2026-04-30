@@ -126,6 +126,12 @@ export function OnboardingForm() {
     setError('');
 
     try {
+      // Ensure the session is fresh before making authenticated requests
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session) {
+        throw new Error('Your session has expired. Please log in again.');
+      }
+
       const now = new Date();
       const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -138,7 +144,7 @@ export function OnboardingForm() {
           trial_start: now.toISOString(),
           trial_end: trialEnd.toISOString(),
           is_trial_active: true,
-          subscription_status: 'trial',
+          subscription_status: 'trialing',
         })
         .select('id')
         .single();
