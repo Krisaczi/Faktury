@@ -548,7 +548,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         token:        token.trim(),
         environment:  env,
         updated_at:   new Date().toISOString(),
-      }, { onConflict: 'company_id' });
+      }, { onConflict: 'company_id,environment' });
       if (upsertError) throw upsertError;
       setSaved(true);
       setToken('');
