@@ -235,10 +235,20 @@ export function useUpload() {
     setKsefLoading(true);
     setKsefError(null);
     try {
+      const supabase = getClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!userRecord?.company_id) throw new Error('No company found for your account');
+
       const res = await fetch('/api/ksef/fetch-invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ since }),
+        body: JSON.stringify({ companyId: userRecord.company_id, since }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'KSeF fetch failed');
