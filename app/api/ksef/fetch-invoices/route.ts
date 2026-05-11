@@ -29,10 +29,20 @@ async function getMfPublicKey(baseUrl: string): Promise<{ publicKeyId: string; p
   if (!res.ok) throw new Error(`Failed to fetch MF public keys (${res.status})`);
   const certs: KsefPublicKeyCert[] = await res.json();
   if (!certs.length) throw new Error('No MF public key certificates returned');
-  // Use the first valid cert
   const cert = certs[0];
   const derBuffer = Buffer.from(cert.certificate, 'base64');
-  const publicKey = crypto.createPublicKey({ key: derBuffer, format: 'der', type: 'spki' });
+  // The certificate field is a full X.509 DER certificate, not a raw SPKI blob.
+  // createPublicKey accepts DER X.509 certs directly.
+  let publicKey: crypto.KeyObject;
+  try {
+    // The certificate field is a base64-encoded full X.509 DER certificate.
+    // Wrap as PEM so Node.js can extract the public key from it.
+    const pem = `-----BEGIN CERTIFICATE-----\n${cert.certificate.match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----`;
+    publicKey = crypto.createPublicKey(pem);
+  } catch {
+    // Fall back to treating as raw SPKI blob
+    publicKey = crypto.createPublicKey({ key: derBuffer, format: 'der', type: 'spki' });
+  }
   return { publicKeyId: cert.publicKeyId, publicKey };
 }
 

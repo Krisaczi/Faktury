@@ -93,7 +93,7 @@ function ParseSummaryCard({ jobId }: { jobId: string }) {
               <InlineLoader size="sm" className="text-blue-500" />
             )}
             <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">
-              {isComplete ? 'Parse complete' : 'Parsing…'}
+              {job.status === 'failed' ? 'Fetch failed' : isComplete ? 'Parse complete' : 'Parsing…'}
             </CardTitle>
           </div>
           {open ? (
@@ -121,38 +121,47 @@ function ParseSummaryCard({ jobId }: { jobId: string }) {
 
       {open && isComplete && (
         <CardContent className="pt-0 animate-fade-in">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            {[
-              { label: 'Invoices created', value: r.invoicesCreated ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
-              { label: 'Risk flags',       value: r.flagsCreated ?? 0,   color: 'text-amber-600 dark:text-amber-400' },
-              {
-                label: 'Errors',
-                value: r.errorCount ?? 0,
-                color: (r.errorCount ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400',
-              },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="text-center p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                <p className={cn('text-2xl font-bold tabular', color)}>{value}</p>
-                <p className="text-xs text-slate-500 mt-0.5 leading-tight">{label}</p>
-              </div>
-            ))}
-          </div>
-
-          {hasErrors && r.errors && r.errors.length > 0 && (
-            <div className="space-y-1.5 mt-2">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Parsing errors:</p>
-              <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-red-100 dark:border-red-900/30">
-                {r.errors.map((e, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 px-3 py-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-                    <span className="text-red-700 dark:text-red-300 leading-snug">
-                      {e.context && <span className="font-mono text-red-500 mr-1">[{e.context}]</span>}
-                      {e.message}
-                    </span>
+          {job.status === 'failed' && r.error ? (
+            <div className="flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/30 px-3 py-2.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+              <span className="text-red-700 dark:text-red-300 leading-snug font-mono break-all">{r.error}</span>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                {[
+                  { label: 'Invoices created', value: r.invoicesCreated ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
+                  { label: 'Risk flags',       value: r.flagsCreated ?? 0,   color: 'text-amber-600 dark:text-amber-400' },
+                  {
+                    label: 'Errors',
+                    value: r.errorCount ?? 0,
+                    color: (r.errorCount ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400',
+                  },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="text-center p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <p className={cn('text-2xl font-bold tabular', color)}>{value}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-tight">{label}</p>
                   </div>
                 ))}
               </div>
-            </div>
+
+              {hasErrors && r.errors && r.errors.length > 0 && (
+                <div className="space-y-1.5 mt-2">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Parsing errors:</p>
+                  <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-red-100 dark:border-red-900/30">
+                    {r.errors.map((e, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                        <span className="text-red-700 dark:text-red-300 leading-snug">
+                          {e.context && <span className="font-mono text-red-500 mr-1">[{e.context}]</span>}
+                          {e.message}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       )}
