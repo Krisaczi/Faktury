@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 
-// KSeF test environment base URL
 const KSEF_TEST_URL = 'https://ksef-test.mf.gov.pl/api';
 const KSEF_PROD_URL = 'https://ksef.mf.gov.pl/api';
 
@@ -23,7 +22,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
     }
 
-    // Verify the caller belongs to this company
     const { data: userRecord, error: userError } = await supabase
       .from('users')
       .select('company_id, role')
@@ -34,7 +32,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Fetch company NIP
     const { data: company, error: companyError } = await supabase
       .from('companies')
       .select('nip, currency')
@@ -42,10 +39,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (companyError || !company?.nip) {
-      return NextResponse.json({ error: 'Company NIP not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Company NIP not found. Please set your NIP in Settings.' }, { status: 404 });
     }
 
-    // Fetch KSeF credentials (owner-only access enforced by RLS)
     const { data: creds, error: credsError } = await supabase
       .from('ksef_credentials')
       .select('token, environment')
@@ -64,7 +60,6 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = creds.environment === 'prod' ? KSEF_PROD_URL : KSEF_TEST_URL;
 
-    // Create an upload session for this KSeF fetch
     const sessionId = crypto.randomUUID();
     const storagePath = `companies/${companyId}/uploads/${sessionId}`;
 
@@ -85,7 +80,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create upload session' }, { status: 500 });
     }
 
-    // Create a parse job to track progress
     const { data: job, error: jobError } = await supabase
       .from('parse_jobs')
       .insert({
@@ -100,11 +94,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
     }
 
-    // Fire KSeF fetch in background
     fetchFromKSeF({
       supabase,
       baseUrl,
-      token: creds.token,
+      ksefToken: creds.token,
       nip: company.nip,
       companyId,
       sessionId,
@@ -125,10 +118,90 @@ export async function POST(req: NextRequest) {
   }
 }
 
+async function initKsefSession(baseUrl: string, nip: string, ksefToken: string): Promise<string> {
+  // Step 1: Get challenge
+  const challengeRes = await fetch(`${baseUrl}/online/Session/AuthorisationChallenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ contextIdentifier: { type: 'onip', identifier: nip } }),
+  });
+
+  if (!challengeRes.ok) {
+    const text = await challengeRes.text();
+    throw new Error(`KSeF AuthorisationChallenge failed (${challengeRes.status}): ${text.slice(0, 300)}`);
+  }
+
+  const challengeData = await challengeRes.json();
+  const challenge: string = challengeData.challenge;
+  const timestamp: string = challengeData.timestamp;
+
+  // Step 2: Init session with token
+  // The token value combined with the timestamp is sent as the session token.
+  // KSeF test environment accepts direct token auth via InitToken endpoint.
+  const tokenRequestXml = buildInitTokenXml(nip, ksefToken, challenge, timestamp);
+
+  const initRes = await fetch(`${baseUrl}/online/Session/InitToken`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      Accept: 'application/json',
+    },
+    body: tokenRequestXml,
+  });
+
+  if (!initRes.ok) {
+    const text = await initRes.text();
+    throw new Error(`KSeF InitToken failed (${initRes.status}): ${text.slice(0, 300)}`);
+  }
+
+  const initData = await initRes.json();
+  const sessionToken: string = initData.sessionToken?.token ?? initData.sessionToken;
+  if (!sessionToken) {
+    throw new Error(`KSeF InitToken returned no session token: ${JSON.stringify(initData).slice(0, 200)}`);
+  }
+  return sessionToken;
+}
+
+function buildInitTokenXml(nip: string, token: string, challenge: string, timestamp: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ns3:InitSessionTokenRequest
+  xmlns="http://ksef.mf.gov.pl/schema/gtw/svc/online/types/2021/10/01/0001"
+  xmlns:ns2="http://ksef.mf.gov.pl/schema/gtw/svc/types/2021/10/01/0001"
+  xmlns:ns3="http://ksef.mf.gov.pl/schema/gtw/svc/online/auth/request/2021/10/01/0001">
+  <ns3:Context>
+    <ns2:Challenge>${challenge}</ns2:Challenge>
+    <ns2:Identifier xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="ns2:SubjectIdentifierByCompanyType">
+      <ns2:Identifier>${nip}</ns2:Identifier>
+    </ns2:Identifier>
+    <ns2:DocumentType>
+      <ns2:Service>KSeF</ns2:Service>
+      <ns2:FormCode>
+        <ns2:SystemCode>FA (2)</ns2:SystemCode>
+        <ns2:SchemaVersion>1-0E</ns2:SchemaVersion>
+        <ns2:TargetNamespace>http://crd.gov.pl/wzor/2023/06/29/12648/</ns2:TargetNamespace>
+        <ns2:Value>FA</ns2:Value>
+      </ns2:FormCode>
+    </ns2:DocumentType>
+    <ns3:Token>${token}</ns3:Token>
+  </ns3:Context>
+</ns3:InitSessionTokenRequest>`;
+}
+
+async function terminateKsefSession(baseUrl: string, sessionToken: string): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/online/Session/Terminate`, {
+      method: 'GET',
+      headers: { Accept: 'application/json', SessionToken: sessionToken },
+    });
+  } catch {
+    // Best-effort — don't fail the whole job over this
+  }
+}
+
 async function fetchFromKSeF({
   supabase,
   baseUrl,
-  token,
+  ksefToken,
   nip,
   companyId,
   sessionId,
@@ -138,7 +211,7 @@ async function fetchFromKSeF({
 }: {
   supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>;
   baseUrl: string;
-  token: string;
+  ksefToken: string;
   nip: string;
   companyId: string;
   sessionId: string;
@@ -146,94 +219,85 @@ async function fetchFromKSeF({
   storagePath: string;
   since?: string;
 }) {
+  let sessionToken: string | null = null;
+
   try {
-    await supabase.from('parse_jobs').update({ progress: 10 }).eq('id', jobId);
+    await supabase.from('parse_jobs').update({ progress: 5 }).eq('id', jobId);
 
-    // Step 1: Authenticate with KSeF
-    const authBody = {
-      contextIdentifier: { type: 'onip', identifier: nip },
-      contextName: { type: 'service', serviceName: 'KSeF' },
-    };
+    // Authenticate and get KSeF session token
+    sessionToken = await initKsefSession(baseUrl, nip, ksefToken);
 
-    const authResponse = await fetch(`${baseUrl}/online/Session/AuthorisationChallenge`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(authBody),
-    });
+    await supabase.from('parse_jobs').update({ progress: 20 }).eq('id', jobId);
 
-    if (!authResponse.ok) {
-      const errText = await authResponse.text();
-      throw new Error(`KSeF auth failed (${authResponse.status}): ${errText.slice(0, 200)}`);
-    }
+    // Build date range — default to last 90 days if no since provided
+    const dateTo = new Date();
+    const dateFrom = since ? new Date(since) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-    await supabase.from('parse_jobs').update({ progress: 30 }).eq('id', jobId);
+    const dateFromStr = dateFrom.toISOString().replace(/\.\d{3}Z$/, '+00:00');
+    const dateToStr = dateTo.toISOString().replace(/\.\d{3}Z$/, '+00:00');
 
-    // Step 2: Query invoices
-    const queryParams = new URLSearchParams({
-      pageSize: '100',
-      pageOffset: '0',
-    });
-    if (since) queryParams.set('dateFrom', since);
-
-    const invoicesResponse = await fetch(
-      `${baseUrl}/online/Invoice/Query/Invoice/Sync?${queryParams}`,
+    // Query Podmiot2 (purchase invoices) — correct endpoint and body
+    const queryRes = await fetch(
+      `${baseUrl}/online/Query/Invoice/Sync?PageSize=100&PageOffset=0`,
       {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
+          SessionToken: sessionToken,
         },
+        body: JSON.stringify({
+          queryCriteria: {
+            subjectType: 'subject2',
+            type: 'incremental',
+            acquisitionTimestampThresholdFrom: dateFromStr,
+            acquisitionTimestampThresholdTo: dateToStr,
+          },
+        }),
       }
     );
 
-    if (!invoicesResponse.ok) {
-      const errText = await invoicesResponse.text();
-      throw new Error(`KSeF query failed (${invoicesResponse.status}): ${errText.slice(0, 200)}`);
+    if (!queryRes.ok) {
+      const text = await queryRes.text();
+      throw new Error(`KSeF query failed (${queryRes.status}): ${text.slice(0, 300)}`);
     }
 
-    const invoicesData = await invoicesResponse.json();
-    const invoiceRefs = invoicesData.invoiceHeaderList ?? [];
+    const queryData = await queryRes.json();
+    const invoiceRefs: Array<{ ksefReferenceNumber: string }> =
+      queryData.invoiceHeaderList ?? queryData.invoiceHeaderList ?? [];
 
-    await supabase.from('parse_jobs').update({ progress: 50 }).eq('id', jobId);
+    await supabase.from('parse_jobs').update({ progress: 40 }).eq('id', jobId);
 
     let invoicesCreated = 0;
     let flagsCreated = 0;
     let errorCount = 0;
     const errors: { message: string; context?: string }[] = [];
 
-    // Step 3: Download and store each XML invoice
     for (let i = 0; i < invoiceRefs.length; i++) {
       const ref = invoiceRefs[i];
       const ksefId = ref.ksefReferenceNumber ?? `invoice-${i}`;
 
       try {
-        const xmlResponse = await fetch(`${baseUrl}/online/Invoice/Get/${ksefId}`, {
+        const xmlRes = await fetch(`${baseUrl}/online/Invoice/Get/${ksefId}`, {
           headers: {
             Accept: 'application/octet-stream',
-            Authorization: `Bearer ${token}`,
+            SessionToken: sessionToken,
           },
         });
 
-        if (!xmlResponse.ok) {
+        if (!xmlRes.ok) {
           errorCount++;
-          errors.push({ message: `Failed to fetch invoice ${ksefId}`, context: ksefId });
+          errors.push({ message: `Failed to fetch invoice ${ksefId} (${xmlRes.status})`, context: ksefId });
           continue;
         }
 
-        const xmlContent = await xmlResponse.text();
+        const xmlContent = await xmlRes.text();
         const filename = `${ksefId}.xml`;
         const filePath = `${storagePath}/${filename}`;
 
-        // Store XML in Supabase Storage
         const { error: storageError } = await supabase.storage
           .from('invoices')
-          .upload(filePath, xmlContent, {
-            contentType: 'application/xml',
-            upsert: true,
-          });
+          .upload(filePath, xmlContent, { contentType: 'application/xml', upsert: true });
 
         if (storageError) {
           errorCount++;
@@ -241,12 +305,10 @@ async function fetchFromKSeF({
           continue;
         }
 
-        // Get public/signed URL
         const { data: urlData } = await supabase.storage
           .from('invoices')
           .createSignedUrl(filePath, 3600);
 
-        // Parse and ingest the XML via inline parse
         const { parseXmlInvoices } = await import('@/lib/parsers/xml-invoice-parser');
         const parseResult = await parseXmlInvoices(xmlContent);
 
@@ -275,7 +337,6 @@ async function fetchFromKSeF({
           if (!invError && invoice) {
             invoicesCreated++;
 
-            // Risk flags
             if (!inv.sellerNip) {
               const { error: fe } = await supabase.from('risk_flags').insert({
                 invoice_id: invoice.id,
@@ -303,8 +364,7 @@ async function fetchFromKSeF({
         });
       }
 
-      // Update progress proportionally
-      const progress = 50 + Math.round(((i + 1) / invoiceRefs.length) * 45);
+      const progress = 40 + Math.round(((i + 1) / invoiceRefs.length) * 55);
       await supabase.from('parse_jobs').update({ progress }).eq('id', jobId);
     }
 
@@ -324,6 +384,7 @@ async function fetchFromKSeF({
     }).eq('id', jobId);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[ksef/fetch-invoices] fetchFromKSeF error:', message);
     await supabase.from('parse_jobs').update({
       status: 'failed',
       result: { error: message } as unknown as never,
@@ -332,5 +393,9 @@ async function fetchFromKSeF({
       status: 'failed',
       error_detail: [{ message }] as unknown as never,
     }).eq('id', sessionId);
+  } finally {
+    if (sessionToken) {
+      await terminateKsefSession(baseUrl, sessionToken);
+    }
   }
 }
