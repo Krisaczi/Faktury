@@ -24,7 +24,8 @@ const onboardingSchema = z.object({
   companyName: z.string().min(2, 'Company name must be at least 2 characters'),
   nip: z
     .string()
-    .regex(/^\d{10}$/, 'NIP must be exactly 10 digits'),
+    .regex(/^\d{10}$/, 'NIP must be exactly 10 digits')
+    .or(z.literal('')),
   currency: z.enum(['PLN', 'EUR', 'USD', 'GBP']),
 });
 
@@ -85,7 +86,7 @@ export default function OnboardingPage() {
       .from('companies')
       .insert({
         name: data.companyName,
-        nip: data.nip,
+        nip: data.nip || null,
         currency: data.currency,
         ingestion_email: ingestionEmail,
         subscription_status: 'trial',
@@ -171,7 +172,7 @@ export default function OnboardingPage() {
             {/* NIP */}
             <div className="space-y-1.5">
               <Label htmlFor="nip" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                NIP (Tax ID)
+                NIP (Tax ID) <span className="text-slate-400 font-normal">— optional</span>
               </Label>
               <Input
                 id="nip"

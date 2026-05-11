@@ -23,7 +23,7 @@ export type Database = {
         Insert: {
           id?: string;
           name: string;
-          nip: string;
+          nip?: string | null;
           currency?: string;
           ingestion_email?: string | null;
           subscription_status?: string;
