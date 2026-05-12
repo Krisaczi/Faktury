@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import type { Database } from '@/types/database';
 import crypto from 'crypto';
+
+function getServiceClient(): SupabaseClient<Database> {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 const KSEF_TEST_URL = 'https://api-test.ksef.mf.gov.pl/v2';
 const KSEF_PROD_URL = 'https://api.ksef.mf.gov.pl/v2';
@@ -218,7 +228,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use service client for privileged reads — user ownership already verified above
-    const service = getSupabaseServiceClient();
+    const service = getServiceClient();
 
     const { data: company } = await service
       .from('companies').select('nip, currency').eq('id', companyId).maybeSingle();
@@ -256,8 +266,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
   } catch (err) {
-    console.error('[ksef/fetch-invoices]', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[ksef/fetch-invoices]', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -266,7 +277,7 @@ export async function POST(req: NextRequest) {
 async function runKsefFetch({
   supabase, baseUrl, ksefToken, nip, companyId, sessionId, jobId, storagePath, since,
 }: {
-  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>;
+  supabase: SupabaseClient<Database>;
   baseUrl: string;
   ksefToken: string;
   nip: string;
