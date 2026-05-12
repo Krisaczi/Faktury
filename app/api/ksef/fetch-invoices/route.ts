@@ -16,7 +16,8 @@ interface KsefChallenge {
 interface KsefPublicKeyCert {
   certificateId: string;
   publicKeyId: string;
-  certificate: string; // base64 DER
+  certificate: string; // base64 DER X.509
+  usage?: string;
 }
 
 interface KsefAuthInitResponse {
@@ -24,26 +25,25 @@ interface KsefAuthInitResponse {
   authenticationToken: { token: string; validUntil: string };
 }
 
+function certToPublicKey(cert: KsefPublicKeyCert): crypto.KeyObject {
+  // KSeF returns full X.509 DER certificates — wrap in PEM envelope to let Node extract the public key
+  const pem = `-----BEGIN CERTIFICATE-----\n${cert.certificate.match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----`;
+  return crypto.createPublicKey(pem);
+}
+
 async function getMfPublicKey(baseUrl: string): Promise<{ publicKeyId: string; publicKey: crypto.KeyObject }> {
   const res = await fetch(`${baseUrl}/security/public-key-certificates`);
-  if (!res.ok) throw new Error(`Failed to fetch MF public keys (${res.status})`);
+  if (!res.ok) throw new Error(`Failed to fetch MF public keys (${res.status}): ${await res.text()}`);
   const certs: KsefPublicKeyCert[] = await res.json();
   if (!certs.length) throw new Error('No MF public key certificates returned');
-  const cert = certs[0];
-  const derBuffer = Buffer.from(cert.certificate, 'base64');
-  // The certificate field is a full X.509 DER certificate, not a raw SPKI blob.
-  // createPublicKey accepts DER X.509 certs directly.
-  let publicKey: crypto.KeyObject;
-  try {
-    // The certificate field is a base64-encoded full X.509 DER certificate.
-    // Wrap as PEM so Node.js can extract the public key from it.
-    const pem = `-----BEGIN CERTIFICATE-----\n${cert.certificate.match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----`;
-    publicKey = crypto.createPublicKey(pem);
-  } catch {
-    // Fall back to treating as raw SPKI blob
-    publicKey = crypto.createPublicKey({ key: derBuffer, format: 'der', type: 'spki' });
-  }
-  return { publicKeyId: cert.publicKeyId, publicKey };
+
+  // Must use the KsefTokenEncryption cert — not the SymmetricKeyEncryption one
+  const tokenCert =
+    certs.find((c) => c.usage?.toLowerCase().includes('token')) ??
+    certs.find((c) => !c.usage?.toLowerCase().includes('symmetric')) ??
+    certs[0];
+
+  return { publicKeyId: tokenCert.publicKeyId, publicKey: certToPublicKey(tokenCert) };
 }
 
 async function getChallenge(baseUrl: string): Promise<KsefChallenge> {
@@ -97,15 +97,21 @@ async function pollAuthStatus(
     const res = await fetch(`${baseUrl}/auth/${referenceNumber}`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
-    if (!res.ok) throw new Error(`KSeF auth status poll failed (${res.status})`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`KSeF auth status poll failed (${res.status}): ${text.slice(0, 200)}`);
+    }
     const data = await res.json();
     const code: number = data.status?.code ?? 0;
     if (code === 200) return;
     if (code !== 100) {
-      throw new Error(`KSeF authentication failed with status ${code}: ${data.status?.description ?? ''}`);
+      const details = data.status?.details?.length
+        ? ` Details: ${JSON.stringify(data.status.details)}`
+        : '';
+      throw new Error(`KSeF authentication failed (status ${code}): ${data.status?.description ?? ''}${details}`);
     }
   }
-  throw new Error('KSeF authentication timed out');
+  throw new Error('KSeF authentication timed out after 30s');
 }
 
 async function redeemAccessToken(
