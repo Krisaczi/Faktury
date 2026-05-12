@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
 
 const KSEF_TEST_URL = 'https://api-test.ksef.mf.gov.pl/v2';
@@ -217,13 +217,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { data: company } = await supabase
+    // Use service client for privileged reads — user ownership already verified above
+    const service = getSupabaseServiceClient();
+
+    const { data: company } = await service
       .from('companies').select('nip, currency').eq('id', companyId).maybeSingle();
     if (!company?.nip) {
       return NextResponse.json({ error: 'Company NIP not found. Please set your NIP in Settings.' }, { status: 404 });
     }
 
-    const { data: creds } = await supabase
+    const { data: creds } = await service
       .from('ksef_credentials').select('token, environment').eq('company_id', companyId).maybeSingle();
     if (!creds?.token) {
       return NextResponse.json(
@@ -236,19 +239,19 @@ export async function POST(req: NextRequest) {
     const sessionId = crypto.randomUUID();
     const storagePath = `companies/${companyId}/uploads/${sessionId}`;
 
-    const { data: session, error: sessionError } = await supabase
+    const { data: session, error: sessionError } = await service
       .from('upload_sessions')
       .insert({ id: sessionId, company_id: companyId, user_id: user.id, source: 'ksef', status: 'processing', storage_path: storagePath })
       .select('id').single();
     if (sessionError || !session) return NextResponse.json({ error: 'Failed to create upload session' }, { status: 500 });
 
-    const { data: job, error: jobError } = await supabase
+    const { data: job, error: jobError } = await service
       .from('parse_jobs')
       .insert({ upload_session_id: sessionId, status: 'processing', progress: 0 })
       .select('id').single();
     if (jobError || !job) return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
 
-    runKsefFetch({ supabase, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
+    runKsefFetch({ supabase: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
       .catch((err) => console.error('[ksef/fetch-invoices] background error', err));
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
