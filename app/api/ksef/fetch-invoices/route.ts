@@ -38,9 +38,11 @@ async function getMfPublicKey(baseUrl: string): Promise<{ publicKeyId: string; p
   if (!certs.length) throw new Error('No MF public key certificates returned');
 
   // Must use the KsefTokenEncryption cert — not the SymmetricKeyEncryption one
+  // usage may be a string, an object, or missing — stringify defensively
+  const usageStr = (c: KsefPublicKeyCert) => JSON.stringify(c.usage ?? '').toLowerCase();
   const tokenCert =
-    certs.find((c) => c.usage?.toLowerCase().includes('token')) ??
-    certs.find((c) => !c.usage?.toLowerCase().includes('symmetric')) ??
+    certs.find((c) => usageStr(c).includes('token')) ??
+    certs.find((c) => !usageStr(c).includes('symmetric')) ??
     certs[0];
 
   return { publicKeyId: tokenCert.publicKeyId, publicKey: certToPublicKey(tokenCert) };
