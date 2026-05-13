@@ -310,11 +310,17 @@ async function runKsefFetch({
     const accessToken = await getKsefAccessToken(baseUrl, nip, ksefToken);
     await supabase.from('parse_jobs').update({ progress: 25 }).eq('id', jobId);
 
-    // Date range — max 3 months per KSeF v2 limit; default last 90 days
-    const dateTo = new Date().toISOString();
-    const dateFrom = since
-      ? new Date(since).toISOString()
-      : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    // KSeF v2 requires YYYY-MM-DD dates and rejects ranges > 3 calendar months.
+    // We cap at 89 days to stay safely within the limit.
+    const MAX_DAYS = 89;
+    const toDate = new Date();
+    const rawFrom = since ? new Date(since) : new Date(Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000);
+    // If caller supplied a since older than MAX_DAYS, clamp it
+    const minFrom = new Date(Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000);
+    const fromDate = rawFrom < minFrom ? minFrom : rawFrom;
+    const toISO   = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateTo   = toISO(toDate);
+    const dateFrom = toISO(fromDate);
 
     // Paginate through all invoice metadata
     const allInvoices: KsefInvoiceMeta[] = [];
