@@ -241,8 +241,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Company NIP not found. Please set your NIP in Settings.' }, { status: 404 });
     }
 
-    const { data: creds } = await service
+    const { data: creds, error: credsError } = await service
       .from('ksef_credentials').select('token, environment').eq('company_id', companyId).maybeSingle();
+    if (credsError) {
+      console.error('[ksef/fetch-invoices] creds query error:', credsError);
+      return NextResponse.json(
+        { error: `KSeF credentials query failed: ${credsError.message}`, code: 'KSEF_CREDENTIALS_QUERY_ERROR' },
+        { status: 500 }
+      );
+    }
     if (!creds?.token) {
       return NextResponse.json(
         { error: 'KSeF credentials not configured. Please add your KSeF API token in Settings.', code: 'KSEF_CREDENTIALS_MISSING' },

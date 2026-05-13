@@ -532,6 +532,23 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [existing, setExisting] = useState<{ environment: string; updated_at: string } | null | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data: userRecord } = await supabase
+        .from('users').select('company_id').eq('id', user.id).maybeSingle();
+      if (!userRecord?.company_id) return;
+      const { data } = await supabase
+        .from('ksef_credentials')
+        .select('environment, updated_at')
+        .eq('company_id', userRecord.company_id)
+        .maybeSingle();
+      setExisting(data ?? null);
+      if (data?.environment) setEnv(data.environment as 'test' | 'prod');
+    });
+  }, [supabase]);
 
   async function handleSave() {
     if (!token.trim()) return;
@@ -543,15 +560,17 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
       const { data: userRecord } = await supabase
         .from('users').select('company_id').eq('id', user.id).maybeSingle();
       if (!userRecord?.company_id) throw new Error('No company');
+      const now = new Date().toISOString();
       const { error: upsertError } = await supabase.from('ksef_credentials').upsert({
         company_id:   userRecord.company_id,
         token:        token.trim(),
         environment:  env,
-        updated_at:   new Date().toISOString(),
+        updated_at:   now,
       }, { onConflict: 'company_id,environment' });
       if (upsertError) throw upsertError;
       setSaved(true);
       setToken('');
+      setExisting({ environment: env, updated_at: now });
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -570,6 +589,24 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         <CardDescription>Connect to Krajowy System e-Faktur to fetch invoices automatically.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Current token status */}
+        {existing !== undefined && (
+          <div className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border',
+            existing
+              ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+              : 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
+          )}>
+            {existing ? (
+              <><CheckCircle className="w-4 h-4 shrink-0" />
+              Token configured &mdash; <span className="font-medium capitalize">{existing.environment}</span> environment
+              {existing.updated_at && <span className="text-xs opacity-70 ml-auto">{fmt(existing.updated_at)}</span>}</>
+            ) : (
+              <><AlertTriangle className="w-4 h-4 shrink-0" />No token saved &mdash; enter one below to enable KSeF sync</>
+            )}
+          </div>
+        )}
+
         {saved && (
           <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
             <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -600,17 +637,17 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="ksef-token">API Token</Label>
+          <Label htmlFor="ksef-token">{existing ? 'Replace Token' : 'API Token'}</Label>
           <Input
             id="ksef-token"
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder="Paste your KSeF API token"
+            placeholder={existing ? 'Paste new token to replace existing' : 'Paste your KSeF API token'}
             disabled={!isAdmin}
             className="font-mono text-sm"
           />
-          <p className="text-xs text-slate-400">Token is encrypted at rest and never exposed to the browser.</p>
+          <p className="text-xs text-slate-400">Token is stored server-side and never returned to the browser.</p>
         </div>
 
         {isAdmin && (
@@ -620,7 +657,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
             className="bg-blue-600 hover:bg-blue-700 text-white"
             size="sm"
           >
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : 'Save Token'}
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : (existing ? 'Replace Token' : 'Save Token')}
           </Button>
         )}
       </CardContent>
