@@ -242,7 +242,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: creds, error: credsError } = await service
-      .from('ksef_credentials').select('token, environment').eq('company_id', companyId).maybeSingle();
+      .from('ksef_credentials').select('token, environment')
+      .eq('company_id', companyId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (credsError) {
       console.error('[ksef/fetch-invoices] creds query error:', credsError);
       return NextResponse.json(
