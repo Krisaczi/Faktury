@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 import crypto from 'crypto';
 
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
       .select('id').single();
     if (jobError || !job) return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
 
-    runKsefFetch({ supabase: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
+    runKsefFetch({ supabase: service, storage: getSupabaseServiceClient(), baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
       .catch((err) => console.error('[ksef/fetch-invoices] background error', err));
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
@@ -291,9 +291,10 @@ export async function POST(req: NextRequest) {
 // ─── Background fetch ──────────────────────────────────────────────────────────
 
 async function runKsefFetch({
-  supabase, baseUrl, ksefToken, nip, companyId, sessionId, jobId, storagePath, since,
+  supabase, storage, baseUrl, ksefToken, nip, companyId, sessionId, jobId, storagePath, since,
 }: {
   supabase: SupabaseClient<Database>;
+  storage: SupabaseClient<Database>;
   baseUrl: string;
   ksefToken: string;
   nip: string;
@@ -349,17 +350,17 @@ async function runKsefFetch({
         const filename = `${ksefId}.xml`;
         const filePath = `${storagePath}/${filename}`;
 
-        const { error: storageError } = await supabase.storage
+        const { error: storageError } = await storage.storage
           .from('invoices')
           .upload(filePath, xmlContent, { contentType: 'application/xml', upsert: true });
 
         if (storageError) {
           errorCount++;
-          errors.push({ message: `Storage upload failed for ${ksefId}`, context: ksefId });
+          errors.push({ message: `Storage upload failed for ${ksefId}: ${storageError.message}`, context: ksefId });
           continue;
         }
 
-        const { data: urlData } = await supabase.storage.from('invoices').createSignedUrl(filePath, 3600);
+        const { data: urlData } = await storage.storage.from('invoices').createSignedUrl(filePath, 3600);
 
         const { parseXmlInvoices } = await import('@/lib/parsers/xml-invoice-parser');
         const parseResult = await parseXmlInvoices(xmlContent);
