@@ -4,12 +4,14 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 import crypto from 'crypto';
 
-function getServiceClient(): SupabaseClient<Database> {
-  return createClient<Database>(
+function getAuthedClient(accessToken: string): SupabaseClient<Database> {
+  const client = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
   );
+  client.auth.setSession({ access_token: accessToken, refresh_token: '' });
+  return client;
 }
 
 const KSEF_TEST_URL = 'https://api-test.ksef.mf.gov.pl/v2';
@@ -214,21 +216,23 @@ async function downloadInvoiceXml(
 export async function POST(req: NextRequest) {
   try {
     const supabase = await getSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const authSession = sessionData.session;
+    if (!authSession) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = authSession.user;
 
     const body = await req.json();
     const { companyId, since } = body as { companyId: string; since?: string };
     if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
 
-    const { data: userRecord, error: userError } = await supabase
+    // Build a client with the user's JWT explicitly set so RLS works correctly in API routes
+    const service = getAuthedClient(authSession.access_token);
+
+    const { data: userRecord, error: userError } = await service
       .from('users').select('company_id').eq('id', user.id).maybeSingle();
     if (userError || userRecord?.company_id !== companyId) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-
-    // Use service client for privileged reads — user ownership already verified above
-    const service = getServiceClient();
 
     const { data: company } = await service
       .from('companies').select('nip, currency').eq('id', companyId).maybeSingle();
