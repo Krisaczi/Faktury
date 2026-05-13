@@ -5,13 +5,14 @@ import type { Database } from '@/types/database';
 import crypto from 'crypto';
 
 function getAuthedClient(accessToken: string): SupabaseClient<Database> {
-  const client = createClient<Database>(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } }
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    }
   );
-  client.auth.setSession({ access_token: accessToken, refresh_token: '' });
-  return client;
 }
 
 const KSEF_TEST_URL = 'https://api-test.ksef.mf.gov.pl/v2';
