@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 import crypto from 'crypto';
 
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
       .select('id').single();
     if (jobError || !job) return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
 
-    runKsefFetch({ supabase: service, storage: getSupabaseServiceClient(), baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
+    runKsefFetch({ supabase: service, storage: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
       .catch((err) => console.error('[ksef/fetch-invoices] background error', err));
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
