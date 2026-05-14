@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/upload', label: 'Upload', icon: Upload },
+  { href: '/invoice', label: 'Invoices', icon: FileText },
   { href: '/risk-report', label: 'Risk Report', icon: FileBarChart2 },
   { href: '/vendors', label: 'Vendors', icon: Building2 },
   { href: '/settings', label: 'Settings', icon: Settings },
