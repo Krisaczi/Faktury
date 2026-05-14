@@ -369,23 +369,23 @@ export default function RiskReportPage() {
                   className="text-sm border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                 />
               </div>
-              <Select value={vendorInput} onValueChange={setVendorInput}>
+              <Select value={vendorInput || 'all'} onValueChange={(v) => setVendorInput(v === 'all' ? '' : v)}>
                 <SelectTrigger className="w-44 h-8 text-sm border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder="All vendors" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All vendors</SelectItem>
+                  <SelectItem value="all">All vendors</SelectItem>
                   {(filterOpts?.vendors ?? []).map((v) => (
                     <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={riskInput} onValueChange={setRiskInput}>
+              <Select value={riskInput || 'all'} onValueChange={(v) => setRiskInput(v === 'all' ? '' : v)}>
                 <SelectTrigger className="w-36 h-8 text-sm border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder="All risk levels" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All levels</SelectItem>
+                  <SelectItem value="all">All levels</SelectItem>
                   {['high', 'medium', 'low', 'critical'].map((r) => (
                     <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
                   ))}
