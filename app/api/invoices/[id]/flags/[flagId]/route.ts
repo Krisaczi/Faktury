@@ -38,17 +38,17 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { status } = body as { status: 'acknowledged' | 'dismissed' | 'open' };
+    const { status } = body as { status: 'acknowledged' | 'dismissed' | 'open' | 'escalated' };
 
-    if (!status || !['acknowledged', 'dismissed', 'open'].includes(status)) {
+    if (!status || !['acknowledged', 'dismissed', 'open', 'escalated'].includes(status)) {
       return NextResponse.json(
-        { error: 'status must be acknowledged, dismissed, or open' },
+        { error: 'status must be acknowledged, dismissed, open, or escalated' },
         { status: 400 }
       );
     }
 
     type FlagUpdate = {
-      status: 'open' | 'acknowledged' | 'dismissed';
+      status: 'open' | 'acknowledged' | 'dismissed' | 'escalated';
       acknowledged_by?: string | null;
       acknowledged_at?: string | null;
     };
@@ -77,7 +77,7 @@ export async function PATCH(
       company_id: userRecord.company_id,
       user_id: user.id,
       invoice_id: params.id,
-      action: status === 'acknowledged' ? 'flag_acknowledged' : status === 'dismissed' ? 'flag_dismissed' : 'flag_reopened',
+      action: status === 'acknowledged' ? 'flag_acknowledged' : status === 'dismissed' ? 'flag_dismissed' : status === 'escalated' ? 'flag_escalated' : 'flag_reopened',
       metadata: { flag_id: params.flagId },
     });
 
