@@ -139,10 +139,12 @@ export function useUpload() {
           const filePath = `${storagePath}/${uf.file.name}`;
 
           // Use XMLHttpRequest for progress tracking
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('Not authenticated');
+
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-            const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
             xhr.upload.addEventListener('progress', (e) => {
               if (e.lengthComputable) {
@@ -168,9 +170,9 @@ export function useUpload() {
 
             xhr.open(
               'POST',
-              `${supabaseUrl}/storage/v1/object/${encodeURIComponent('invoices/' + filePath)}`
+              `${supabaseUrl}/storage/v1/object/invoices/${filePath}`
             );
-            xhr.setRequestHeader('Authorization', `Bearer ${supabaseKey}`);
+            xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
             xhr.setRequestHeader('x-upsert', 'true');
             xhr.send(uf.file);
           });
