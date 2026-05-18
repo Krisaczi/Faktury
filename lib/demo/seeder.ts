@@ -151,10 +151,10 @@ export async function seedDemoSession(opts: {
         status:        v.risk_base > 50 ? 'under_review' : 'active',
         nip:           `${Math.floor(1000000000 + rng() * 8999999999)}`,
         contact_email: `contact@${v.name.toLowerCase().replace(/[^a-z]/g, '')}.pl`,
-        // bank_accounts is text[] — store as serialized JSON strings
         bank_accounts: [
           JSON.stringify({ iban: `PL${Math.floor(10 + rng() * 89)}${Math.floor(10000000000000000 + rng() * 89999999999999999)}`, currency: 'PLN' }),
         ],
+        notes: null,
       }))
     )
     .select('id');
@@ -181,10 +181,12 @@ export async function seedDemoSession(opts: {
       issue_date:     isoDate(issueDate),
       due_date:       isoDate(dueDate),
       amount,
+      total_amount:   amount,
       currency:       pickRandom(currencies, rng),
       overall_risk:   riskLevels[riskIdx],
+      seller_nip:     riskIdx === 2 && rng() < 0.3 ? null : `${Math.floor(1000000000 + rng() * 8999999999)}`,
       bank_account:   `PL${Math.floor(10 + rng() * 89)}XXXX`,
-      file_url:       null,
+      raw_file_url:   null,
     };
   });
 
@@ -249,12 +251,6 @@ export async function seedDemoSession(opts: {
     .from('companies')
     .update({ demo_session_id: demoSessionId })
     .eq('id', companyId);
-
-  // ── 9. Create billing_metadata row (trial) ─────────────────────────────────
-  await db.from('billing_metadata').upsert(
-    { company_id: companyId, plan_name: 'Demo', status: 'trial' },
-    { onConflict: 'company_id' }
-  );
 
   return {
     demoSessionId,
