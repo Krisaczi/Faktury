@@ -21,6 +21,7 @@ function StatSkeleton() {
 
 export function HomepageStatsSection() {
   const { stats, isLoading } = useHomepageStats();
+  const showSkeleton = isLoading || !stats;
 
   return (
     <section
@@ -28,16 +29,11 @@ export function HomepageStatsSection() {
       aria-label="Platform statistics"
     >
       <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-2 sm:grid-cols-4 gap-8">
-        {isLoading
+        {showSkeleton
           ? STAT_META.map(({ key }) => <StatSkeleton key={key} />)
           : STAT_META.map(({ key, label }) => (
               <div key={key} className="text-center">
-                <p
-                  className={cn(
-                    'text-3xl font-bold text-slate-900 dark:text-white tabular-nums',
-                    'transition-opacity duration-300'
-                  )}
-                >
+                <p className={cn('text-3xl font-bold text-slate-900 dark:text-white tabular-nums')}>
                   {stats[key]}
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{label}</p>

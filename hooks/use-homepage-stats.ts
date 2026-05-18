@@ -15,12 +15,6 @@ export interface HomepageStats {
   flagged_invoices_count: number;
 }
 
-const FALLBACK: HomepageStats = {
-  total_companies: 500,
-  total_vendors: 2_000_000,
-  avg_report_time_minutes: 1.5,
-  flagged_invoices_count: 0,
-};
 
 function formatCompanies(n: number): string {
   if (n >= 1000) return `${Math.floor(n / 1000)}k+`;
@@ -76,15 +70,13 @@ export function useHomepageStats() {
     fetchStats,
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60 * 60 * 1000, // 1 hour
-      refreshInterval:  60 * 60 * 1000, // re-fetch every hour
+      dedupingInterval: 30 * 60 * 1000,
+      refreshInterval:  60 * 60 * 1000,
     }
   );
 
-  const stats = format(data ?? FALLBACK);
-
   return {
-    stats,
+    stats: data ? format(data) : null,
     isLoading,
     isError: !!error,
   };
