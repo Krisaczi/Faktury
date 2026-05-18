@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Shield, CircleCheck as CheckCircle, TrendingUp, Building2, ChartBar as FileBarChart2, Upload, ArrowRight, Star, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { HomepageStatsSection } from '@/components/homepage/stats-section';
 
 const features = [
   {
@@ -36,12 +37,6 @@ const features = [
   },
 ];
 
-const stats = [
-  { value: '500+', label: 'Enterprises trust us' },
-  { value: '2M+', label: 'Vendors monitored' },
-  { value: '99.9%', label: 'Uptime SLA' },
-  { value: '<2min', label: 'Avg risk report time' },
-];
 
 const testimonials = [
   {
@@ -169,16 +164,7 @@ export default function LandingPage() {
       </section>
 
       {/* Stats */}
-      <section className="py-12 border-y border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-2 sm:grid-cols-4 gap-8">
-          {stats.map(({ value, label }) => (
-            <div key={label} className="text-center">
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">{value}</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <HomepageStatsSection />
 
       {/* Features */}
       <section id="features" className="py-24 px-4 sm:px-6 lg:px-8">
