@@ -4,10 +4,10 @@ import { useHomepageStats } from '@/hooks/use-homepage-stats';
 import { cn } from '@/lib/utils';
 
 const STAT_META = [
-  { key: 'enterprises'     as const, label: 'Enterprises trust us' },
-  { key: 'vendors'         as const, label: 'Vendors monitored' },
+  { key: 'enterprises'    as const, label: 'Enterprises trust us' },
+  { key: 'vendors'        as const, label: 'Vendors monitored' },
   { key: 'flaggedInvoices' as const, label: 'Flagged invoices' },
-  { key: 'reportTime'      as const, label: 'Avg risk report time' },
+  { key: 'flaggedAmount'  as const, label: 'Flagged invoice value' },
 ];
 
 function StatSkeleton() {

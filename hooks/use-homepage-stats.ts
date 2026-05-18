@@ -11,10 +11,9 @@ const supabase = createBrowserClient(
 export interface HomepageStats {
   total_companies: number;
   total_vendors: number;
-  avg_report_time_minutes: number;
   flagged_invoices_count: number;
+  flagged_invoice_amount: number;
 }
-
 
 function formatCompanies(n: number): string {
   if (n >= 1000) return `${Math.floor(n / 1000)}k+`;
@@ -29,24 +28,23 @@ function formatVendors(n: number): string {
   return `${n}+`;
 }
 
-function formatReportTime(mins: number): string {
-  if (mins < 1)  return '<1min';
-  if (mins < 2)  return '<2min';
-  if (mins < 60) return `<${Math.ceil(mins)}min`;
-  return `<${Math.ceil(mins / 60)}hr`;
+export function formatPolishShortNumber(n: number): string {
+  if (n < 1_000)     return n.toString();
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1).replace('.', ',')} tys.`;
+  return `${(n / 1_000_000).toFixed(1).replace('.', ',')} mln`;
 }
 
-export function formatPolishShortNumber(n: number): string {
-  if (n < 1_000)       return n.toString();
-  if (n < 1_000_000)   return `${(n / 1_000).toFixed(1).replace('.', ',')} tys.`;
-  return `${(n / 1_000_000).toFixed(1).replace('.', ',')} mln`;
+export function formatPolishShortCurrency(n: number): string {
+  if (n < 1_000)     return `${n} PLN`;
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1).replace('.', ',')} tys. PLN`;
+  return `${(n / 1_000_000).toFixed(1).replace('.', ',')} mln PLN`;
 }
 
 export interface FormattedHomepageStats {
   enterprises: string;
   vendors: string;
   flaggedInvoices: string;
-  reportTime: string;
+  flaggedAmount: string;
 }
 
 function format(raw: HomepageStats): FormattedHomepageStats {
@@ -54,7 +52,7 @@ function format(raw: HomepageStats): FormattedHomepageStats {
     enterprises:     formatCompanies(raw.total_companies),
     vendors:         formatVendors(raw.total_vendors),
     flaggedInvoices: formatPolishShortNumber(raw.flagged_invoices_count),
-    reportTime:      formatReportTime(raw.avg_report_time_minutes),
+    flaggedAmount:   formatPolishShortCurrency(raw.flagged_invoice_amount),
   };
 }
 
