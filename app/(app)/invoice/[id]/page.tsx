@@ -79,7 +79,7 @@ function fmt(date: string | null | undefined) {
 
 function fmtDateTime(date: string | null | undefined) {
   if (!date) return '—';
-  try { return format(parseISO(date), 'MMM d, yyyy · HH:mm'); } catch { return date; }
+  try { return format(parseISO(date), 'MMM d, yyyy · HH:mm:ss'); } catch { return date; }
 }
 
 function fmtCurrency(amount: number | null | undefined, currency = 'PLN') {
@@ -1014,7 +1014,7 @@ export default function InvoiceDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <MetaRow label="Created At"  value={fmt(invoice?.created_at)} />
+                      <MetaRow label="Created At"  value={fmtDateTime(invoice?.created_at)} />
                       <MetaRow label="Session ID"  value={invoice?.upload_session_id} mono />
                       {invoice?.raw_file_url && (
                         <div className="flex items-start justify-between gap-4 py-2.5">
