@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AuthBackButton } from './back-button';
 
 export const metadata: Metadata = {
   title: 'Authentication — RiskGuard',
@@ -9,8 +10,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="flex justify-center mb-8">
-          <a href="/" className="flex items-center gap-2 group">
+        <div className="flex items-center justify-between mb-8">
+          <AuthBackButton />
+          <a href="/" className="flex items-center gap-2 group mx-auto">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-shadow">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                 <path
@@ -24,6 +26,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               RiskGuard
             </span>
           </a>
+          {/* spacer to keep logo centered */}
+          <div className="w-16" />
         </div>
         {children}
       </div>

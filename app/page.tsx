@@ -150,10 +150,9 @@ export default function LandingPage() {
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
-            <Link href="/demo">
+            <Link href="/signup">
               <Button size="lg" variant="outline" className="h-12 px-8 text-base border-slate-200 dark:border-slate-700 gap-2">
-                <Play className="w-4 h-4 text-blue-600" />
-                Try live demo
+                Sign up
               </Button>
             </Link>
           </div>
@@ -311,10 +310,9 @@ export default function LandingPage() {
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
-              <Link href="/demo">
-                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 h-12 px-8 text-base gap-2 border border-white/30">
-                  <Play className="w-4 h-4" />
-                  Try live demo
+              <Link href="/signup">
+                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 h-12 px-8 text-base border border-white/30">
+                  Sign up
                 </Button>
               </Link>
             </div>
