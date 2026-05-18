@@ -636,14 +636,16 @@ Deno.serve(async (req: Request) => {
           if (existing) {
             vendorId = existing.id;
           } else {
-            // Create new vendor
+            // Create new vendor — mark as auto-created
             const { data: newVendor } = await adminClient
               .from("vendors")
               .insert({
                 company_id: companyId,
+                user_id: user.id,
                 name: lookupName ?? lookupNip ?? "Unknown Vendor",
                 nip: lookupNip ?? null,
                 status: "active",
+                new_vendor: true as never,
               })
               .select("id")
               .single();

@@ -212,6 +212,47 @@ async function downloadInvoiceXml(
   return res.text();
 }
 
+// ─── Vendor upsert ────────────────────────────────────────────────────────────
+
+async function upsertVendor(
+  supabase: SupabaseClient<Database>,
+  companyId: string,
+  userId: string,
+  nip: string | null | undefined,
+  name: string | null | undefined
+): Promise<string | null> {
+  const lookupNip  = nip?.trim() || null;
+  const lookupName = name?.trim() || null;
+
+  if (!lookupNip && !lookupName) return null;
+
+  // Try to find existing vendor by NIP (most precise) or name
+  let query = supabase.from('vendors').select('id').eq('company_id', companyId);
+  if (lookupNip) {
+    query = query.eq('nip', lookupNip);
+  } else {
+    query = query.ilike('name', lookupName!);
+  }
+  const { data: existing } = await query.maybeSingle();
+  if (existing) return existing.id;
+
+  // Create new vendor, mark as auto-created
+  const { data: created } = await supabase
+    .from('vendors')
+    .insert({
+      company_id: companyId,
+      user_id: userId,
+      name: lookupName ?? lookupNip ?? 'Unknown Vendor',
+      nip: lookupNip,
+      status: 'active',
+      new_vendor: true as never,
+    })
+    .select('id')
+    .single();
+
+  return created?.id ?? null;
+}
+
 // ─── Route Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -277,7 +318,7 @@ export async function POST(req: NextRequest) {
       .select('id').single();
     if (jobError || !job) return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
 
-    runKsefFetch({ supabase: service, storage: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, sessionId, jobId: job.id, storagePath, since })
+    runKsefFetch({ supabase: service, storage: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, userId: user.id, sessionId, jobId: job.id, storagePath, since })
       .catch((err) => console.error('[ksef/fetch-invoices] background error', err));
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
@@ -291,7 +332,7 @@ export async function POST(req: NextRequest) {
 // ─── Background fetch ──────────────────────────────────────────────────────────
 
 async function runKsefFetch({
-  supabase, storage, baseUrl, ksefToken, nip, companyId, sessionId, jobId, storagePath, since,
+  supabase, storage, baseUrl, ksefToken, nip, companyId, userId, sessionId, jobId, storagePath, since,
 }: {
   supabase: SupabaseClient<Database>;
   storage: SupabaseClient<Database>;
@@ -299,6 +340,7 @@ async function runKsefFetch({
   ksefToken: string;
   nip: string;
   companyId: string;
+  userId: string;
   sessionId: string;
   jobId: string;
   storagePath: string;
@@ -368,6 +410,8 @@ async function runKsefFetch({
         // If XML parser finds structured data, use it; otherwise fall back to KSeF metadata
         const invoiceList = parseResult.invoices.length > 0 ? parseResult.invoices : [{
           invoiceNumber: meta.invoiceNumber,
+          vendorName: meta.seller?.name ?? null,
+          vendorNip: meta.seller?.nip ?? null,
           invoiceDate: meta.issueDate,
           dueDate: null,
           totalAmount: meta.grossAmount,
@@ -379,10 +423,15 @@ async function runKsefFetch({
         }];
 
         for (const inv of invoiceList) {
+          const sellerNip  = inv.sellerNip ?? inv.vendorNip ?? meta.seller?.nip ?? null;
+          const sellerName = inv.vendorName ?? meta.seller?.name ?? null;
+          const vendorId   = await upsertVendor(supabase, companyId, userId, sellerNip, sellerName);
+
           const { data: invoice, error: invError } = await supabase
             .from('invoices')
             .insert({
               company_id: companyId,
+              vendor_id: vendorId,
               invoice_number: inv.invoiceNumber ?? ksefId,
               invoice_date: inv.invoiceDate ?? null,
               issue_date: inv.invoiceDate ?? null,
@@ -391,7 +440,7 @@ async function runKsefFetch({
               total_amount: inv.totalAmount ?? null,
               tax_amount: inv.taxAmount ?? null,
               currency: inv.currency ?? 'PLN',
-              seller_nip: inv.sellerNip ?? null,
+              seller_nip: sellerNip,
               buyer_nip: inv.buyerNip ?? null,
               bank_account: inv.bankAccount ?? null,
               raw_file_url: urlData?.signedUrl ?? filePath,

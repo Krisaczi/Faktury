@@ -14,6 +14,8 @@
 
 export interface ParsedInvoice {
   invoiceNumber?: string;
+  vendorName?: string;
+  vendorNip?: string;
   invoiceDate?: string;
   dueDate?: string;
   totalAmount?: number;
@@ -116,6 +118,8 @@ function parseDate(raw: string | undefined): string | undefined {
 function parseKsefSegment(segment: string): ParsedInvoice {
   return {
     invoiceNumber: extractFirst(segment, 'P_2', 'NrFa', 'NumerFaktury'),
+    vendorName: extractFirst(segment, 'NazwaSprzedawcy', 'NazwaFirmy', 'Nazwa'),
+    vendorNip: extractFirst(segment, 'NIP', 'NIPSprzedawcy', 'NIPUE'),
     invoiceDate: parseDate(extractFirst(segment, 'P_1', 'DataWystawienia', 'DataFa')),
     dueDate: parseDate(extractFirst(segment, 'P_6', 'TerminPlatnosci', 'DataPlatnosci')),
     totalAmount: parseAmount(extractFirst(segment, 'P_15', 'WartoscFaktury', 'KwotaDoZaplaty', 'Wartosc')),
@@ -131,6 +135,8 @@ function parseKsefSegment(segment: string): ParsedInvoice {
 function parseUBLSegment(segment: string): ParsedInvoice {
   return {
     invoiceNumber: extractFirst(segment, 'cbc:ID', 'ID'),
+    vendorName: extractFirst(segment, 'cac:PartyName', 'cbc:Name', 'Name'),
+    vendorNip: extractFirst(segment, 'cbc:CompanyID', 'CompanyID'),
     invoiceDate: parseDate(extractFirst(segment, 'cbc:IssueDate', 'IssueDate')),
     dueDate: parseDate(extractFirst(segment, 'cbc:PaymentDueDate', 'DueDate')),
     totalAmount: parseAmount(extractFirst(segment, 'cbc:PayableAmount', 'PayableAmount', 'TaxInclusiveAmount')),
@@ -145,6 +151,8 @@ function parseUBLSegment(segment: string): ParsedInvoice {
 function parseGenericSegment(segment: string): ParsedInvoice {
   return {
     invoiceNumber: extractFirst(segment, 'invoice_number', 'InvoiceNumber', 'Number', 'Nr'),
+    vendorName: extractFirst(segment, 'vendor_name', 'VendorName', 'SellerName', 'Sprzedawca'),
+    vendorNip: extractFirst(segment, 'seller_nip', 'SellerNIP', 'NIP'),
     invoiceDate: parseDate(extractFirst(segment, 'invoice_date', 'InvoiceDate', 'Date', 'IssueDate')),
     dueDate: parseDate(extractFirst(segment, 'due_date', 'DueDate', 'PaymentDate')),
     totalAmount: parseAmount(extractFirst(segment, 'total_amount', 'TotalAmount', 'Total', 'GrossAmount')),
