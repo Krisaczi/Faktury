@@ -606,7 +606,7 @@ function VendorSummaryCard({ vendorId }: { vendorId: string }) {
 
   if (!data) return null;
 
-  const { vendor, stats, recent_invoices } = data;
+  const { vendor, stats, recent_invoices = [] } = data;
   const statusColors: Record<string, string> = {
     active:       'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     inactive:     'bg-slate-100   text-slate-600   dark:bg-slate-800      dark:text-slate-400',
