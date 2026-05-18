@@ -230,6 +230,12 @@ export function useInvoiceDetail(invoiceId: string | null) {
     return json.url;
   }
 
+  // ── Delete invoice ───────────────────────────────────────────────────────────
+  async function deleteInvoice(): Promise<void> {
+    if (!invoiceId) throw new Error('No invoice ID');
+    await apiFetch(`/api/invoices/${invoiceId}`, { method: 'DELETE' });
+  }
+
   return {
     data,
     error,
@@ -239,6 +245,7 @@ export function useInvoiceDetail(invoiceId: string | null) {
     addFlag,
     addReview,
     getDownloadUrl,
+    deleteInvoice,
   };
 }
 

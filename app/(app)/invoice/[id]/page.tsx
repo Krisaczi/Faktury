@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ClipboardList,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -732,11 +733,13 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const {
     data, error, isLoading,
-    updateFlag, addFlag, addReview, getDownloadUrl,
+    updateFlag, addFlag, addReview, getDownloadUrl, deleteInvoice,
   } = useInvoiceDetail(id ?? null);
 
-  const [updatingFlag, setUpdatingFlag] = useState<string | null>(null);
-  const [downloading, setDownloading]   = useState(false);
+  const [updatingFlag, setUpdatingFlag]       = useState<string | null>(null);
+  const [downloading, setDownloading]         = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting]               = useState(false);
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -781,6 +784,20 @@ export default function InvoiceDetailPage() {
       showToast(e instanceof Error ? e.message : 'Download failed', 'error');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteInvoice();
+      setDeleteDialogOpen(false);
+      showToast('Invoice deleted successfully.', 'success');
+      setTimeout(() => router.push('/invoice'), 800);
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to delete invoice', 'error');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -928,8 +945,56 @@ export default function InvoiceDetailPage() {
                       Download XML
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    aria-label="Delete this invoice"
+                  >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    Delete
+                  </Button>
                 </div>
               )}
+
+              {/* ── Delete confirmation dialog ─────────────────────────────── */}
+              <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                      <Trash2 className="w-5 h-5" aria-hidden="true" />
+                      Delete Invoice
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-600 dark:text-slate-400">
+                      Are you sure you want to delete invoice{' '}
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        {invoice?.invoice_number ?? id}
+                      </span>
+                      ? This action cannot be undone. All associated risk flags will also be removed.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDeleteDialogOpen(false)}
+                      disabled={deleting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                    >
+                      {deleting
+                        ? <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
+                        : <Trash2 className="w-4 h-4" aria-hidden="true" />}
+                      {deleting ? 'Deleting…' : 'Delete Invoice'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
