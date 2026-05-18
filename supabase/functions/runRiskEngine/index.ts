@@ -51,6 +51,7 @@ interface VendorInvoice {
   total_amount: number | null;
   bank_account: string | null;
   issue_date: string | null;
+  seller_nip: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ function checkMissingFields(invoice: Invoice): FlagCandidate[] {
   return flags;
 }
 
-/** 2. Duplicate invoice number within the same company */
+/** 2. Duplicate invoice number — same number + same seller NIP within the company */
 function checkDuplicateInvoiceNumber(
   invoice: Invoice,
   companyInvoices: VendorInvoice[]
@@ -124,20 +125,25 @@ function checkDuplicateInvoiceNumber(
   if (!invoice.invoice_number?.trim()) return [];
 
   const normalized = invoice.invoice_number.trim().toUpperCase();
-  const duplicates = companyInvoices.filter(
-    (i) =>
-      i.id !== invoice.id &&
-      i.invoice_number?.trim().toUpperCase() === normalized
-  );
+  const sellerNip  = invoice.seller_nip?.trim() ?? null;
+
+  const duplicates = companyInvoices.filter((i) => {
+    if (i.id === invoice.id) return false;
+    if (i.invoice_number?.trim().toUpperCase() !== normalized) return false;
+    // When both invoices have a seller NIP, require it to match (same vendor)
+    if (sellerNip && i.seller_nip?.trim() && i.seller_nip.trim() !== sellerNip) return false;
+    return true;
+  });
 
   if (duplicates.length === 0) return [];
 
+  const vendorLabel = sellerNip ? `NIP ${sellerNip}` : "this company";
   return [
     {
       type: "duplicate_invoice_number",
       severity: "high",
       message: sanitize(
-        `Invoice number "${invoice.invoice_number}" already exists in ${duplicates.length} other invoice(s) for this company.`
+        `Invoice number "${invoice.invoice_number}" already exists in ${duplicates.length} other invoice(s) for ${vendorLabel}.`
       ),
     },
   ];
@@ -333,7 +339,7 @@ Deno.serve(async (req: Request) => {
     // ── Fetch company invoices for duplicate number check ─────────────────────
     const { data: companyInvoices } = await db
       .from("invoices")
-      .select("id, invoice_number, amount, total_amount, bank_account, issue_date")
+      .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip")
       .eq("company_id", callerCompanyId)
       .not("id", "eq", invoiceId)
       .limit(2000);
@@ -343,7 +349,7 @@ Deno.serve(async (req: Request) => {
     if (invoice.vendor_id) {
       const { data: vi } = await db
         .from("invoices")
-        .select("id, invoice_number, amount, total_amount, bank_account, issue_date")
+        .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip")
         .eq("vendor_id", invoice.vendor_id)
         .eq("company_id", callerCompanyId)
         .not("id", "eq", invoiceId)

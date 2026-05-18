@@ -714,8 +714,44 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
+        // ── Duplicate detection ───────────────────────────────────────────────
+        const sellerNipForDupe = inv.sellerNip ?? inv.vendorNip ?? null;
+        let isDuplicate = false;
+        if (inv.invoiceNumber && sellerNipForDupe) {
+          const { data: existing } = await adminClient
+            .from("invoices")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("invoice_number", inv.invoiceNumber)
+            .eq("seller_nip", sellerNipForDupe)
+            .neq("id", invoice.id)
+            .limit(1)
+            .maybeSingle();
+          isDuplicate = existing !== null;
+        } else if (inv.invoiceNumber) {
+          // Fallback: check by invoice_number + company_id when NIP is absent
+          const { data: existing } = await adminClient
+            .from("invoices")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("invoice_number", inv.invoiceNumber)
+            .is("seller_nip", null)
+            .neq("id", invoice.id)
+            .limit(1)
+            .maybeSingle();
+          isDuplicate = existing !== null;
+        }
+
         // ── Risk flags ────────────────────────────────────────────────────────
         const flags = generateRiskFlags(inv);
+        if (isDuplicate) {
+          const vendorLabel = sellerNipForDupe ? `NIP ${sellerNipForDupe}` : (inv.vendorName ?? "unknown vendor");
+          flags.push({
+            flag_type: "duplicate_invoice_number",
+            severity: "high",
+            message: `Duplicate invoice number "${inv.invoiceNumber}" already exists for vendor ${vendorLabel}.`,
+          });
+        }
         let flagsCreated = 0;
 
         for (const flag of flags) {

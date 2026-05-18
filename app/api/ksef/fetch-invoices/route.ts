@@ -514,14 +514,56 @@ async function runKsefFetch({
 
           if (!invError && invoice) {
             invoicesCreated++;
+            const invoiceFlags: { type: string; severity: 'low' | 'medium' | 'high' | 'critical' | 'info'; message: string }[] = [];
+
+            // Check for duplicate: same invoice_number + seller_nip within company
+            const invoiceNumber = inv.invoiceNumber ?? ksefId;
+            if (invoiceNumber && sellerNip) {
+              const { data: dupRow } = await supabase
+                .from('invoices')
+                .select('id')
+                .eq('company_id', companyId)
+                .eq('invoice_number', invoiceNumber)
+                .eq('seller_nip', sellerNip)
+                .neq('id', invoice.id)
+                .limit(1)
+                .maybeSingle();
+              if (dupRow) {
+                const vendorLabel = sellerNip ? `NIP ${sellerNip}` : (sellerName ?? 'unknown vendor');
+                invoiceFlags.push({
+                  type: 'duplicate_invoice_number',
+                  severity: 'high',
+                  message: `Duplicate invoice number "${invoiceNumber}" already exists for vendor ${vendorLabel}.`,
+                });
+              }
+            }
+
             if (!inv.sellerNip) {
-              const { error: fe } = await supabase.from('risk_flags').insert({
-                invoice_id: invoice.id,
+              invoiceFlags.push({
                 type: 'missing_seller_nip',
                 severity: 'medium',
                 message: 'Seller NIP not found in KSeF XML',
               });
-              if (!fe) flagsCreated++;
+            }
+
+            let highestRisk: 'low' | 'medium' | 'high' | 'critical' | null = null;
+            for (const flag of invoiceFlags) {
+              const { error: fe } = await supabase.from('risk_flags').insert({
+                invoice_id: invoice.id,
+                type: flag.type,
+                severity: flag.severity,
+                message: flag.message,
+                status: 'open',
+              });
+              if (!fe) {
+                flagsCreated++;
+                if (flag.severity === 'high' || flag.severity === 'critical') highestRisk = 'high';
+                else if (!highestRisk && flag.severity === 'medium') highestRisk = 'medium';
+                else if (!highestRisk) highestRisk = 'low';
+              }
+            }
+            if (highestRisk) {
+              await supabase.from('invoices').update({ overall_risk: highestRisk }).eq('id', invoice.id);
             }
           } else {
             errorCount++;
