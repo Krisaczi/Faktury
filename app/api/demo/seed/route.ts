@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { seedDemoSession } from '@/lib/demo/seeder';
 
-// Guard: only allow seeding when a server secret is provided.
-// In production point DEMO_SEED_SECRET at a strong random string.
 function validateSeedSecret(req: NextRequest): boolean {
   const secret = process.env.DEMO_SEED_SECRET;
-  // If no secret configured, disallow in production
-  if (!secret) return process.env.NODE_ENV !== 'production';
+  // If no secret configured, allow all requests (demo is public)
+  if (!secret) return true;
   const provided = req.headers.get('x-demo-seed-secret') ?? '';
   return provided === secret;
 }
