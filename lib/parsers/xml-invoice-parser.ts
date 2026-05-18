@@ -12,6 +12,18 @@
  * - Generic flat-XML with common invoice field names
  */
 
+export interface ParsedParty {
+  name?: string;
+  nip?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  iban?: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface ParsedInvoice {
   invoiceNumber?: string;
   vendorName?: string;
@@ -24,6 +36,8 @@ export interface ParsedInvoice {
   sellerNip?: string;
   buyerNip?: string;
   bankAccount?: string;
+  seller?: ParsedParty;
+  buyer?: ParsedParty;
 }
 
 export interface ParseError {
@@ -149,23 +163,116 @@ function parseDate(raw: string | undefined): string | undefined {
   return undefined;
 }
 
+// ─── Party extraction helper ─────────────────────────────────────────────────
+// Extracts address, IBAN, and contact details from a party XML block.
+// Handles KSeF (Podmiot1/Podmiot2), UBL (AccountingSupplierParty), and generic variants.
+function extractParty(block: string, nipHint?: string): ParsedParty {
+  const party: ParsedParty = {};
+
+  // Name
+  const rawName = extractFirst(
+    block,
+    'NazwaPodmiotu', 'Nazwa', 'NazwaFirmy',         // KSeF
+    'cbc:Name', 'PartyName', 'Name',                 // UBL / generic
+    'CompanyName', 'FirmName',
+  );
+  if (rawName) party.name = normalizeVendorName(rawName);
+
+  // NIP / Tax ID
+  party.nip = nipHint ?? extractFirst(
+    block,
+    'NIP', 'NIPUE',                                  // KSeF
+    'cbc:CompanyID', 'CompanyID', 'TaxID',           // UBL / generic
+  );
+
+  // ── Address ──
+  // KSeF AdresPodmiotu block
+  const addrBlock = block.match(/<(?:[^:>]*:)?AdresPodmiotu[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AdresPodmiotu>/i)?.[1]
+    ?? block.match(/<(?:[^:>]*:)?Adres[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Adres>/i)?.[1]
+    ?? block.match(/<(?:[^:>]*:)?PostalAddress[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?PostalAddress>/i)?.[1]
+    ?? block.match(/<(?:[^:>]*:)?Address[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Address>/i)?.[1]
+    ?? block;
+
+  party.street = extractFirst(
+    addrBlock,
+    'Ulica', 'UlicaNumer',                           // KSeF
+    'cbc:StreetName', 'StreetName', 'Street',        // UBL / generic
+    'AddressLine', 'Line1',
+  );
+
+  party.postalCode = extractFirst(
+    addrBlock,
+    'KodPocztowy',                                   // KSeF
+    'cbc:PostalZone', 'PostalZone', 'PostalCode',    // UBL / generic
+    'ZipCode', 'Zip',
+  );
+
+  party.city = extractFirst(
+    addrBlock,
+    'Miejscowosc', 'Miasto',                         // KSeF
+    'cbc:CityName', 'CityName', 'City',              // UBL / generic
+    'Town',
+  );
+
+  party.country = extractFirst(
+    addrBlock,
+    'KodKraju',                                      // KSeF (2-letter code)
+    'cbc:IdentificationCode', 'Country', 'CountryCode', // UBL / generic
+  );
+
+  // ── IBAN / bank account ──
+  const bankBlock = block.match(/<(?:[^:>]*:)?DaneRachunku[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?DaneRachunku>/i)?.[1]
+    ?? block.match(/<(?:[^:>]*:)?BankAccount[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?BankAccount>/i)?.[1]
+    ?? block;
+  party.iban = extractFirst(
+    bankBlock,
+    'NrRachunku', 'NumerRachunku', 'RachunekBankowy', // KSeF
+    'IBAN', 'BankAccountNumber', 'AccountNumber',      // generic
+    'cbc:ID',
+  );
+
+  // ── Contact ──
+  const contactBlock = block.match(/<(?:[^:>]*:)?Kontakt[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Kontakt>/i)?.[1]
+    ?? block.match(/<(?:[^:>]*:)?Contact[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Contact>/i)?.[1]
+    ?? block;
+  party.email = extractFirst(
+    contactBlock,
+    'Email', 'EmailAdres', 'AdresEmail',             // KSeF / generic
+    'cbc:ElectronicMail', 'ElectronicMail',          // UBL
+  );
+  party.phone = extractFirst(
+    contactBlock,
+    'Telefon', 'NrTelefonu',                         // KSeF
+    'cbc:Telephone', 'Telephone', 'Phone',           // UBL / generic
+  );
+
+  return party;
+}
+
 // ─── KSeF FA parser ──────────────────────────────────────────────────────────
 function parseKsefSegment(segment: string): ParsedInvoice {
-  // Extract seller NIP from Podmiot1 block specifically to avoid picking up buyer NIP
-  const sellerBlock = segment.match(/<(?:[^:>]*:)?Podmiot1[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot1>/i)?.[1]
+  const sellerBlockRaw = segment.match(/<(?:[^:>]*:)?Podmiot1[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot1>/i)?.[1]
     ?? segment.match(/<(?:[^:>]*:)?Sprzedawca[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Sprzedawca>/i)?.[1]
     ?? segment;
-  const sellerNip = extractFirst(sellerBlock, 'NIP', 'NIPSprzedawcy', 'NIPUE');
+  const sellerNip = extractFirst(sellerBlockRaw, 'NIP', 'NIPSprzedawcy', 'NIPUE');
 
-  const buyerBlock = segment.match(/<(?:[^:>]*:)?Podmiot2[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot2>/i)?.[1]
+  const buyerBlockRaw = segment.match(/<(?:[^:>]*:)?Podmiot2[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot2>/i)?.[1]
     ?? segment.match(/<(?:[^:>]*:)?Nabywca[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Nabywca>/i)?.[1];
-  const buyerNip = buyerBlock
-    ? extractFirst(buyerBlock, 'NIP', 'NIPNabywcy', 'NIPKupujacego')
+  const buyerNip = buyerBlockRaw
+    ? extractFirst(buyerBlockRaw, 'NIP', 'NIPNabywcy', 'NIPKupujacego')
     : extractFirst(segment, 'NIPNabywcy', 'NIPKupujacego');
+
+  const bankAccount = extractFirst(segment, 'NrRachunku', 'NumerRachunku', 'RachunekBankowy');
+
+  const seller = extractParty(sellerBlockRaw, sellerNip);
+  // Hoist top-level bank account into seller IBAN if not already found in the seller block
+  if (!seller.iban && bankAccount) seller.iban = bankAccount;
+
+  const buyer = buyerBlockRaw ? extractParty(buyerBlockRaw, buyerNip) : undefined;
 
   return {
     invoiceNumber: extractFirst(segment, 'P_2', 'NrFa', 'NumerFaktury'),
-    vendorName: normalizeVendorName(extractKsefSellerName(segment)),
+    vendorName: seller.name ?? normalizeVendorName(extractKsefSellerName(segment)),
     vendorNip: sellerNip,
     invoiceDate: parseDate(extractFirst(segment, 'P_1', 'DataWystawienia', 'DataFa')),
     dueDate: parseDate(extractFirst(segment, 'P_6', 'TerminPlatnosci', 'DataPlatnosci')),
@@ -174,42 +281,75 @@ function parseKsefSegment(segment: string): ParsedInvoice {
     currency: extractFirst(segment, 'KodWaluty', 'Waluta') ?? 'PLN',
     sellerNip,
     buyerNip,
-    bankAccount: extractFirst(segment, 'NrRachunku', 'NumerRachunku', 'RachunekBankowy'),
+    bankAccount,
+    seller,
+    buyer,
   };
 }
 
 // ─── UBL 2.1 parser ──────────────────────────────────────────────────────────
 function parseUBLSegment(segment: string): ParsedInvoice {
-  // UBL: seller is in AccountingSupplierParty
-  const supplierBlock = segment.match(/<(?:[^:>]*:)?AccountingSupplierParty[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AccountingSupplierParty>/i)?.[1] ?? segment;
+  const supplierBlockRaw = segment.match(/<(?:[^:>]*:)?AccountingSupplierParty[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AccountingSupplierParty>/i)?.[1] ?? segment;
+  const customerBlockRaw = segment.match(/<(?:[^:>]*:)?AccountingCustomerParty[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AccountingCustomerParty>/i)?.[1];
+
+  const sellerNip = extractFirst(supplierBlockRaw, 'cbc:CompanyID', 'CompanyID');
+  const buyerNip  = customerBlockRaw ? extractFirst(customerBlockRaw, 'cbc:CompanyID', 'CompanyID') : undefined;
+
+  const seller = extractParty(supplierBlockRaw, sellerNip);
+  const buyer  = customerBlockRaw ? extractParty(customerBlockRaw, buyerNip) : undefined;
+
   return {
     invoiceNumber: extractFirst(segment, 'cbc:ID', 'ID'),
-    vendorName: normalizeVendorName(extractFirst(supplierBlock, 'cbc:Name', 'cac:PartyName', 'Name')),
-    vendorNip: extractFirst(segment, 'cbc:CompanyID', 'CompanyID'),
+    vendorName: seller.name,
+    vendorNip: sellerNip,
     invoiceDate: parseDate(extractFirst(segment, 'cbc:IssueDate', 'IssueDate')),
     dueDate: parseDate(extractFirst(segment, 'cbc:PaymentDueDate', 'DueDate')),
     totalAmount: parseAmount(extractFirst(segment, 'cbc:PayableAmount', 'PayableAmount', 'TaxInclusiveAmount')),
     taxAmount: parseAmount(extractFirst(segment, 'cbc:TaxAmount', 'TaxAmount')),
     currency: extractFirst(segment, 'cbc:DocumentCurrencyCode', 'DocumentCurrencyCode') ?? 'PLN',
-    sellerNip: extractFirst(segment, 'cac:TaxScheme', 'CompanyID', 'cbc:CompanyID'),
+    sellerNip,
+    buyerNip,
     bankAccount: extractFirst(segment, 'cbc:ID', 'PaymentID'),
+    seller,
+    buyer,
   };
 }
 
 // ─── Generic flat XML ─────────────────────────────────────────────────────────
 function parseGenericSegment(segment: string): ParsedInvoice {
+  const sellerNip = extractFirst(segment, 'seller_nip', 'SellerNIP', 'NIP');
+  const buyerNip  = extractFirst(segment, 'buyer_nip', 'BuyerNIP');
+  const bankAccount = extractFirst(segment, 'bank_account', 'BankAccount', 'IBAN');
+
+  const sellerBlockRaw = segment.match(/<(?:[^:>]*:)?Seller[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Seller>/i)?.[1]
+    ?? segment.match(/<(?:[^:>]*:)?Vendor[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Vendor>/i)?.[1];
+  const buyerBlockRaw  = segment.match(/<(?:[^:>]*:)?Buyer[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Buyer>/i)?.[1]
+    ?? segment.match(/<(?:[^:>]*:)?Customer[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Customer>/i)?.[1];
+
+  const sellerName = normalizeVendorName(
+    extractFirst(segment, 'vendor_name', 'VendorName', 'SellerName', 'Sprzedawca', 'NazwaSprzedawcy', 'NazwaFirmy')
+  );
+  const seller = sellerBlockRaw
+    ? extractParty(sellerBlockRaw, sellerNip)
+    : { name: sellerName, nip: sellerNip, iban: bankAccount };
+  if (!seller.iban && bankAccount) seller.iban = bankAccount;
+
+  const buyer = buyerBlockRaw ? extractParty(buyerBlockRaw, buyerNip) : (buyerNip ? { nip: buyerNip } : undefined);
+
   return {
     invoiceNumber: extractFirst(segment, 'invoice_number', 'InvoiceNumber', 'Number', 'Nr'),
-    vendorName: normalizeVendorName(extractFirst(segment, 'vendor_name', 'VendorName', 'SellerName', 'Sprzedawca', 'NazwaSprzedawcy', 'NazwaFirmy')),
-    vendorNip: extractFirst(segment, 'seller_nip', 'SellerNIP', 'NIP'),
+    vendorName: seller.name ?? sellerName,
+    vendorNip: sellerNip,
     invoiceDate: parseDate(extractFirst(segment, 'invoice_date', 'InvoiceDate', 'Date', 'IssueDate')),
     dueDate: parseDate(extractFirst(segment, 'due_date', 'DueDate', 'PaymentDate')),
     totalAmount: parseAmount(extractFirst(segment, 'total_amount', 'TotalAmount', 'Total', 'GrossAmount')),
     taxAmount: parseAmount(extractFirst(segment, 'tax_amount', 'TaxAmount', 'VAT')),
     currency: extractFirst(segment, 'currency', 'Currency', 'CurrencyCode') ?? 'PLN',
-    sellerNip: extractFirst(segment, 'seller_nip', 'SellerNIP', 'NIP'),
-    buyerNip: extractFirst(segment, 'buyer_nip', 'BuyerNIP'),
-    bankAccount: extractFirst(segment, 'bank_account', 'BankAccount', 'IBAN'),
+    sellerNip,
+    buyerNip,
+    bankAccount,
+    seller,
+    buyer,
   };
 }
 
