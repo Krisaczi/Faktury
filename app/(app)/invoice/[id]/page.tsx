@@ -27,6 +27,9 @@ import {
   ClipboardList,
   Lock,
   Trash2,
+  FileDown,
+  Eye,
+  Maximize2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -736,10 +739,11 @@ export default function InvoiceDetailPage() {
     updateFlag, addFlag, addReview, getDownloadUrl, deleteInvoice,
   } = useInvoiceDetail(id ?? null);
 
-  const [updatingFlag, setUpdatingFlag]       = useState<string | null>(null);
-  const [downloading, setDownloading]         = useState(false);
+  const [updatingFlag, setUpdatingFlag]         = useState<string | null>(null);
+  const [downloading, setDownloading]           = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleting, setDeleting]               = useState(false);
+  const [deleting, setDeleting]                 = useState(false);
+  const [pdfPreviewOpen, setPdfPreviewOpen]     = useState(false);
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -948,6 +952,26 @@ export default function InvoiceDetailPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="gap-2 h-9"
+                    onClick={() => setPdfPreviewOpen(true)}
+                    aria-label="Preview invoice as PDF"
+                  >
+                    <Eye className="w-4 h-4" aria-hidden="true" />
+                    Preview PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 h-9"
+                    onClick={() => window.open(`/api/invoices/${id}/pdf?print=1`, '_blank', 'noopener')}
+                    aria-label="Download invoice as PDF"
+                  >
+                    <FileDown className="w-4 h-4" aria-hidden="true" />
+                    Download PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="gap-2 h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
                     onClick={() => setDeleteDialogOpen(true)}
                     aria-label="Delete this invoice"
@@ -957,6 +981,43 @@ export default function InvoiceDetailPage() {
                   </Button>
                 </div>
               )}
+
+              {/* ── PDF preview modal ─────────────────────────────────────── */}
+              <Dialog open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
+                <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0 gap-0">
+                  <DialogHeader className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+                        <Eye className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                        Invoice Preview — {invoice?.invoice_number ?? id}
+                      </DialogTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 h-8 text-xs"
+                        onClick={() => window.open(`/api/invoices/${id}/pdf?print=1`, '_blank', 'noopener')}
+                        aria-label="Open in new tab for printing"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        Open & Print
+                      </Button>
+                    </div>
+                    <DialogDescription className="sr-only">
+                      Print-ready invoice document preview
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex-1 min-h-0">
+                    {pdfPreviewOpen && (
+                      <iframe
+                        src={`/api/invoices/${id}/pdf`}
+                        className="w-full h-full border-0 rounded-b-lg"
+                        title={`Invoice ${invoice?.invoice_number ?? id} preview`}
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                      />
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* ── Delete confirmation dialog ─────────────────────────────── */}
               <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
