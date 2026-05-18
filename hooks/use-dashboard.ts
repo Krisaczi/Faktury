@@ -56,8 +56,10 @@ async function fetchTimeseries(): Promise<TimeseriesPoint[]> {
 async function fetchActivity(): Promise<ActivityItem[]> {
   const supabase = getClient();
   const { data, error } = await supabase.rpc('get_recent_activity');
-  if (error) throw error;
-  return (data ?? []) as ActivityItem[];
+  if (error) throw new Error(error.message);
+  if (!data) return [];
+  const rows = Array.isArray(data) ? data : [data];
+  return (rows as ActivityItem[]).filter((r) => r.label != null);
 }
 
 export function useDashboardMetrics() {
