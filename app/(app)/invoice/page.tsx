@@ -314,14 +314,9 @@ export default function InvoicesPage() {
                 <div className="flex items-center gap-1.5 md:flex-col md:items-start">
                   <span className="text-xs text-slate-400 md:hidden">Risk:</span>
                   <RiskBadge level={invoice.overall_risk} />
-                  {invoice.flags?.some((f) => f.type === 'duplicate_invoice_number') && (
-                    <Badge variant="outline" className="text-xs font-medium bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
-                      Duplicate
-                    </Badge>
-                  )}
-                  {invoice.flags?.some((f) => f.type === 'duplicate_invoice_date') && (
+                  {invoice.flags?.some((f) => f.type === 'duplicate_invoice_after_first') && (
                     <Badge variant="outline" className="text-xs font-medium bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
-                      Duplicate (by date)
+                      Duplicate (after first)
                     </Badge>
                   )}
                 </div>

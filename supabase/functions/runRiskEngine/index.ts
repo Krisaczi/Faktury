@@ -119,40 +119,12 @@ function checkMissingFields(invoice: Invoice): FlagCandidate[] {
   return flags;
 }
 
-/** 2. Duplicate invoice number — same number + same seller NIP within the company */
-function checkDuplicateInvoiceNumber(
-  invoice: Invoice,
-  companyInvoices: VendorInvoice[]
-): FlagCandidate[] {
-  if (!invoice.invoice_number?.trim()) return [];
-
-  const normalized = invoice.invoice_number.trim().toUpperCase();
-  const sellerNip  = invoice.seller_nip?.trim() ?? null;
-
-  const duplicates = companyInvoices.filter((i) => {
-    if (i.id === invoice.id) return false;
-    if (i.invoice_number?.trim().toUpperCase() !== normalized) return false;
-    // When both invoices have a seller NIP, require it to match (same vendor)
-    if (sellerNip && i.seller_nip?.trim() && i.seller_nip.trim() !== sellerNip) return false;
-    return true;
-  });
-
-  if (duplicates.length === 0) return [];
-
-  const vendorLabel = sellerNip ? `NIP ${sellerNip}` : "this company";
-  return [
-    {
-      type: "duplicate_invoice_number",
-      severity: "high",
-      message: sanitize(
-        `Invoice number "${invoice.invoice_number}" already exists in ${duplicates.length} other invoice(s) for ${vendorLabel}.`
-      ),
-    },
-  ];
-}
-
-/** 3. Duplicate by creation date — this invoice was inserted after an earlier copy */
-function checkDuplicateByDate(
+/**
+ * 2. Duplicate after first — flags this invoice only when an earlier invoice with the
+ *    same invoice_number + seller_nip already exists (created > 60 s before this one).
+ *    The original (earliest) invoice is never flagged.
+ */
+function checkDuplicateAfterFirst(
   invoice: Invoice,
   companyInvoices: VendorInvoice[]
 ): FlagCandidate[] {
@@ -162,22 +134,30 @@ function checkDuplicateByDate(
   const sellerNip   = invoice.seller_nip?.trim() ?? null;
   const invoiceTs   = new Date(invoice.created_at).getTime();
 
-  const earlier = companyInvoices.find((i) => {
+  // Find the earliest matching invoice (could be this one or an earlier one)
+  const matches = companyInvoices.filter((i) => {
     if (i.id === invoice.id || !i.created_at) return false;
     if (i.invoice_number?.trim().toUpperCase() !== normalized) return false;
     if (sellerNip && i.seller_nip?.trim() && i.seller_nip.trim() !== sellerNip) return false;
-    return new Date(i.created_at).getTime() < invoiceTs;
+    return true;
   });
 
-  if (!earlier) return [];
+  if (matches.length === 0) return [];
+
+  const earliestTs = Math.min(...matches.map((i) => new Date(i.created_at!).getTime()));
+
+  // Only flag this invoice if it was created strictly after the earliest copy
+  // and the gap is more than 60 seconds (avoids batch-upload false positives)
+  const gapSeconds = (invoiceTs - earliestTs) / 1000;
+  if (gapSeconds <= 60) return [];
 
   const vendorLabel = sellerNip ? `NIP ${sellerNip}` : "this company";
   return [
     {
-      type: "duplicate_invoice_date",
+      type: "duplicate_invoice_after_first",
       severity: "high",
       message: sanitize(
-        `Duplicate invoice detected based on creation date — an earlier copy already exists for vendor ${vendorLabel}.`
+        `Duplicate invoice detected — an earlier copy of invoice number "${invoice.invoice_number}" already exists for vendor ${vendorLabel}.`
       ),
     },
   ];
@@ -398,8 +378,7 @@ Deno.serve(async (req: Request) => {
     // ── Run all checks ────────────────────────────────────────────────────────
     const flagCandidates: FlagCandidate[] = [
       ...checkMissingFields(invoice as Invoice),
-      ...checkDuplicateInvoiceNumber(invoice as Invoice, allCompanyInvoices),
-      ...checkDuplicateByDate(invoice as Invoice, allCompanyInvoices),
+      ...checkDuplicateAfterFirst(invoice as Invoice, allCompanyInvoices),
       ...checkDuplicateVendorAmount(invoice as Invoice, vendorInvoices),
       ...checkBankAccountChange(invoice as Invoice, vendorInvoices),
       ...checkAmountOutlier(invoice as Invoice, vendorInvoices),
@@ -464,7 +443,7 @@ Deno.serve(async (req: Request) => {
       metadata:   {
         flags_created:  createdFlags.length,
         overall_risk:   overallRisk,
-        checks_run:     6,
+        checks_run:     5,
       },
     });
 

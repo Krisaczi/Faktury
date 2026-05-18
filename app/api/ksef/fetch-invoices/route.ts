@@ -516,39 +516,30 @@ async function runKsefFetch({
             invoicesCreated++;
             const invoiceFlags: { type: string; severity: 'low' | 'medium' | 'high' | 'critical' | 'info'; message: string }[] = [];
 
-            // Check for duplicate: same invoice_number + seller_nip within company
+            // Duplicate-after-first: only flag this invoice if an earlier one exists (gap > 60 s)
             const invoiceNumber = inv.invoiceNumber ?? ksefId;
-            if (invoiceNumber) {
-              let query = supabase
+            if (invoiceNumber && sellerNip) {
+              const { data: earlierRow } = await supabase
                 .from('invoices')
                 .select('id, created_at')
                 .eq('company_id', companyId)
                 .eq('invoice_number', invoiceNumber)
+                .eq('seller_nip', sellerNip)
                 .neq('id', invoice.id)
                 .order('created_at', { ascending: true })
-                .limit(1);
+                .limit(1)
+                .maybeSingle();
 
-              if (sellerNip) {
-                query = query.eq('seller_nip', sellerNip);
-              } else {
-                query = query.is('seller_nip', null);
-              }
-
-              const { data: dupRow } = await query.maybeSingle();
-              if (dupRow) {
-                const vendorLabel = sellerNip ? `NIP ${sellerNip}` : (sellerName ?? 'unknown vendor');
-                invoiceFlags.push({
-                  type: 'duplicate_invoice_number',
-                  severity: 'high',
-                  message: `Duplicate invoice number "${invoiceNumber}" already exists for vendor ${vendorLabel}.`,
-                });
-                const existingTs = new Date((dupRow as { created_at: string }).created_at).getTime();
-                const newTs      = new Date(invoice.created_at).getTime();
-                if (newTs > existingTs) {
+              if (earlierRow) {
+                const earliestTs = new Date((earlierRow as { created_at: string }).created_at).getTime();
+                const currentTs  = new Date(invoice.created_at).getTime();
+                const gapSeconds = (currentTs - earliestTs) / 1000;
+                if (gapSeconds > 60) {
+                  const vendorLabel = `NIP ${sellerNip}`;
                   invoiceFlags.push({
-                    type: 'duplicate_invoice_date',
+                    type: 'duplicate_invoice_after_first',
                     severity: 'high',
-                    message: `Duplicate invoice detected based on creation date — an earlier copy already exists for vendor ${vendorLabel}.`,
+                    message: `Duplicate invoice detected — an earlier copy of invoice number "${invoiceNumber}" already exists for vendor ${vendorLabel}.`,
                   });
                 }
               }

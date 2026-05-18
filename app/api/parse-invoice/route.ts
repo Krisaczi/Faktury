@@ -159,6 +159,33 @@ async function parseAndIngest({
           flags.push({ flag_type: 'high_value', severity: 'high', message: `High-value invoice: ${inv.currency ?? 'PLN'} ${inv.totalAmount}` });
         }
 
+        // Duplicate-after-first check: find the earliest invoice with same number + seller NIP
+        if (inv.invoiceNumber && inv.sellerNip) {
+          const { data: earlierInvoice } = await supabase
+            .from('invoices')
+            .select('id, created_at')
+            .eq('company_id', companyId)
+            .eq('invoice_number', inv.invoiceNumber)
+            .eq('seller_nip', inv.sellerNip)
+            .neq('id', invoice.id)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (earlierInvoice) {
+            const gapSeconds =
+              (Date.now() -
+                new Date((earlierInvoice as { created_at: string }).created_at).getTime()) / 1000;
+            if (gapSeconds > 60) {
+              flags.push({
+                flag_type: 'duplicate_invoice_after_first',
+                severity: 'high',
+                message: `Duplicate invoice detected — an earlier copy of invoice number "${inv.invoiceNumber}" already exists for vendor NIP ${inv.sellerNip}.`,
+              });
+            }
+          }
+        }
+
         if (flags.length > 0) {
           for (const flag of flags) {
             const { error: flagError } = await supabase.from('risk_flags').insert({
