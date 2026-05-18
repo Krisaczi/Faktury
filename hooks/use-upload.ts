@@ -233,7 +233,7 @@ export function useUpload() {
     }
   }, [files]);
 
-  const fetchFromKSeF = useCallback(async (since?: string) => {
+  const fetchFromKSeF = useCallback(async (opts?: { startDate?: string; endDate?: string; since?: string }) => {
     setKsefLoading(true);
     setKsefError(null);
     try {
@@ -250,7 +250,12 @@ export function useUpload() {
       const res = await fetch('/api/ksef/fetch-invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: userRecord.company_id, since }),
+        body: JSON.stringify({
+          companyId: userRecord.company_id,
+          startDate: opts?.startDate,
+          endDate: opts?.endDate,
+          since: opts?.since,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'KSeF fetch failed');

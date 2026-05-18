@@ -15,16 +15,28 @@ import {
   Info,
   FileCode2,
   ShieldAlert,
+  Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useUpload, useJobStatus, type UploadFile } from '@/hooks/use-upload';
 import { InlineLoader } from '@/components/ui/skeleton-loaders';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { DemoGuard } from '@/components/layout/demo-banner';
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function toInputDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+const today       = toInputDate(new Date());
+const thirtyAgo   = toInputDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
 const ACCEPTED        = '.csv,.pdf,.zip,.xml';
 const ACCEPTED_LABELS = ['CSV', 'PDF', 'ZIP', 'XML'];
@@ -175,7 +187,28 @@ export default function UploadPage() {
     addFiles, removeFile, clearAll, uploadAll, fetchFromKSeF,
   } = useUpload();
 
-  const [dragging, setDragging] = useState(false);
+  const [dragging, setDragging]       = useState(false);
+  const [ksefStartDate, setKsefStart] = useState(thirtyAgo);
+  const [ksefEndDate, setKsefEnd]     = useState(today);
+  const [dateError, setDateError]     = useState<string | null>(null);
+
+  const handleKsefFetch = useCallback(() => {
+    setDateError(null);
+    if (!ksefStartDate || !ksefEndDate) {
+      setDateError('Please select both a start and end date.');
+      return;
+    }
+    if (ksefStartDate > ksefEndDate) {
+      setDateError('Start date must be before or equal to end date.');
+      return;
+    }
+    const diffDays = (new Date(ksefEndDate).getTime() - new Date(ksefStartDate).getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays > 89) {
+      setDateError('Date range cannot exceed 89 days (KSeF limit).');
+      return;
+    }
+    fetchFromKSeF({ startDate: ksefStartDate, endDate: ksefEndDate });
+  }, [ksefStartDate, ksefEndDate, fetchFromKSeF]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -248,7 +281,8 @@ export default function UploadPage() {
 
       {/* KSeF Action */}
       <Card className="border-slate-200 dark:border-slate-800">
-        <CardContent className="py-4">
+        <CardContent className="py-4 space-y-4">
+          {/* Header row */}
           <div className="flex items-start gap-4">
             <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
               <CloudDownload className="w-4 h-4 text-slate-600 dark:text-slate-400" />
@@ -256,29 +290,69 @@ export default function UploadPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-900 dark:text-white">Fetch from KSeF</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                Automatically retrieve XML invoices from the Krajowy System e-Faktur using your stored credentials.
+                Retrieve XML invoices from the Krajowy System e-Faktur. Select a date range (max 89 days).
               </p>
-              {ksefError && (
-                <div role="alert" className="flex items-center gap-1.5 mt-2 text-xs text-red-600 dark:text-red-400">
+            </div>
+          </div>
+
+          {/* Date range inputs */}
+          <DemoGuard message="KSeF fetch is disabled in Demo Mode.">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ksef-start" className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3" />
+                    Start date
+                  </Label>
+                  <Input
+                    id="ksef-start"
+                    type="date"
+                    value={ksefStartDate}
+                    max={ksefEndDate || today}
+                    onChange={(e) => { setKsefStart(e.target.value); setDateError(null); }}
+                    disabled={ksefLoading || isUploading}
+                    className="h-8 text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ksef-end" className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3" />
+                    End date
+                  </Label>
+                  <Input
+                    id="ksef-end"
+                    type="date"
+                    value={ksefEndDate}
+                    min={ksefStartDate}
+                    max={today}
+                    onChange={(e) => { setKsefEnd(e.target.value); setDateError(null); }}
+                    disabled={ksefLoading || isUploading}
+                    className="h-8 text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Validation / API error */}
+              {(dateError || ksefError) && (
+                <div role="alert" className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{ksefError}</span>
+                  <span>{dateError ?? ksefError}</span>
                 </div>
               )}
-            </div>
-            <DemoGuard message="KSeF fetch is disabled in Demo Mode.">
+
               <Button
                 variant="outline"
                 size="sm"
                 disabled={ksefLoading || isUploading}
-                onClick={() => fetchFromKSeF()}
-                className="shrink-0 border-slate-200 dark:border-slate-700"
+                onClick={handleKsefFetch}
+                className="w-full border-slate-200 dark:border-slate-700 h-8"
               >
                 {ksefLoading
                   ? <><InlineLoader size="xs" className="mr-1.5 text-slate-500" />Fetching…</>
-                  : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Fetch now</>}
+                  : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Fetch invoices</>}
               </Button>
-            </DemoGuard>
-          </div>
+            </div>
+          </DemoGuard>
         </CardContent>
       </Card>
 

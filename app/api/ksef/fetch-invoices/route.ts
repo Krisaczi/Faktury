@@ -264,8 +264,32 @@ export async function POST(req: NextRequest) {
     const user = authSession.user;
 
     const body = await req.json();
-    const { companyId, since } = body as { companyId: string; since?: string };
+    const { companyId, since, startDate, endDate } = body as {
+      companyId: string;
+      since?: string;
+      startDate?: string;
+      endDate?: string;
+    };
     if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
+
+    // Validate date range when provided
+    if (startDate || endDate) {
+      if (!startDate || !endDate) {
+        return NextResponse.json({ error: 'Both startDate and endDate are required when specifying a date range.' }, { status: 400 });
+      }
+      const start = new Date(startDate);
+      const end   = new Date(endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD.' }, { status: 400 });
+      }
+      if (start > end) {
+        return NextResponse.json({ error: 'Start date must be before or equal to end date.' }, { status: 400 });
+      }
+      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 89) {
+        return NextResponse.json({ error: 'Date range cannot exceed 89 days (KSeF API limit).' }, { status: 400 });
+      }
+    }
 
     // Build a client with the user's JWT explicitly set so RLS works correctly in API routes
     const service = getAuthedClient(authSession.access_token);
@@ -318,7 +342,7 @@ export async function POST(req: NextRequest) {
       .select('id').single();
     if (jobError || !job) return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
 
-    runKsefFetch({ supabase: service, storage: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, userId: user.id, sessionId, jobId: job.id, storagePath, since })
+    runKsefFetch({ supabase: service, storage: service, baseUrl, ksefToken: creds.token, nip: company.nip, companyId, userId: user.id, sessionId, jobId: job.id, storagePath, since, startDate, endDate })
       .catch((err) => console.error('[ksef/fetch-invoices] background error', err));
 
     return NextResponse.json({ jobId: job.id, uploadSessionId: sessionId, status: 'processing' });
@@ -331,8 +355,13 @@ export async function POST(req: NextRequest) {
 
 // ─── Background fetch ──────────────────────────────────────────────────────────
 
+// Converts a JS Date to KSeF-compatible ISO date string (YYYY-MM-DD)
+function toKsefDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 async function runKsefFetch({
-  supabase, storage, baseUrl, ksefToken, nip, companyId, userId, sessionId, jobId, storagePath, since,
+  supabase, storage, baseUrl, ksefToken, nip, companyId, userId, sessionId, jobId, storagePath, since, startDate, endDate,
 }: {
   supabase: SupabaseClient<Database>;
   storage: SupabaseClient<Database>;
@@ -345,6 +374,8 @@ async function runKsefFetch({
   jobId: string;
   storagePath: string;
   since?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   try {
     await supabase.from('parse_jobs').update({ progress: 5 }).eq('id', jobId);
@@ -353,17 +384,24 @@ async function runKsefFetch({
     const accessToken = await getKsefAccessToken(baseUrl, nip, ksefToken);
     await supabase.from('parse_jobs').update({ progress: 25 }).eq('id', jobId);
 
-    // KSeF v2 requires YYYY-MM-DD dates and rejects ranges > 3 calendar months.
-    // We cap at 89 days to stay safely within the limit.
+    // KSeF v2 requires YYYY-MM-DD dates and rejects ranges > 3 calendar months (89 days max).
+    // Priority: explicit startDate/endDate > since > default last 30 days.
     const MAX_DAYS = 89;
-    const toDate = new Date();
-    const rawFrom = since ? new Date(since) : new Date(Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000);
-    // If caller supplied a since older than MAX_DAYS, clamp it
-    const minFrom = new Date(Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000);
-    const fromDate = rawFrom < minFrom ? minFrom : rawFrom;
-    const toISO   = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
-    const dateTo   = toISO(toDate);
-    const dateFrom = toISO(fromDate);
+    const DEFAULT_DAYS = 30;
+    let dateFrom: string;
+    let dateTo: string;
+
+    if (startDate && endDate) {
+      dateFrom = startDate;
+      dateTo   = endDate;
+    } else {
+      const toDate  = new Date();
+      const rawFrom = since ? new Date(since) : new Date(Date.now() - DEFAULT_DAYS * 24 * 60 * 60 * 1000);
+      const minFrom = new Date(Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000);
+      const fromDate = rawFrom < minFrom ? minFrom : rawFrom;
+      dateFrom = toKsefDate(fromDate);
+      dateTo   = toKsefDate(toDate);
+    }
 
     // Paginate through all invoice metadata
     const allInvoices: KsefInvoiceMeta[] = [];
