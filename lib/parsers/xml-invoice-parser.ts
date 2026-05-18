@@ -186,39 +186,57 @@ function extractParty(block: string, nipHint?: string): ParsedParty {
   );
 
   // ── Address ──
-  // KSeF AdresPodmiotu block
   const addrBlock = block.match(/<(?:[^:>]*:)?AdresPodmiotu[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AdresPodmiotu>/i)?.[1]
     ?? block.match(/<(?:[^:>]*:)?Adres[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Adres>/i)?.[1]
     ?? block.match(/<(?:[^:>]*:)?PostalAddress[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?PostalAddress>/i)?.[1]
     ?? block.match(/<(?:[^:>]*:)?Address[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Address>/i)?.[1]
     ?? block;
 
-  party.street = extractFirst(
-    addrBlock,
-    'Ulica', 'UlicaNumer',                           // KSeF
-    'cbc:StreetName', 'StreetName', 'Street',        // UBL / generic
-    'AddressLine', 'Line1',
-  );
-
-  party.postalCode = extractFirst(
-    addrBlock,
-    'KodPocztowy',                                   // KSeF
-    'cbc:PostalZone', 'PostalZone', 'PostalCode',    // UBL / generic
-    'ZipCode', 'Zip',
-  );
-
-  party.city = extractFirst(
-    addrBlock,
-    'Miejscowosc', 'Miasto',                         // KSeF
-    'cbc:CityName', 'CityName', 'City',              // UBL / generic
-    'Town',
-  );
-
   party.country = extractFirst(
     addrBlock,
-    'KodKraju',                                      // KSeF (2-letter code)
-    'cbc:IdentificationCode', 'Country', 'CountryCode', // UBL / generic
+    'KodKraju',                                          // KSeF FA 2.0 (2-letter code, comes first in block)
+    'cbc:IdentificationCode', 'Country', 'CountryCode',  // UBL / generic
   );
+
+  // KSeF FA 2.0 uses AdresL1 (street+number) and AdresL2 (postal code + city combined, e.g. "00-950 Warszawa")
+  const adresL1 = extractFirst(addrBlock, 'AdresL1');
+  const adresL2 = extractFirst(addrBlock, 'AdresL2');
+
+  if (adresL1) {
+    party.street = adresL1;
+  } else {
+    party.street = extractFirst(
+      addrBlock,
+      'Ulica', 'UlicaNumer',                             // older KSeF variants
+      'cbc:StreetName', 'StreetName', 'Street',          // UBL / generic
+      'AddressLine', 'Line1',
+    );
+  }
+
+  if (adresL2) {
+    // AdresL2 format: "00-950 Warszawa" — split on first space sequence after postal pattern
+    const m = adresL2.match(/^(\d{2}-\d{3})\s+(.+)$/);
+    if (m) {
+      party.postalCode = m[1];
+      party.city = m[2];
+    } else {
+      // Not a standard postal format — treat as city
+      party.city = adresL2;
+    }
+  } else {
+    party.postalCode = extractFirst(
+      addrBlock,
+      'KodPocztowy',                                     // older KSeF variants
+      'cbc:PostalZone', 'PostalZone', 'PostalCode',      // UBL / generic
+      'ZipCode', 'Zip',
+    );
+    party.city = extractFirst(
+      addrBlock,
+      'Miejscowosc', 'Miasto',                           // older KSeF variants
+      'cbc:CityName', 'CityName', 'City',                // UBL / generic
+      'Town',
+    );
+  }
 
   // ── IBAN / bank account ──
   const bankBlock = block.match(/<(?:[^:>]*:)?DaneRachunku[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?DaneRachunku>/i)?.[1]
