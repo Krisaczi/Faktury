@@ -706,7 +706,7 @@ Deno.serve(async (req: Request) => {
             upload_session_id: uploadSessionId ?? null,
             overall_risk:      null,
           })
-          .select("id")
+          .select("id, created_at")
           .single();
 
         if (invError || !invoice) {
@@ -716,40 +716,50 @@ Deno.serve(async (req: Request) => {
 
         // ── Duplicate detection ───────────────────────────────────────────────
         const sellerNipForDupe = inv.sellerNip ?? inv.vendorNip ?? null;
-        let isDuplicate = false;
-        if (inv.invoiceNumber && sellerNipForDupe) {
-          const { data: existing } = await adminClient
+        let isDuplicateNumber = false;
+        let isDuplicateByDate = false;
+
+        if (inv.invoiceNumber) {
+          let query = adminClient
             .from("invoices")
-            .select("id")
+            .select("id, created_at")
             .eq("company_id", companyId)
             .eq("invoice_number", inv.invoiceNumber)
-            .eq("seller_nip", sellerNipForDupe)
             .neq("id", invoice.id)
-            .limit(1)
-            .maybeSingle();
-          isDuplicate = existing !== null;
-        } else if (inv.invoiceNumber) {
-          // Fallback: check by invoice_number + company_id when NIP is absent
-          const { data: existing } = await adminClient
-            .from("invoices")
-            .select("id")
-            .eq("company_id", companyId)
-            .eq("invoice_number", inv.invoiceNumber)
-            .is("seller_nip", null)
-            .neq("id", invoice.id)
-            .limit(1)
-            .maybeSingle();
-          isDuplicate = existing !== null;
+            .order("created_at", { ascending: true })
+            .limit(1);
+
+          if (sellerNipForDupe) {
+            query = query.eq("seller_nip", sellerNipForDupe);
+          } else {
+            query = query.is("seller_nip", null);
+          }
+
+          const { data: existing } = await query.maybeSingle();
+          if (existing) {
+            isDuplicateNumber = true;
+            const existingTs = new Date(existing.created_at).getTime();
+            const newTs      = new Date(invoice.created_at).getTime();
+            // Exact same timestamp → already processed; later timestamp → newer duplicate
+            isDuplicateByDate = newTs > existingTs;
+          }
         }
 
         // ── Risk flags ────────────────────────────────────────────────────────
         const flags = generateRiskFlags(inv);
-        if (isDuplicate) {
-          const vendorLabel = sellerNipForDupe ? `NIP ${sellerNipForDupe}` : (inv.vendorName ?? "unknown vendor");
+        const vendorLabel = sellerNipForDupe ? `NIP ${sellerNipForDupe}` : (inv.vendorName ?? "unknown vendor");
+        if (isDuplicateNumber) {
           flags.push({
             flag_type: "duplicate_invoice_number",
             severity: "high",
             message: `Duplicate invoice number "${inv.invoiceNumber}" already exists for vendor ${vendorLabel}.`,
+          });
+        }
+        if (isDuplicateByDate) {
+          flags.push({
+            flag_type: "duplicate_invoice_date",
+            severity: "high",
+            message: `Duplicate invoice detected based on creation date — a earlier copy already exists for vendor ${vendorLabel}.`,
           });
         }
         let flagsCreated = 0;

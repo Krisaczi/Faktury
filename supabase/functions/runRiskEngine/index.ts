@@ -42,6 +42,7 @@ interface Invoice {
   seller_nip: string | null;
   currency: string | null;
   overall_risk: string | null;
+  created_at: string | null;
 }
 
 interface VendorInvoice {
@@ -52,6 +53,7 @@ interface VendorInvoice {
   bank_account: string | null;
   issue_date: string | null;
   seller_nip: string | null;
+  created_at: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -149,7 +151,39 @@ function checkDuplicateInvoiceNumber(
   ];
 }
 
-/** 3. Duplicate vendor + amount combination */
+/** 3. Duplicate by creation date — this invoice was inserted after an earlier copy */
+function checkDuplicateByDate(
+  invoice: Invoice,
+  companyInvoices: VendorInvoice[]
+): FlagCandidate[] {
+  if (!invoice.invoice_number?.trim() || !invoice.created_at) return [];
+
+  const normalized  = invoice.invoice_number.trim().toUpperCase();
+  const sellerNip   = invoice.seller_nip?.trim() ?? null;
+  const invoiceTs   = new Date(invoice.created_at).getTime();
+
+  const earlier = companyInvoices.find((i) => {
+    if (i.id === invoice.id || !i.created_at) return false;
+    if (i.invoice_number?.trim().toUpperCase() !== normalized) return false;
+    if (sellerNip && i.seller_nip?.trim() && i.seller_nip.trim() !== sellerNip) return false;
+    return new Date(i.created_at).getTime() < invoiceTs;
+  });
+
+  if (!earlier) return [];
+
+  const vendorLabel = sellerNip ? `NIP ${sellerNip}` : "this company";
+  return [
+    {
+      type: "duplicate_invoice_date",
+      severity: "high",
+      message: sanitize(
+        `Duplicate invoice detected based on creation date — an earlier copy already exists for vendor ${vendorLabel}.`
+      ),
+    },
+  ];
+}
+
+/** 4. Duplicate vendor + amount combination */
 function checkDuplicateVendorAmount(
   invoice: Invoice,
   vendorInvoices: VendorInvoice[]
@@ -322,7 +356,7 @@ Deno.serve(async (req: Request) => {
     const { data: invoice, error: invoiceError } = await db
       .from("invoices")
       .select(
-        "id, company_id, vendor_id, invoice_number, invoice_date, issue_date, due_date, amount, total_amount, bank_account, seller_nip, currency, overall_risk"
+        "id, company_id, vendor_id, invoice_number, invoice_date, issue_date, due_date, amount, total_amount, bank_account, seller_nip, currency, overall_risk, created_at"
       )
       .eq("id", invoiceId)
       .maybeSingle();
@@ -339,7 +373,7 @@ Deno.serve(async (req: Request) => {
     // ── Fetch company invoices for duplicate number check ─────────────────────
     const { data: companyInvoices } = await db
       .from("invoices")
-      .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip")
+      .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip, created_at")
       .eq("company_id", callerCompanyId)
       .not("id", "eq", invoiceId)
       .limit(2000);
@@ -349,7 +383,7 @@ Deno.serve(async (req: Request) => {
     if (invoice.vendor_id) {
       const { data: vi } = await db
         .from("invoices")
-        .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip")
+        .select("id, invoice_number, amount, total_amount, bank_account, issue_date, seller_nip, created_at")
         .eq("vendor_id", invoice.vendor_id)
         .eq("company_id", callerCompanyId)
         .not("id", "eq", invoiceId)
@@ -365,6 +399,7 @@ Deno.serve(async (req: Request) => {
     const flagCandidates: FlagCandidate[] = [
       ...checkMissingFields(invoice as Invoice),
       ...checkDuplicateInvoiceNumber(invoice as Invoice, allCompanyInvoices),
+      ...checkDuplicateByDate(invoice as Invoice, allCompanyInvoices),
       ...checkDuplicateVendorAmount(invoice as Invoice, vendorInvoices),
       ...checkBankAccountChange(invoice as Invoice, vendorInvoices),
       ...checkAmountOutlier(invoice as Invoice, vendorInvoices),
@@ -429,7 +464,7 @@ Deno.serve(async (req: Request) => {
       metadata:   {
         flags_created:  createdFlags.length,
         overall_risk:   overallRisk,
-        checks_run:     5,
+        checks_run:     6,
       },
     });
 

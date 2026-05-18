@@ -509,7 +509,7 @@ async function runKsefFetch({
               raw_file_url: urlData?.signedUrl ?? filePath,
               upload_session_id: sessionId,
             })
-            .select('id')
+            .select('id, created_at')
             .single();
 
           if (!invError && invoice) {
@@ -518,16 +518,23 @@ async function runKsefFetch({
 
             // Check for duplicate: same invoice_number + seller_nip within company
             const invoiceNumber = inv.invoiceNumber ?? ksefId;
-            if (invoiceNumber && sellerNip) {
-              const { data: dupRow } = await supabase
+            if (invoiceNumber) {
+              let query = supabase
                 .from('invoices')
-                .select('id')
+                .select('id, created_at')
                 .eq('company_id', companyId)
                 .eq('invoice_number', invoiceNumber)
-                .eq('seller_nip', sellerNip)
                 .neq('id', invoice.id)
-                .limit(1)
-                .maybeSingle();
+                .order('created_at', { ascending: true })
+                .limit(1);
+
+              if (sellerNip) {
+                query = query.eq('seller_nip', sellerNip);
+              } else {
+                query = query.is('seller_nip', null);
+              }
+
+              const { data: dupRow } = await query.maybeSingle();
               if (dupRow) {
                 const vendorLabel = sellerNip ? `NIP ${sellerNip}` : (sellerName ?? 'unknown vendor');
                 invoiceFlags.push({
@@ -535,6 +542,15 @@ async function runKsefFetch({
                   severity: 'high',
                   message: `Duplicate invoice number "${invoiceNumber}" already exists for vendor ${vendorLabel}.`,
                 });
+                const existingTs = new Date((dupRow as { created_at: string }).created_at).getTime();
+                const newTs      = new Date(invoice.created_at).getTime();
+                if (newTs > existingTs) {
+                  invoiceFlags.push({
+                    type: 'duplicate_invoice_date',
+                    severity: 'high',
+                    message: `Duplicate invoice detected based on creation date — an earlier copy already exists for vendor ${vendorLabel}.`,
+                  });
+                }
               }
             }
 

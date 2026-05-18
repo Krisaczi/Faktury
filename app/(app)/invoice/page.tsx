@@ -319,6 +319,11 @@ export default function InvoicesPage() {
                       Duplicate
                     </Badge>
                   )}
+                  {invoice.flags?.some((f) => f.type === 'duplicate_invoice_date') && (
+                    <Badge variant="outline" className="text-xs font-medium bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+                      Duplicate (by date)
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Flags */}
