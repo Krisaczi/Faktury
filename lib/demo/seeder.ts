@@ -138,18 +138,21 @@ export async function seedDemoSession(opts: {
   );
 
   // ── 5. Insert vendors ──────────────────────────────────────────────────────
+  // NIPs are derived deterministically from the vendor index to guarantee uniqueness
+  // within the company (unique constraint on company_id + nip).
   const vendorTemplates = VENDOR_TEMPLATES.slice(0, vendorCount);
-  const { data: vendors } = await db
+  const { data: vendors, error: vendorErr } = await db
     .from('vendors')
     .insert(
-      vendorTemplates.map((v) => ({
+      vendorTemplates.map((v, idx) => ({
         user_id:       authUserId,
         company_id:    companyId,
         name:          v.name,
         category:      v.category,
         risk_score:    Math.min(100, v.risk_base + Math.floor(rng() * 20)),
         status:        v.risk_base > 50 ? 'under_review' : 'active',
-        nip:           `${Math.floor(1000000000 + rng() * 8999999999)}`,
+        // Use index-based NIP to guarantee no collisions within the same company
+        nip:           `${2000000000 + idx * 100000000 + Math.floor(rng() * 99999999)}`,
         contact_email: `contact@${v.name.toLowerCase().replace(/[^a-z]/g, '')}.pl`,
         bank_accounts: [
           JSON.stringify({ iban: `PL${Math.floor(10 + rng() * 89)}${Math.floor(10000000000000000 + rng() * 89999999999999999)}`, currency: 'PLN' }),
@@ -159,6 +162,7 @@ export async function seedDemoSession(opts: {
     )
     .select('id');
 
+  if (vendorErr) throw new Error(`Vendor insert failed: ${vendorErr.message}`);
   const vendorIds = (vendors ?? []).map((v: { id: string }) => v.id);
 
   // ── 6. Insert invoices ─────────────────────────────────────────────────────
