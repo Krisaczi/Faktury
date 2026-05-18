@@ -799,12 +799,12 @@ export default function VendorProfilePage() {
                         </button>
                       )}
                     </div>
-                    <Select value={riskInput} onValueChange={(v) => { setRiskInput(v); setInvoiceFilters((f) => ({ ...f, riskLevel: v || undefined, page: 1 })); }}>
+                    <Select value={riskInput || 'all'} onValueChange={(v) => { const val = v === 'all' ? '' : v; setRiskInput(val); setInvoiceFilters((f) => ({ ...f, riskLevel: val || undefined, page: 1 })); }}>
                       <SelectTrigger className="w-32 h-8 text-sm border-slate-200 dark:border-slate-700">
                         <SelectValue placeholder="All risk" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All risk</SelectItem>
+                        <SelectItem value="all">All risk</SelectItem>
                         {['critical', 'high', 'medium', 'low'].map((r) => (
                           <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
                         ))}
