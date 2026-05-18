@@ -146,6 +146,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
     data: activity,
     isLoading: activityLoading,
     isValidating: activityValidating,
+    mutate: mutateActivity,
   } = useDashboardActivity();
 
   const chartData = (timeseries ?? []).map((p) => ({
@@ -362,9 +363,13 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
                     Latest invoices, flags, and uploads
                   </CardDescription>
                 </div>
-                {activityValidating && !activityLoading && (
-                  <InlineLoader size="xs" className="text-slate-400" />
-                )}
+                <button
+                  onClick={() => mutateActivity()}
+                  className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title="Refresh activity"
+                >
+                  <RefreshCw className={cn('w-3.5 h-3.5 text-slate-400', activityValidating && 'animate-spin')} />
+                </button>
               </div>
             </CardHeader>
             <CardContent>

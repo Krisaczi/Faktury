@@ -78,7 +78,8 @@ export function useDashboardTimeseries() {
 
 export function useDashboardActivity() {
   return useSWR<ActivityItem[]>('dashboard-activity', fetchActivity, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
+    revalidateOnFocus: true,
+    dedupingInterval: 5_000,
+    refreshInterval: 15_000,
   });
 }
