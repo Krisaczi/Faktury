@@ -214,6 +214,19 @@ async function downloadInvoiceXml(
 
 // ─── Vendor upsert ────────────────────────────────────────────────────────────
 
+function normalizeVendorName(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return null;
+  // Convert all-caps names (common in KSeF XML) to title case
+  if (trimmed === trimmed.toUpperCase() && /[A-ZĄĆĘŁŃÓŚŹŻ]{3,}/.test(trimmed)) {
+    return trimmed
+      .toLowerCase()
+      .replace(/(^|\s|\.)([\wąćęłńóśźż])/g, (_, pre, c) => pre + c.toUpperCase());
+  }
+  return trimmed;
+}
+
 async function upsertVendor(
   supabase: SupabaseClient<Database>,
   companyId: string,
@@ -222,34 +235,46 @@ async function upsertVendor(
   name: string | null | undefined
 ): Promise<string | null> {
   const lookupNip  = nip?.trim() || null;
-  const lookupName = name?.trim() || null;
+  const lookupName = normalizeVendorName(name);
 
   if (!lookupNip && !lookupName) return null;
 
-  // Try to find existing vendor by NIP (most precise) or name
-  let query = supabase.from('vendors').select('id').eq('company_id', companyId);
+  // Prefer NIP lookup (unique per company); fall back to name match
   if (lookupNip) {
-    query = query.eq('nip', lookupNip);
+    const { data: byNip } = await supabase
+      .from('vendors').select('id')
+      .eq('company_id', companyId)
+      .eq('nip', lookupNip)
+      .maybeSingle();
+    if (byNip) return byNip.id;
   } else {
-    query = query.ilike('name', lookupName!);
+    const { data: byName } = await supabase
+      .from('vendors').select('id')
+      .eq('company_id', companyId)
+      .ilike('name', lookupName!)
+      .maybeSingle();
+    if (byName) return byName.id;
   }
-  const { data: existing } = await query.maybeSingle();
-  if (existing) return existing.id;
 
-  // Create new vendor, mark as auto-created
+  // Create new vendor — use ON CONFLICT to avoid races on the unique (company_id, nip) index
+  const insertName = lookupName ?? lookupNip ?? 'Unknown Vendor';
+  if (lookupNip) {
+    const { data: upserted } = await supabase
+      .from('vendors')
+      .upsert(
+        { company_id: companyId, user_id: userId, name: insertName, nip: lookupNip, status: 'active', new_vendor: true as never },
+        { onConflict: 'company_id,nip', ignoreDuplicates: false }
+      )
+      .select('id')
+      .single();
+    return upserted?.id ?? null;
+  }
+
   const { data: created } = await supabase
     .from('vendors')
-    .insert({
-      company_id: companyId,
-      user_id: userId,
-      name: lookupName ?? lookupNip ?? 'Unknown Vendor',
-      nip: lookupNip,
-      status: 'active',
-      new_vendor: true as never,
-    })
+    .insert({ company_id: companyId, user_id: userId, name: insertName, nip: null, status: 'active', new_vendor: true as never })
     .select('id')
     .single();
-
   return created?.id ?? null;
 }
 
@@ -462,7 +487,7 @@ async function runKsefFetch({
 
         for (const inv of invoiceList) {
           const sellerNip  = inv.sellerNip ?? inv.vendorNip ?? meta.seller?.nip ?? null;
-          const sellerName = inv.vendorName ?? meta.seller?.name ?? null;
+          const sellerName = normalizeVendorName(inv.vendorName ?? meta.seller?.name ?? null);
           const vendorId   = await upsertVendor(supabase, companyId, userId, sellerNip, sellerName);
 
           const { data: invoice, error: invError } = await supabase

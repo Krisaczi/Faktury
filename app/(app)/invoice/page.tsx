@@ -292,7 +292,7 @@ export default function InvoicesPage() {
                   {invoice.vendor_name ? (
                     <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>
                   ) : (
-                    <span className="text-sm text-slate-400 italic">—</span>
+                    <span className="text-sm text-slate-400 italic">Unknown vendor</span>
                   )}
                 </div>
 

@@ -68,6 +68,25 @@ function extractFirst(xml: string, ...tags: string[]): string | undefined {
   return undefined;
 }
 
+function extractKsefSellerName(xml: string): string | undefined {
+  const sellerBlockMatch = xml.match(/<(?:[^:>]*:)?Podmiot1[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot1>/i)
+    ?? xml.match(/<(?:[^:>]*:)?Sprzedawca[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Sprzedawca>/i);
+  const block = sellerBlockMatch ? sellerBlockMatch[1] : xml;
+  return extractFirst(block, "NazwaPodmiotu", "Nazwa", "NazwaFirmy", "NazwaSprzedawcy", "NazwaDostawcy", "FullName");
+}
+
+function normalizeVendorName(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.replace(/\s+/g, " ").trim();
+  if (!trimmed) return undefined;
+  if (trimmed === trimmed.toUpperCase() && /[A-ZĄĆĘŁŃÓŚŹŻ]{3,}/.test(trimmed)) {
+    return trimmed
+      .toLowerCase()
+      .replace(/(^|\s|\.)([\wąćęłńóśźż])/g, (_: string, pre: string, c: string) => pre + c.toUpperCase());
+  }
+  return trimmed;
+}
+
 function extractSegments(xml: string, tag: string): string[] {
   const segments: string[] = [];
   const bare = tag.replace(/^[^:]+:/, "");
@@ -111,25 +130,37 @@ function detectXmlFormat(xml: string): "ksef" | "ubl" | "generic" {
 }
 
 function parseKsefSegment(seg: string): ParsedInvoice {
+  const sellerBlock = seg.match(/<(?:[^:>]*:)?Podmiot1[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot1>/i)?.[1]
+    ?? seg.match(/<(?:[^:>]*:)?Sprzedawca[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Sprzedawca>/i)?.[1]
+    ?? seg;
+  const sellerNip = extractFirst(sellerBlock, "NIP", "NIPSprzedawcy", "NIPUE");
+
+  const buyerBlock = seg.match(/<(?:[^:>]*:)?Podmiot2[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot2>/i)?.[1]
+    ?? seg.match(/<(?:[^:>]*:)?Nabywca[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Nabywca>/i)?.[1];
+  const buyerNip = buyerBlock
+    ? extractFirst(buyerBlock, "NIP", "NIPNabywcy", "NIPKupujacego")
+    : extractFirst(seg, "NIPNabywcy", "NIPKupujacego");
+
   return {
     invoiceNumber: extractFirst(seg, "P_2", "NrFa", "NumerFaktury"),
-    vendorName: extractFirst(seg, "NazwaSprzedawcy", "NazwaFirmy", "Nazwa"),
-    vendorNip: extractFirst(seg, "NIP", "NIPSprzedawcy", "NIPUE"),
+    vendorName: normalizeVendorName(extractKsefSellerName(seg)),
+    vendorNip: sellerNip,
     invoiceDate: parseDate(extractFirst(seg, "P_1", "DataWystawienia", "DataFa")),
     dueDate: parseDate(extractFirst(seg, "P_6", "TerminPlatnosci", "DataPlatnosci")),
     totalAmount: parseAmount(extractFirst(seg, "P_15", "WartoscFaktury", "KwotaDoZaplaty", "Wartosc")),
     taxAmount: parseAmount(extractFirst(seg, "P_14", "KwotaPodatku", "KwotaVAT")),
     currency: extractFirst(seg, "KodWaluty", "Waluta") ?? "PLN",
-    sellerNip: extractFirst(seg, "NIP", "NIPSprzedawcy", "NIPUE"),
-    buyerNip: extractFirst(seg, "NIPNabywcy", "NIPKupujacego"),
+    sellerNip,
+    buyerNip,
     bankAccount: extractFirst(seg, "NrRachunku", "NumerRachunku", "RachunekBankowy"),
   };
 }
 
 function parseUBLSegment(seg: string): ParsedInvoice {
+  const supplierBlock = seg.match(/<(?:[^:>]*:)?AccountingSupplierParty[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?AccountingSupplierParty>/i)?.[1] ?? seg;
   return {
     invoiceNumber: extractFirst(seg, "cbc:ID", "ID"),
-    vendorName: extractFirst(seg, "cac:PartyName", "cbc:Name", "Name"),
+    vendorName: normalizeVendorName(extractFirst(supplierBlock, "cbc:Name", "cac:PartyName", "Name")),
     vendorNip: extractFirst(seg, "cbc:CompanyID", "CompanyID"),
     invoiceDate: parseDate(extractFirst(seg, "cbc:IssueDate", "IssueDate")),
     dueDate: parseDate(extractFirst(seg, "cbc:PaymentDueDate", "DueDate")),
@@ -144,7 +175,7 @@ function parseUBLSegment(seg: string): ParsedInvoice {
 function parseGenericSegment(seg: string): ParsedInvoice {
   return {
     invoiceNumber: extractFirst(seg, "invoice_number", "InvoiceNumber", "Number", "Nr"),
-    vendorName: extractFirst(seg, "vendor_name", "VendorName", "SellerName", "Sprzedawca"),
+    vendorName: normalizeVendorName(extractFirst(seg, "vendor_name", "VendorName", "SellerName", "Sprzedawca", "NazwaSprzedawcy", "NazwaFirmy")),
     vendorNip: extractFirst(seg, "seller_nip", "SellerNIP", "NIP"),
     invoiceDate: parseDate(extractFirst(seg, "invoice_date", "InvoiceDate", "Date", "IssueDate")),
     dueDate: parseDate(extractFirst(seg, "due_date", "DueDate", "PaymentDate")),
