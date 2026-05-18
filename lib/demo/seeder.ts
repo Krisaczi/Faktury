@@ -122,21 +122,20 @@ export async function seedDemoSession(opts: {
   if (authErr || !authData.user) throw new Error(`Auth user creation failed: ${authErr?.message}`);
   const authUserId = authData.user.id as string;
 
-  // ── 3. Insert public users row ─────────────────────────────────────────────
-  await db.from('users').insert({
-    id:         authUserId,
-    email:      demoEmail,
-    company_id: companyId,
-    role:       'owner',
-  });
+  // ── 3. Upsert public users row ─────────────────────────────────────────────
+  // The handle_new_user trigger pre-inserts with company_id=NULL, role='member'.
+  // We upsert to set the correct company_id and role.
+  await db.from('users').upsert(
+    { id: authUserId, email: demoEmail, company_id: companyId, role: 'owner' },
+    { onConflict: 'id' }
+  );
 
-  // ── 4. Insert profiles row ─────────────────────────────────────────────────
-  await db.from('profiles').insert({
-    id:        authUserId,
-    email:     demoEmail,
-    full_name: 'Demo User',
-    role:      'owner',
-  });
+  // ── 4. Upsert profiles row ─────────────────────────────────────────────────
+  // Trigger pre-inserts with role='user'; upsert to set correct role.
+  await db.from('profiles').upsert(
+    { id: authUserId, email: demoEmail, full_name: 'Demo User', role: 'owner' },
+    { onConflict: 'id' }
+  );
 
   // ── 5. Insert vendors ──────────────────────────────────────────────────────
   const vendorTemplates = VENDOR_TEMPLATES.slice(0, vendorCount);
@@ -144,16 +143,18 @@ export async function seedDemoSession(opts: {
     .from('vendors')
     .insert(
       vendorTemplates.map((v) => ({
-        user_id:    authUserId,
-        company_id: companyId,
-        name:       v.name,
-        category:   v.category,
-        risk_score: Math.min(100, v.risk_base + Math.floor(rng() * 20)),
-        status:     v.risk_base > 50 ? 'under_review' : 'active',
-        nip:        `${Math.floor(1000000000 + rng() * 8999999999)}`,
+        user_id:       authUserId,
+        company_id:    companyId,
+        name:          v.name,
+        category:      v.category,
+        risk_score:    Math.min(100, v.risk_base + Math.floor(rng() * 20)),
+        status:        v.risk_base > 50 ? 'under_review' : 'active',
+        nip:           `${Math.floor(1000000000 + rng() * 8999999999)}`,
         contact_email: `contact@${v.name.toLowerCase().replace(/[^a-z]/g, '')}.pl`,
-        bank_accounts: [{ iban: `PL${Math.floor(10 + rng() * 89)}${Math.floor(1000000000000000000 + rng() * 8999999999999999999)}`, currency: 'PLN' }],
-        notes: null,
+        // bank_accounts is text[] — store as serialized JSON strings
+        bank_accounts: [
+          JSON.stringify({ iban: `PL${Math.floor(10 + rng() * 89)}${Math.floor(10000000000000000 + rng() * 89999999999999999)}`, currency: 'PLN' }),
+        ],
       }))
     )
     .select('id');
@@ -180,22 +181,21 @@ export async function seedDemoSession(opts: {
       issue_date:     isoDate(issueDate),
       due_date:       isoDate(dueDate),
       amount,
-      total_amount:   amount,
       currency:       pickRandom(currencies, rng),
       overall_risk:   riskLevels[riskIdx],
-      seller_nip:     riskIdx === 2 && rng() < 0.3 ? null : `${Math.floor(1000000000 + rng() * 8999999999)}`,
       bank_account:   `PL${Math.floor(10 + rng() * 89)}XXXX`,
-      raw_file_url:   null,
+      file_url:       null,
     };
   });
 
   // Insert in batches of 50
   const insertedInvoiceIds: string[] = [];
   for (let i = 0; i < invoiceRows.length; i += 50) {
-    const { data: invBatch } = await db
+    const { data: invBatch, error: invErr } = await db
       .from('invoices')
       .insert(invoiceRows.slice(i, i + 50))
       .select('id, overall_risk');
+    if (invErr) throw new Error(`Invoice insert failed: ${invErr.message}`);
     (invBatch ?? []).forEach((inv: { id: string; overall_risk: string }) => insertedInvoiceIds.push(inv.id));
   }
 
