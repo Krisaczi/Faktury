@@ -333,8 +333,8 @@ export default function LandingPage() {
             &copy; {new Date().getFullYear()} RiskGuard. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-slate-400 dark:text-slate-500">
-            <a href="#" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Terms</a>
+            <Link href="/privacy-policy" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Privacy</Link>
+            <Link href="/terms-of-use" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Terms</Link>
             <a href="#" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Contact</a>
           </div>
         </div>

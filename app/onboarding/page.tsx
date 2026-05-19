@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -249,6 +250,17 @@ export default function OnboardingPage() {
 
         <p className="text-center text-xs text-slate-400 mt-4">
           You can update these details later in Settings.
+        </p>
+        <p className="text-center text-xs text-slate-400 mt-2">
+          By continuing, you agree to our{' '}
+          <Link href="/terms-of-use" className="text-blue-500 hover:text-blue-600 hover:underline transition-colors">
+            Terms of Use
+          </Link>
+          {' '}and{' '}
+          <Link href="/privacy-policy" className="text-blue-500 hover:text-blue-600 hover:underline transition-colors">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </div>
     </div>
