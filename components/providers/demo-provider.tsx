@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const exitDemo = useCallback(async () => {
     try {
       await fetch('/api/demo/disable', { method: 'POST' });
+      await getSupabaseBrowserClient().auth.signOut();
     } finally {
       setStatus(DEFAULT_STATUS);
       router.push('/login');
