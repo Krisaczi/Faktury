@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { useInvoicingRole } from '@/hooks/use-invoicing-role';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useState } from 'react';
@@ -16,17 +17,18 @@ import {
 } from '@/components/ui/tooltip';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/upload', label: 'Upload', icon: Upload },
-  { href: '/invoice', label: 'Invoices', icon: FileText },
-  { href: '/risk-report', label: 'Risk Report', icon: FileBarChart2 },
-  { href: '/vendors', label: 'Vendors', icon: Building2 },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/upload',      label: 'Upload',       icon: Upload },
+  { href: '/invoice',     label: 'Invoices',     icon: FileText },
+  { href: '/risk-report', label: 'Risk Report',  icon: FileBarChart2 },
+  { href: '/vendors',     label: 'Vendors',      icon: Building2 },
+  { href: '/settings',    label: 'Settings',     icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
+  const { hasInvoicing } = useInvoicingRole();
   const [collapsed, setCollapsed] = useState(false);
 
   const initials = profile?.full_name
@@ -96,6 +98,54 @@ export function Sidebar() {
               </Tooltip>
             );
           })}
+
+          {/* Invoicing module — visible to admin / accountant / viewer */}
+          {hasInvoicing && (
+            <>
+              <div className={cn('my-2 border-t border-slate-800', collapsed && 'mx-1')} />
+              {!collapsed && (
+                <p className="px-3 pb-1 text-[10px] font-semibold text-slate-600 uppercase tracking-widest">
+                  Fakturowanie
+                </p>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {(() => {
+                    const active = pathname.startsWith('/admin/invoices');
+                    return (
+                      <Link
+                        href="/admin/invoices"
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                          active
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                          collapsed && 'justify-center px-2'
+                        )}
+                      >
+                        <ReceiptText
+                          className={cn(
+                            'flex-shrink-0 transition-colors',
+                            collapsed ? 'w-5 h-5' : 'w-4 h-4',
+                            active ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                          )}
+                        />
+                        {!collapsed && <span>Faktury wystawione</span>}
+                        {!collapsed && active && (
+                          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
+                        )}
+                      </Link>
+                    );
+                  })()}
+                </TooltipTrigger>
+                {collapsed && (
+                  <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
+                    Faktury wystawione
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </>
+          )}
         </nav>
 
         {/* User footer */}

@@ -8,11 +8,12 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from './sidebar';
 
 const pageLabels: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/upload': 'Upload',
-  '/risk-report': 'Risk Report',
-  '/vendors': 'Vendors',
-  '/settings': 'Settings',
+  '/dashboard':      'Dashboard',
+  '/upload':         'Upload',
+  '/risk-report':    'Risk Report',
+  '/vendors':        'Vendors',
+  '/settings':       'Settings',
+  '/admin/invoices': 'Faktury wystawione',
 };
 
 export function Topbar() {
