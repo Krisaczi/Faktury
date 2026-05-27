@@ -5,7 +5,9 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { useUserRole } from '@/hooks/use-user-role';
 import { useInvoicingRole } from '@/hooks/use-invoicing-role';
+import { ROLE_LABELS, type AppRole } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useState } from 'react';
@@ -25,10 +27,19 @@ const navItems = [
   { href: '/settings',    label: 'Settings',     icon: Settings },
 ];
 
+const ROLE_COLORS: Record<AppRole, string> = {
+  owner:      'bg-amber-500/15 text-amber-400 ring-amber-500/20',
+  admin:      'bg-blue-500/15 text-blue-400 ring-blue-500/20',
+  accountant: 'bg-emerald-500/15 text-emerald-400 ring-emerald-500/20',
+  viewer:     'bg-slate-500/15 text-slate-400 ring-slate-500/20',
+  member:     'bg-slate-500/10 text-slate-500 ring-slate-500/10',
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
   const { hasInvoicing } = useInvoicingRole();
+  const { data: roleData } = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
 
   const initials = profile?.full_name
@@ -167,24 +178,46 @@ export function Sidebar() {
             )}
           </Tooltip>
 
-          <div className={cn(
-            'flex items-center gap-3 px-2 py-2 rounded-lg',
-            collapsed && 'justify-center'
-          )}>
-            <Avatar className="w-7 h-7 flex-shrink-0">
-              <AvatarFallback className="text-xs bg-blue-700 text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">
-                  {profile?.full_name ?? 'User'}
-                </p>
-                <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className={cn(
+                'flex items-center gap-3 px-2 py-2 rounded-lg cursor-default select-none',
+                collapsed && 'justify-center'
+              )}>
+                <Avatar className="w-7 h-7 flex-shrink-0">
+                  <AvatarFallback className="text-xs bg-blue-700 text-white">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate">
+                      {profile?.full_name ?? 'User'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                    {roleData?.role && (
+                      <span
+                        aria-label={`Rola użytkownika: ${ROLE_LABELS[roleData.role]}`}
+                        className={cn(
+                          'mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset leading-none',
+                          ROLE_COLORS[roleData.role]
+                        )}
+                      >
+                        {ROLE_LABELS[roleData.role]}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+            </TooltipTrigger>
+            {collapsed && roleData?.role && (
+              <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
+                <span className="font-medium">{profile?.full_name ?? user?.email}</span>
+                <br />
+                <span className="text-slate-400 text-xs">{ROLE_LABELS[roleData.role]}</span>
+              </TooltipContent>
             )}
-          </div>
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
