@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -155,6 +155,46 @@ export function Sidebar() {
                   </TooltipContent>
                 )}
               </Tooltip>
+
+              {/* Kontrahenci — owner only */}
+              {roleData?.role === 'owner' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {(() => {
+                      const active = pathname.startsWith('/admin/companies');
+                      return (
+                        <Link
+                          href="/admin/companies"
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                            active
+                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                            collapsed && 'justify-center px-2'
+                          )}
+                        >
+                          <Users
+                            className={cn(
+                              'flex-shrink-0 transition-colors',
+                              collapsed ? 'w-5 h-5' : 'w-4 h-4',
+                              active ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                            )}
+                          />
+                          {!collapsed && <span>Kontrahenci</span>}
+                          {!collapsed && active && (
+                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
+                          )}
+                        </Link>
+                      );
+                    })()}
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
+                      Kontrahenci
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
             </>
           )}
         </nav>

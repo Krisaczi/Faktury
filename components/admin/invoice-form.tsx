@@ -74,6 +74,12 @@ interface Props {
     address: string;
     bank_account?: string;
   };
+  buyerDefaults?: {
+    buyer_name?:    string;
+    buyer_nip?:     string;
+    buyer_address?: string;
+    buyer_email?:   string;
+  };
 }
 
 const VAT_LABELS: Record<VatRate, string> = {
@@ -90,7 +96,7 @@ const PAYMENT_LABELS = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults }: Props) {
+export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
@@ -112,6 +118,10 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults }: 
       seller_nip:     defaultValues?.seller_nip     ?? sellerDefaults?.nip     ?? '',
       seller_address: defaultValues?.seller_address ?? sellerDefaults?.address ?? '',
       seller_bank_account: defaultValues?.seller_bank_account ?? sellerDefaults?.bank_account ?? '',
+      buyer_name:     defaultValues?.buyer_name     ?? buyerDefaults?.buyer_name    ?? '',
+      buyer_nip:      defaultValues?.buyer_nip      ?? buyerDefaults?.buyer_nip     ?? '',
+      buyer_address:  defaultValues?.buyer_address  ?? buyerDefaults?.buyer_address ?? '',
+      buyer_email:    defaultValues?.buyer_email     ?? buyerDefaults?.buyer_email   ?? '',
       items: defaultValues?.items?.length
         ? defaultValues.items
         : [emptyItem()],

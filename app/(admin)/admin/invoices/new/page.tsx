@@ -5,10 +5,11 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { canWriteInvoice, type AppRole } from '@/lib/permissions';
+import { getBuyerCompanyById } from '@/app/(admin)/admin/companies/actions';
 
 export const metadata = { title: 'Admin — Nowa faktura' };
 
-async function getSellerDefaults() {
+async function getSellerDefaults(buyerCompanyId?: string) {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return undefined;
@@ -29,18 +30,44 @@ async function getSellerDefaults() {
 
   if (!company) return undefined;
 
+  // Prefill buyer if a buyer_company_id was provided
+  let buyerDefaults: {
+    buyer_name?:    string;
+    buyer_nip?:     string;
+    buyer_address?: string;
+    buyer_email?:   string;
+  } | undefined;
+
+  if (buyerCompanyId) {
+    const detail = await getBuyerCompanyById(buyerCompanyId);
+    if (detail) {
+      const bc = detail.company;
+      const addressParts = [bc.street, bc.postal_code, bc.city, bc.country].filter(Boolean).join(', ');
+      buyerDefaults = {
+        buyer_name:    bc.name,
+        buyer_nip:     bc.nip ?? undefined,
+        buyer_address: addressParts || undefined,
+        buyer_email:   bc.billing_email ?? bc.email ?? undefined,
+      };
+    }
+  }
+
   return {
-    name:    company.name,
-    nip:     company.nip ?? '',
-    address: '',
-    role:    (userRecord.role ?? 'member') as AppRole,
+    name:          company.name,
+    nip:           company.nip ?? '',
+    address:       '',
+    role:          (userRecord.role ?? 'member') as AppRole,
+    buyerDefaults,
   };
 }
 
-export default async function NewInvoicePage() {
-  const defaults = await getSellerDefaults();
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: { buyer_company_id?: string };
+}) {
+  const defaults = await getSellerDefaults(searchParams.buyer_company_id);
 
-  // Hard block for non-writers — extra safety layer on top of the layout guard
   if (!canWriteInvoice(defaults?.role)) redirect('/admin/invoices');
 
   const sellerDefaults = defaults
@@ -66,6 +93,7 @@ export default async function NewInvoicePage() {
       <InvoiceForm
         mode="create"
         sellerDefaults={sellerDefaults}
+        buyerDefaults={defaults?.buyerDefaults}
       />
     </Stack>
   );
