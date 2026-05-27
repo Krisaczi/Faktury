@@ -44,17 +44,14 @@ export function useUserRole() {
 
     init();
 
-    // Realtime subscription — updates role badge without a page refresh
+    // Unique channel name per mount avoids "cannot add callbacks after subscribe()"
+    // when React StrictMode unmounts/remounts or the component re-renders.
+    const channelName = `user-role-watch-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel('user-role-watch')
+      .channel(channelName)
       .on(
         'postgres_changes',
-        {
-          event:  'UPDATE',
-          schema: 'public',
-          table:  'users',
-          // filter is set after userId is resolved; channel is recreated on mount
-        },
+        { event: 'UPDATE', schema: 'public', table: 'users' },
         (payload) => {
           if (!userId || payload.new?.id !== userId) return;
           setData(prev => prev
