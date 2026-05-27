@@ -129,7 +129,7 @@ export default function InvoicesPage() {
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="w-4 h-4" />
-            Filters
+            Filtry
             {hasFilters && (
               <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
                 {[search, vendorId, riskLevel].filter(Boolean).length}
@@ -138,7 +138,7 @@ export default function InvoicesPage() {
           </Button>
           {totalCount > 0 && (
             <span className="text-sm text-slate-500 tabular-nums">
-              {totalCount.toLocaleString()} invoice{totalCount !== 1 ? 's' : ''}
+              {totalCount.toLocaleString()} faktura{totalCount !== 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -165,7 +165,7 @@ export default function InvoicesPage() {
               >
                 <SelectTrigger className="h-9"><SelectValue placeholder="All vendors" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All vendors</SelectItem>
+                  <SelectItem value="all">Wszyscy dostawcy</SelectItem>
                   {(filterOpts?.vendors ?? []).map((v) => (
                     <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                   ))}
@@ -179,11 +179,11 @@ export default function InvoicesPage() {
               >
                 <SelectTrigger className="h-9"><SelectValue placeholder="All risk levels" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All risk levels</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="all">Wszystkie poziomy ryzyka</SelectItem>
+                  <SelectItem value="critical">Krytyczne</SelectItem>
+                  <SelectItem value="high">Wysokie</SelectItem>
+                  <SelectItem value="medium">Średnie</SelectItem>
+                  <SelectItem value="low">Brak</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -193,7 +193,7 @@ export default function InvoicesPage() {
                 className="h-9 gap-1.5 text-slate-500"
                 onClick={clearFilters}
               >
-                <X className="w-3.5 h-3.5" />Clear
+                <X className="w-3.5 h-3.5" />Wyczyść
               </Button>
             )}
           </div>
@@ -204,13 +204,13 @@ export default function InvoicesPage() {
       {error && !isLoading && (
         <div role="alert" className="flex items-center gap-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-          <p className="text-sm text-red-700 dark:text-red-300 flex-1">Failed to load invoices.</p>
+          <p className="text-sm text-red-700 dark:text-red-300 flex-1">Nie udało się załadować faktur.</p>
           <Button
             size="sm" variant="ghost"
             onClick={() => mutate()}
             className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 h-7 px-2"
           >
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />Retry
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />Spróbuj ponownie
           </Button>
         </div>
       )}
@@ -245,22 +245,22 @@ export default function InvoicesPage() {
         <>
           {/* Column headers */}
           <div className="hidden md:grid grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_72px] gap-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-            <span>Invoice</span>
-            <span>Vendor</span>
+            <span>Faktura</span>
+            <span>Dostawca</span>
             <button
               className="flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition-colors text-left"
               onClick={() => toggleSort('issue_date')}
             >
-              Date <SortIcon field="issue_date" />
+              Data <SortIcon field="issue_date" />
             </button>
             <button
               className="flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition-colors text-left"
               onClick={() => toggleSort('amount')}
             >
-              Amount <SortIcon field="amount" />
+              Kwota <SortIcon field="amount" />
             </button>
-            <span>Risk</span>
-            <span>Flags</span>
+            <span>Ryzyko</span>
+            <span>Poziom</span>
           </div>
 
           <div className="space-y-1.5" role="list" aria-label="Invoice list">
@@ -278,7 +278,7 @@ export default function InvoicesPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate transition-colors">
-                      {invoice.invoice_number ?? <span className="italic text-slate-400">No number</span>}
+                      {invoice.invoice_number ?? <span className="italic text-slate-400">Bram numeru</span>}
                     </p>
                     {invoice.seller_nip && (
                       <p className="text-xs text-slate-400 font-mono truncate">NIP {invoice.seller_nip}</p>
@@ -292,19 +292,19 @@ export default function InvoicesPage() {
                   {invoice.vendor_name ? (
                     <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>
                   ) : (
-                    <span className="text-sm text-slate-400 italic">Unknown vendor</span>
+                    <span className="text-sm text-slate-400 italic">Nieznany dostawca</span>
                   )}
                 </div>
 
                 {/* Date */}
                 <div className="flex items-center gap-1.5 md:block">
-                  <span className="text-xs text-slate-400 md:hidden">Date:</span>
+                  <span className="text-xs text-slate-400 md:hidden">Data:</span>
                   <span className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">{fmt(invoice.issue_date)}</span>
                 </div>
 
                 {/* Amount */}
                 <div className="flex items-center gap-1.5 md:block">
-                  <span className="text-xs text-slate-400 md:hidden">Amount:</span>
+                  <span className="text-xs text-slate-400 md:hidden">Kwota:</span>
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200 tabular-nums">
                     {fmtCurrency(invoice.amount, invoice.currency)}
                   </span>
@@ -312,18 +312,18 @@ export default function InvoicesPage() {
 
                 {/* Risk */}
                 <div className="flex items-center gap-1.5 md:flex-col md:items-start">
-                  <span className="text-xs text-slate-400 md:hidden">Risk:</span>
+                  <span className="text-xs text-slate-400 md:hidden">Ryzyko:</span>
                   <RiskBadge level={invoice.overall_risk} />
                   {invoice.flags?.some((f) => f.type === 'duplicate_invoice_after_first') && (
                     <Badge variant="outline" className="text-xs font-medium bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
-                      Duplicate (after first)
+                      Potencjanly Duplikat
                     </Badge>
                   )}
                 </div>
 
                 {/* Flags */}
                 <div className="flex items-center gap-1.5 md:block">
-                  <span className="text-xs text-slate-400 md:hidden">Flags:</span>
+                  <span className="text-xs text-slate-400 md:hidden">Poziom:</span>
                   {invoice.flag_count > 0 ? (
                     <span className={cn(
                       'inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold tabular-nums',
@@ -345,7 +345,7 @@ export default function InvoicesPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <p className="text-sm text-slate-500">
-                Page {page} of {totalPages} &middot; {totalCount.toLocaleString()} total
+                Strona {page} of {totalPages} &middot; {totalCount.toLocaleString()} łącznie
               </p>
               <div className="flex items-center gap-2">
                 <Button

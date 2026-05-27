@@ -514,6 +514,160 @@ export type Database = {
         };
         Relationships: [];
       };
+      issued_invoices: {
+        Row: {
+          id: string;
+          company_id: string;
+          invoice_number: string;
+          status: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          currency: string;
+          issue_date: string;
+          sale_date: string | null;
+          due_date: string | null;
+          payment_method: 'transfer' | 'cash' | 'card' | 'other';
+          seller_name: string;
+          seller_nip: string;
+          seller_address: string;
+          seller_bank_account: string | null;
+          buyer_name: string;
+          buyer_nip: string | null;
+          buyer_address: string;
+          buyer_email: string | null;
+          net_total: number;
+          vat_total: number;
+          gross_total: number;
+          notes: string | null;
+          ksef_reference_no: string | null;
+          ksef_session_token: string | null;
+          ksef_status: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
+          ksef_error_message: string | null;
+          ksef_sent_at: string | null;
+          ksef_accepted_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          invoice_number: string;
+          status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          currency?: string;
+          issue_date?: string;
+          sale_date?: string | null;
+          due_date?: string | null;
+          payment_method?: 'transfer' | 'cash' | 'card' | 'other';
+          seller_name: string;
+          seller_nip: string;
+          seller_address: string;
+          seller_bank_account?: string | null;
+          buyer_name: string;
+          buyer_nip?: string | null;
+          buyer_address?: string;
+          buyer_email?: string | null;
+          net_total?: number;
+          vat_total?: number;
+          gross_total?: number;
+          notes?: string | null;
+          ksef_reference_no?: string | null;
+          ksef_session_token?: string | null;
+          ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
+          ksef_error_message?: string | null;
+          ksef_sent_at?: string | null;
+          ksef_accepted_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          invoice_number?: string;
+          status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          currency?: string;
+          issue_date?: string;
+          sale_date?: string | null;
+          due_date?: string | null;
+          payment_method?: 'transfer' | 'cash' | 'card' | 'other';
+          seller_name?: string;
+          seller_nip?: string;
+          seller_address?: string;
+          seller_bank_account?: string | null;
+          buyer_name?: string;
+          buyer_nip?: string | null;
+          buyer_address?: string;
+          buyer_email?: string | null;
+          net_total?: number;
+          vat_total?: number;
+          gross_total?: number;
+          notes?: string | null;
+          ksef_reference_no?: string | null;
+          ksef_session_token?: string | null;
+          ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
+          ksef_error_message?: string | null;
+          ksef_sent_at?: string | null;
+          ksef_accepted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'issued_invoices_company_id_fkey';
+            columns: ['company_id'];
+            referencedRelation: 'companies';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      issued_invoice_items: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          position: number;
+          name: string;
+          unit: string;
+          quantity: number;
+          unit_price_net: number;
+          vat_rate: '23' | '8' | '5' | '0' | 'zw' | 'np' | 'oo';
+          net_amount: number;
+          vat_amount: number;
+          gross_amount: number;
+          discount_pct: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          position: number;
+          name: string;
+          unit?: string;
+          quantity: number;
+          unit_price_net: number;
+          vat_rate?: '23' | '8' | '5' | '0' | 'zw' | 'np' | 'oo';
+          net_amount: number;
+          vat_amount?: number;
+          gross_amount: number;
+          discount_pct?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          position?: number;
+          name?: string;
+          unit?: string;
+          quantity?: number;
+          unit_price_net?: number;
+          vat_rate?: '23' | '8' | '5' | '0' | 'zw' | 'np' | 'oo';
+          net_amount?: number;
+          vat_amount?: number;
+          gross_amount?: number;
+          discount_pct?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'issued_invoice_items_invoice_id_fkey';
+            columns: ['invoice_id'];
+            referencedRelation: 'issued_invoices';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -630,6 +784,20 @@ export type Database = {
           high_risk: number;
         }[];
       };
+      generate_invoice_number: {
+        Args: {
+          p_company_id: string;
+          p_year?: number | null;
+        };
+        Returns: string;
+      };
+      peek_invoice_sequence: {
+        Args: {
+          p_company_id: string;
+          p_year?: number | null;
+        };
+        Returns: number;
+      };
     };
     Enums: {
       user_role: 'user' | 'admin' | 'owner';
@@ -637,6 +805,9 @@ export type Database = {
       risk_level: 'low' | 'medium' | 'high' | 'critical';
       report_status: 'draft' | 'published' | 'archived';
       upload_status: 'pending' | 'processing' | 'completed' | 'failed';
+      issued_invoice_status: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+      issued_invoice_payment_method: 'transfer' | 'cash' | 'card' | 'other';
+      ksef_processing_status: 'pending' | 'processing' | 'accepted' | 'rejected';
     };
     CompositeTypes: {
       [_ in never]: never;

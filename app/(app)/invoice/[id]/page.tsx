@@ -222,14 +222,14 @@ function AddFlagDialog({
           aria-label="Add manual risk flag"
         >
           <Plus className="w-3.5 h-3.5" />
-          Add Flag
+          Dodaj Flagę
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Risk Flag</DialogTitle>
+          <DialogTitle>Dodaj flagę ryzyka</DialogTitle>
           <DialogDescription>
-            Manually flag this invoice for review. Flags are logged and visible to your team.
+            Ręcznie oznacz tę fakturę do weryfikacji. Flagi są rejestrowane i widoczne dla Twojego zespołu..
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
@@ -241,7 +241,7 @@ function AddFlagDialog({
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="flag-type">Type</Label>
+              <Label htmlFor="flag-type">Rodzaj</Label>
               <Select value={type} onValueChange={setType}>
                 <SelectTrigger id="flag-type" className="h-9">
                   <SelectValue />
@@ -256,7 +256,7 @@ function AddFlagDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="flag-severity">Severity</Label>
+              <Label htmlFor="flag-severity">Poziom</Label>
               <Select value={severity} onValueChange={(v) => setSeverity(v as InvoiceFlag['severity'])}>
                 <SelectTrigger id="flag-severity" className="h-9">
                   <SelectValue />
@@ -271,7 +271,7 @@ function AddFlagDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="flag-message">
-              Message{' '}
+              Wiadomość{' '}
               <span className="text-slate-400 text-xs font-normal">({message.length}/500)</span>
             </Label>
             <Textarea
@@ -285,14 +285,14 @@ function AddFlagDialog({
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Anuluj</Button>
             <Button
               type="submit"
               disabled={submitting}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               {submitting
-                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />Adding…</>
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />Dodawanie…</>
                 : 'Add Flag'}
             </Button>
           </DialogFooter>
@@ -336,28 +336,28 @@ function ReviewDialog({
           aria-label="Mark invoice as reviewed"
         >
           <MessageSquare className="w-4 h-4" />
-          Mark Reviewed
+          Oznacz jak zweryfikowane
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Submit Review</DialogTitle>
-          <DialogDescription>Record your review decision for this invoice.</DialogDescription>
+          <DialogTitle>Prześlij recenzję</DialogTitle>
+          <DialogDescription>Zapisz recenzję dla tej faktury.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="review-status">Decision</Label>
+            <Label htmlFor="review-status">Decyzja</Label>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger id="review-status"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="reviewed">Reviewed</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="flagged_for_follow_up">Flagged for Follow-up</SelectItem>
+                <SelectItem value="reviewed">Zweryfikowana</SelectItem>
+                <SelectItem value="approved">Zatwierdzona</SelectItem>
+                <SelectItem value="flagged_for_follow_up">Oznaczona do weryfikacji</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="review-note">Note (optional)</Label>
+            <Label htmlFor="review-note">Notatka (opcjonalnie)</Label>
             <Textarea
               id="review-note"
               placeholder="Add context, observations, or follow-up actions…"
@@ -368,7 +368,7 @@ function ReviewDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>Anuluj</Button>
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting ? 'Submitting…' : 'Submit Review'}
           </Button>
@@ -430,7 +430,7 @@ function FlagCard({
         <div className="px-4 pb-4 border-t border-inherit pt-3 space-y-3">
           <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400">
             <div>
-              <span className="font-medium text-slate-600 dark:text-slate-300">Type: </span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">Rodzaj: </span>
               {flag.type.replace(/_/g, ' ')}
             </div>
             <div>
@@ -438,12 +438,12 @@ function FlagCard({
               <span className="capitalize">{flag.status}</span>
             </div>
             <div>
-              <span className="font-medium text-slate-600 dark:text-slate-300">Created: </span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">Utworzono: </span>
               {fmt(flag.created_at)}
             </div>
             {flag.acknowledged_at && (
               <div>
-                <span className="font-medium text-slate-600 dark:text-slate-300">Actioned: </span>
+                <span className="font-medium text-slate-600 dark:text-slate-300">Czynności: </span>
                 {fmt(flag.acknowledged_at)}
               </div>
             )}
@@ -451,7 +451,7 @@ function FlagCard({
 
           {flag.comment && (
             <div className="text-xs bg-white dark:bg-slate-900 rounded-md px-3 py-2 border border-slate-200 dark:border-slate-700">
-              <span className="font-medium text-slate-600 dark:text-slate-300">Comment: </span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">Komentarz: </span>
               <span className="text-slate-500 dark:text-slate-400 italic">{flag.comment}</span>
             </div>
           )}
@@ -464,7 +464,7 @@ function FlagCard({
                 onClick={() => onUpdateStatus(flag.id, 'acknowledged')}
                 aria-label="Acknowledge this flag"
               >
-                <Check className="w-3 h-3" />Acknowledge
+                <Check className="w-3 h-3" />Uznano
               </Button>
             )}
             {flag.status !== 'escalated' && flag.status !== 'dismissed' && (
@@ -474,7 +474,7 @@ function FlagCard({
                 onClick={() => onUpdateStatus(flag.id, 'escalated')}
                 aria-label="Escalate this flag"
               >
-                <ChevronsUp className="w-3 h-3" />Escalate
+                <ChevronsUp className="w-3 h-3" />Eskaluj
               </Button>
             )}
             {flag.status !== 'dismissed' && (
@@ -484,7 +484,7 @@ function FlagCard({
                 onClick={() => onUpdateStatus(flag.id, 'dismissed')}
                 aria-label="Dismiss this flag"
               >
-                <X className="w-3 h-3" />Dismiss
+                <X className="w-3 h-3" />Odrzuć
               </Button>
             )}
             {flag.status !== 'open' && (
@@ -494,7 +494,7 @@ function FlagCard({
                 onClick={() => onUpdateStatus(flag.id, 'open')}
                 aria-label="Reopen this flag"
               >
-                <RefreshCw className="w-3 h-3" />Reopen
+                <RefreshCw className="w-3 h-3" />Otwórz ponownie
               </Button>
             )}
             {isUpdating && <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />}
@@ -532,7 +532,7 @@ function AuditLogPanel({ invoiceId }: { invoiceId: string }) {
             <div className="flex items-center gap-2">
               <History className="w-4 h-4 text-slate-500" aria-hidden="true" />
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Audit Trail
+                Ścieżka audytu
               </span>
               {data && data.length > 0 && (
                 <Badge className="text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-0">
@@ -542,7 +542,7 @@ function AuditLogPanel({ invoiceId }: { invoiceId: string }) {
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <Lock className="w-3 h-3" aria-hidden="true" />
-              Admin only
+              Musisz być Administratorem
               {open
                 ? <ChevronDown className="w-4 h-4 ml-1" />
                 : <ChevronRight className="w-4 h-4 ml-1" />
@@ -558,7 +558,7 @@ function AuditLogPanel({ invoiceId }: { invoiceId: string }) {
               </div>
             ) : !data || data.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-sm">
-                No audit entries found.
+                Nie znaleziono wpisów.
               </div>
             ) : (
               <ol className="mt-3 space-y-0" aria-label="Audit log entries">
@@ -637,11 +637,11 @@ function VendorSummaryCard({ vendorId }: { vendorId: string }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="text-center p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
             <p className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums">{stats.total_invoices}</p>
-            <p className="text-xs text-slate-500">Total Invoices</p>
+            <p className="text-xs text-slate-500">Liczba faktur</p>
           </div>
           <div className="text-center p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20">
             <p className="text-lg font-bold text-red-600 dark:text-red-400 tabular-nums">{stats.high_risk_count}</p>
-            <p className="text-xs text-slate-500">High Risk</p>
+            <p className="text-xs text-slate-500">Wysokie ryzyko</p>
           </div>
         </div>
 
@@ -656,7 +656,7 @@ function VendorSummaryCard({ vendorId }: { vendorId: string }) {
 
         {recent_invoices.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Recent Invoices</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ostatnie faktury</p>
             <div className="space-y-1">
               {recent_invoices.map((inv) => (
                 <Link
@@ -684,7 +684,7 @@ function VendorSummaryCard({ vendorId }: { vendorId: string }) {
             aria-label="Open full vendor profile"
           >
             <ExternalLink className="w-3 h-3" />
-            Open Vendor Profile
+            Otwórz profil dostawcy
           </Button>
         </Link>
       </CardContent>
@@ -785,7 +785,7 @@ export default function InvoiceDetailPage() {
       a.rel = 'noopener noreferrer';
       a.click();
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Download failed', 'error');
+      showToast(e instanceof Error ? e.message : 'Pobranie pliku nie powiodło się.', 'error');
     } finally {
       setDownloading(false);
     }
@@ -796,10 +796,10 @@ export default function InvoiceDetailPage() {
     try {
       await deleteInvoice();
       setDeleteDialogOpen(false);
-      showToast('Invoice deleted successfully.', 'success');
+      showToast('Faktura usunięta.', 'success');
       setTimeout(() => router.push('/invoice'), 800);
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Failed to delete invoice', 'error');
+      showToast(e instanceof Error ? e.message : 'Nie udało się usunąć faktury', 'error');
     } finally {
       setDeleting(false);
     }
@@ -815,12 +815,12 @@ export default function InvoiceDetailPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
         <AlertTriangle className="w-12 h-12 text-red-400" aria-hidden="true" />
         <div>
-          <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">Invoice not found</p>
+          <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">Nie znaleziono faktury</p>
           <p className="text-sm text-slate-500 mt-1">{error.message}</p>
         </div>
         <Button variant="outline" onClick={() => router.push('/invoice')} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
-          Back to Invoices
+          Powrót do Faktury
         </Button>
       </div>
     );
@@ -873,14 +873,14 @@ export default function InvoiceDetailPage() {
                 aria-label="Go back"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Back
+                Cofnij
               </Button>
               <Separator orientation="vertical" className="h-4" />
               <Link
                 href="/invoice"
                 className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               >
-                Invoices
+                Faktury
               </Link>
               <ChevronRight className="w-3 h-3 text-slate-300" aria-hidden="true" />
               <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate max-w-xs">
@@ -915,7 +915,7 @@ export default function InvoiceDetailPage() {
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              Last reviewed {fmt(latestReview.created_at)}
+                              Ostatnio przeglądane {fmt(latestReview.created_at)}
                               {latestReview.note && ` · "${latestReview.note}"`}
                             </TooltipContent>
                           </Tooltip>
@@ -923,7 +923,7 @@ export default function InvoiceDetailPage() {
                         {escalated.length > 0 && (
                           <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800 text-xs gap-1">
                             <ChevronsUp className="w-3 h-3" aria-hidden="true" />
-                            {escalated.length} escalated
+                            {escalated.length} eskalacje
                           </Badge>
                         )}
                       </div>
@@ -946,7 +946,7 @@ export default function InvoiceDetailPage() {
                       {downloading
                         ? <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
                         : <Download className="w-4 h-4" aria-hidden="true" />}
-                      Download XML
+                      Pobierz XML
                     </Button>
                   )}
                   <Button
@@ -957,7 +957,7 @@ export default function InvoiceDetailPage() {
                     aria-label="Preview invoice as PDF"
                   >
                     <Eye className="w-4 h-4" aria-hidden="true" />
-                    Preview PDF
+                    Podgląd PDF
                   </Button>
                   <Button
                     size="sm"
@@ -967,7 +967,7 @@ export default function InvoiceDetailPage() {
                     aria-label="Download invoice as PDF"
                   >
                     <FileDown className="w-4 h-4" aria-hidden="true" />
-                    Download PDF
+                    Pobierz PDF
                   </Button>
                   <Button
                     size="sm"
@@ -977,7 +977,7 @@ export default function InvoiceDetailPage() {
                     aria-label="Delete this invoice"
                   >
                     <Trash2 className="w-4 h-4" aria-hidden="true" />
-                    Delete
+                    Usuń
                   </Button>
                 </div>
               )}
@@ -989,7 +989,7 @@ export default function InvoiceDetailPage() {
                     <div className="flex items-center justify-between">
                       <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
                         <Eye className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                        Invoice Preview — {invoice?.invoice_number ?? id}
+                        Podgląd faktury — {invoice?.invoice_number ?? id}
                       </DialogTitle>
                       <Button
                         size="sm"
@@ -999,11 +999,11 @@ export default function InvoiceDetailPage() {
                         aria-label="Open in new tab for printing"
                       >
                         <Maximize2 className="w-3.5 h-3.5" />
-                        Open & Print
+                        Otwórz & Drukuj
                       </Button>
                     </div>
                     <DialogDescription className="sr-only">
-                      Print-ready invoice document preview
+                      Podgląd faktury gotowej do druku
                     </DialogDescription>
                   </DialogHeader>
                   <div className="flex-1 min-h-0">
@@ -1025,14 +1025,14 @@ export default function InvoiceDetailPage() {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
                       <Trash2 className="w-5 h-5" aria-hidden="true" />
-                      Delete Invoice
+                      Usuń Fakturę
                     </DialogTitle>
                     <DialogDescription className="text-slate-600 dark:text-slate-400">
-                      Are you sure you want to delete invoice{' '}
+                     Czy na pewno chcesz usunąć fakturę?{' '}
                       <span className="font-semibold text-slate-900 dark:text-slate-100">
                         {invoice?.invoice_number ?? id}
                       </span>
-                      ? This action cannot be undone. All associated risk flags will also be removed.
+                      ? Tej czynności nie można cofnąć. Wszystkie powiązane flagi ryzyka również zostaną usunięte..
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter className="gap-2 sm:gap-0">
@@ -1041,7 +1041,7 @@ export default function InvoiceDetailPage() {
                       onClick={() => setDeleteDialogOpen(false)}
                       disabled={deleting}
                     >
-                      Cancel
+                      Anuluj
                     </Button>
                     <Button
                       className="gap-2 bg-red-600 hover:bg-red-700 text-white"
@@ -1093,7 +1093,7 @@ export default function InvoiceDetailPage() {
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <CardHeader className="pb-1">
                       <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                        Invoice Details
+                        Dane Faktury
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1122,7 +1122,7 @@ export default function InvoiceDetailPage() {
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <CardHeader className="pb-1">
                       <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                        Tax & Banking
+                        Dane Podatkowe & Bankowe
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1136,7 +1136,7 @@ export default function InvoiceDetailPage() {
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <CardHeader className="pb-1">
                       <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                        Source & Metadata
+                        Żródło & Metadata
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1144,7 +1144,7 @@ export default function InvoiceDetailPage() {
                       <MetaRow label="Session ID"  value={invoice?.upload_session_id} mono />
                       {invoice?.raw_file_url && (
                         <div className="flex items-start justify-between gap-4 py-2.5">
-                          <span className="text-sm text-slate-500 dark:text-slate-400 flex-shrink-0 w-36">Raw File</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 flex-shrink-0 w-36">Plik</span>
                           <Button
                             variant="ghost" size="sm"
                             className="h-7 text-xs gap-1.5 text-blue-600 dark:text-blue-400 px-0 hover:bg-transparent hover:underline"
@@ -1153,7 +1153,7 @@ export default function InvoiceDetailPage() {
                             aria-label="Download raw invoice file"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            Download
+                            Pobierz
                           </Button>
                         </div>
                       )}
@@ -1179,7 +1179,7 @@ export default function InvoiceDetailPage() {
                           {downloading
                             ? <RefreshCw className="w-4 h-4 animate-spin" />
                             : <Download className="w-4 h-4" />}
-                          Download XML
+                          Pobierz XML
                         </Button>
                       )}
                       {vendor?.id && (
@@ -1189,7 +1189,7 @@ export default function InvoiceDetailPage() {
                             className="w-full justify-start gap-2 h-9 text-sm"
                           >
                             <Building2 className="w-4 h-4" />
-                            Open Vendor Profile
+                            Otwórz profil dostawcy
                           </Button>
                         </Link>
                       )}
@@ -1201,7 +1201,7 @@ export default function InvoiceDetailPage() {
                     <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                       <CardHeader className="pb-1">
                         <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                          Review History
+                          Historia recenzji
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2 pt-2">
@@ -1248,7 +1248,7 @@ export default function InvoiceDetailPage() {
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                          Risk Flags
+                          Flagi ryzyka
                           {openFlags.length > 0 && (
                             <Badge className="ml-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-xs">
                               {openFlags.length} open
@@ -1268,15 +1268,15 @@ export default function InvoiceDetailPage() {
                       {flags.length === 0 ? (
                         <div className="text-center py-8 text-slate-400">
                           <CheckCircle className="w-10 h-10 mx-auto mb-2 text-emerald-400" aria-hidden="true" />
-                          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">No risk flags</p>
-                          <p className="text-xs mt-1">This invoice passed all automated risk checks.</p>
+                          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Brak ryzyk</p>
+                          <p className="text-xs mt-1">Ta faktura przeszła wszystkie automatyczne kontrole ryzyka.</p>
                         </div>
                       ) : (
                         <div className="space-y-2" role="list" aria-label="Risk flags">
                           {escalated.length > 0 && (
                             <>
                               <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2">
-                                Escalated ({escalated.length})
+                                Eskalowane ({escalated.length})
                               </p>
                               {escalated.map((flag) => (
                                 <FlagCard key={flag.id} flag={flag} onUpdateStatus={handleUpdateFlag} updating={updatingFlag} />
@@ -1286,7 +1286,7 @@ export default function InvoiceDetailPage() {
                           {openFlags.length > 0 && (
                             <>
                               <p className={cn('text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2', escalated.length > 0 && 'mt-4')}>
-                                Open ({openFlags.length})
+                                Otwórz ({openFlags.length})
                               </p>
                               {openFlags.map((flag) => (
                                 <FlagCard key={flag.id} flag={flag} onUpdateStatus={handleUpdateFlag} updating={updatingFlag} />
@@ -1297,7 +1297,7 @@ export default function InvoiceDetailPage() {
                             <Collapsible>
                               <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                                 <ChevronRight className="w-3.5 h-3.5" />
-                                Resolved ({resolvedFlags.length})
+                                Wyjaśnione ({resolvedFlags.length})
                               </CollapsibleTrigger>
                               <CollapsibleContent className="space-y-2">
                                 {resolvedFlags.map((flag) => (
@@ -1319,14 +1319,14 @@ export default function InvoiceDetailPage() {
                       <CardHeader className="pb-1">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-slate-500" />
-                          Vendor
+                          Dostawca
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-2">
                           <Info className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                           <span>
-                            No vendor profile found for NIP{' '}
+                            Nie znaleziono profilu dostawcy dla NIP{' '}
                             <code className="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">
                               {invoice.seller_nip}
                             </code>
@@ -1335,7 +1335,7 @@ export default function InvoiceDetailPage() {
                         <Link href="/vendors">
                           <Button variant="outline" size="sm" className="w-full mt-2 gap-2 h-8 text-xs">
                             <Plus className="w-3.5 h-3.5" />
-                            Create Vendor Profile
+                            Utwórz profil dostawcy
                           </Button>
                         </Link>
                       </CardContent>

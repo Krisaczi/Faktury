@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
               <Shield className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-              RiskGuard
+              BezpieczneFaktury
             </span>
           </Link>
           <div className="flex items-center gap-4">
@@ -107,15 +107,15 @@ export default function PrivacyPolicyPage() {
             <Section id="administrator" title="1. Administrator danych osobowych">
               <p>
                 Administratorem Twoich danych osobowych jest spółka prowadząca platformę
-                RiskGuard (dalej: <strong>„Administrator"</strong> lub <strong>„my"</strong>):
+                BezpieczneFaktury (dalej: <strong>„Administrator"</strong> lub <strong>„my"</strong>):
               </p>
               <InfoCard>
-                <InfoRow label="Nazwa">RiskGuard Sp. z o.o. (podmiot przykładowy)</InfoRow>
-                <InfoRow label="Adres">ul. Testowa 1, 01-001 Warszawa, Polska</InfoRow>
-                <InfoRow label="NIP">0000000000</InfoRow>
+                <InfoRow label="Nazwa">KrisAczi - Krzysztof Mrozowski</InfoRow>
+                <InfoRow label="Adres">ul. Kluczborska 4/77, 01-461 Warszawa, Polska</InfoRow>
+                <InfoRow label="NIP">5213256335</InfoRow>
                 <InfoRow label="E-mail do spraw RODO">
                   <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    privacy@riskguard.pl
+                    privacy@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
               </InfoCard>
@@ -313,7 +313,7 @@ export default function PrivacyPolicyPage() {
             {/* ── 9. Automatyzacja ── */}
             <Section id="automatyzacja" title="9. Zautomatyzowane podejmowanie decyzji i profilowanie">
               <p>
-                Platforma RiskGuard wykonuje <strong>automatyczne obliczenia wyniku ryzyka</strong>{' '}
+                Platforma BezpieczneFaktury wykonuje <strong>automatyczne obliczenia wyniku ryzyka</strong>{' '}
                 (ang. <em>risk score</em>) dla faktur i kontrahentów. System analizuje między innymi:
               </p>
               <ul className="list-disc pl-5 space-y-1 mt-2">
@@ -335,7 +335,7 @@ export default function PrivacyPolicyPage() {
             {/* ── 10. Cookies ── */}
             <Section id="cookies" title="10. Pliki cookies i podobne technologie">
               <p>
-                Platforma RiskGuard używa plików cookies i podobnych technologii przechowywania
+                Platforma BezpieczneFaktury używa plików cookies i podobnych technologii przechowywania
                 danych w przeglądarce. Poniżej opisujemy stosowane przez nas kategorie:
               </p>
               <Table
@@ -389,10 +389,10 @@ export default function PrivacyPolicyPage() {
                 <InfoRow label="E-mail">
                   <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
                     <Mail className="w-3.5 h-3.5" />
-                    privacy@riskguard.pl
+                    privacy@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
-                <InfoRow label="Poczta">RiskGuard Sp. z o.o., ul. Testowa 1, 01-001 Warszawa</InfoRow>
+                <InfoRow label="Poczta">KrisAczi - Krzysztof Mrozowski, ul. Kluczborska 4/77, 01-461 warszawa</InfoRow>
                 <InfoRow label="Czas odpowiedzi">Do 30 dni roboczych od otrzymania wniosku</InfoRow>
               </InfoCard>
               <p className="mt-4">
@@ -432,7 +432,7 @@ export default function PrivacyPolicyPage() {
             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
               <Shield className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-slate-900 dark:text-white">RiskGuard</span>
+            <span className="font-bold text-slate-900 dark:text-white">BezpieczneFaktury</span>
           </Link>
           <p className="text-sm text-slate-400 dark:text-slate-500">
             &copy; {new Date().getFullYear()} RiskGuard. Wszelkie prawa zastrzeżone.

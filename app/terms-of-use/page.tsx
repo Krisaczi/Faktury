@@ -85,7 +85,7 @@ export default function TermsOfUsePage() {
                   Regulamin świadczenia usług
                 </h1>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">
-                  Platforma <strong className="text-slate-700 dark:text-slate-300">RiskGuard</strong>
+                  Platforma <strong className="text-slate-700 dark:text-slate-300">BezpieczneFaktury</strong>
                   &nbsp;· Ostatnia aktualizacja: <strong className="text-slate-700 dark:text-slate-300">{updated}</strong>
                 </p>
               </div>
@@ -108,7 +108,7 @@ export default function TermsOfUsePage() {
             {/* §1 Informacje ogólne */}
             <Section id="ogolne" title="§1. Informacje ogólne">
               <p>
-                Platforma <strong>RiskGuard</strong> (dalej: <strong>„Serwis"</strong> lub
+                Platforma <strong>BezpieczneFaktury</strong> (dalej: <strong>„Serwis"</strong> lub
                 <strong> „Platforma"</strong>) to usługa SaaS (Software as a Service) umożliwiająca
                 przedsiębiorcom przetwarzanie faktur elektronicznych, analizę ryzyka kontrahentów,
                 integrację z Krajowym Systemem e-Faktur (KSeF) oraz zarządzanie dokumentacją
@@ -138,19 +138,18 @@ export default function TermsOfUsePage() {
             {/* §2 Dane usługodawcy */}
             <Section id="usługodawca" title="§2. Dane usługodawcy">
               <InfoCard>
-                <InfoRow label="Nazwa">RiskGuard Sp. z o.o.</InfoRow>
-                <InfoRow label="Adres">ul. Testowa 1, 01-001 Warszawa, Polska</InfoRow>
-                <InfoRow label="NIP">0000000000</InfoRow>
-                <InfoRow label="REGON">000000000</InfoRow>
-                <InfoRow label="KRS">0000000000</InfoRow>
+                <InfoRow label="Nazwa">KrisAczi - Krzysztof Mrozowski</InfoRow>
+                <InfoRow label="Adres">ul. Kluczborska 4/77, 01-461 Warszawa</InfoRow>
+                <InfoRow label="NIP">5213256335</InfoRow>
+                <InfoRow label="REGON">529127580</InfoRow>
                 <InfoRow label="E-mail kontaktowy">
                   <a href="mailto:kontakt@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    kontakt@riskguard.pl
+                    kontakt@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
                 <InfoRow label="E-mail do spraw prawnych">
                   <a href="mailto:legal@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    legal@riskguard.pl
+                    legal@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
               </InfoCard>
@@ -498,13 +497,13 @@ export default function TermsOfUsePage() {
                   <li>
                     <strong>E-mailem</strong> na adres{' '}
                     <a href="mailto:kontakt@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                      kontakt@riskguard.pl
+                      kontakt@bezpiecznefaktury.pl
                     </a>{' '}
                     z tytułem wiadomości: „Reklamacja – [krótki opis problemu]"
                   </li>
                   <li>
-                    <strong>Pisemnie</strong> na adres siedziby Usługodawcy: ul. Testowa 1,
-                    01-001 Warszawa
+                    <strong>Pisemnie</strong> na adres siedziby Usługodawcy: Kluczborska 4/77,
+                    01-461 Warszawa
                   </li>
                 </ul>
               </SubSection>
@@ -614,7 +613,7 @@ export default function TermsOfUsePage() {
                   <strong>Kontakt.</strong> W sprawach nieuregulowanych Regulaminem oraz
                   wszelkich pytaniach prosimy o kontakt pod adresem{' '}
                   <a href="mailto:legal@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    legal@riskguard.pl
+                    legal@bezpiecznefaktury.pl
                   </a>.
                 </li>
               </ol>
@@ -640,7 +639,7 @@ export default function TermsOfUsePage() {
             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
               <Shield className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-slate-900 dark:text-white">RiskGuard</span>
+            <span className="font-bold text-slate-900 dark:text-white">BezpieczneFaktury</span>
           </Link>
           <p className="text-sm text-slate-400 dark:text-slate-500">
             &copy; {new Date().getFullYear()} RiskGuard. Wszelkie prawa zastrzeżone.

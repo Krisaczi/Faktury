@@ -4,10 +4,10 @@ import { useHomepageStats } from '@/hooks/use-homepage-stats';
 import { cn } from '@/lib/utils';
 
 const STAT_META = [
-  { key: 'enterprises'    as const, label: 'Enterprises trust us' },
-  { key: 'vendors'        as const, label: 'Vendors monitored' },
-  { key: 'flaggedInvoices' as const, label: 'Flagged invoices' },
-  { key: 'flaggedAmount'  as const, label: 'Flagged invoice value' },
+  { key: 'enterprises'    as const, label: 'Zaufało nam' },
+  { key: 'vendors'        as const, label: 'Monitorowani dostawcy' },
+  { key: 'flaggedInvoices' as const, label: 'Oznaczone faktury' },
+  { key: 'flaggedAmount'  as const, label: 'Potencjalne oszczędności' },
 ];
 
 function StatSkeleton() {

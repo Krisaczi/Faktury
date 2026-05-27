@@ -123,10 +123,10 @@ export default function OnboardingPage() {
             <Shield className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Set up your company
+            Dodaj swoją firmę
           </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-            Tell us about your organization to get started with RiskGuard.
+            Wrpowadź dane firmy.
           </p>
         </div>
 
@@ -146,7 +146,7 @@ export default function OnboardingPage() {
           <div className="flex items-center gap-2 mb-6">
             <Building2 className="w-4 h-4 text-blue-600" />
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">
-              Company Details
+              Dane firmy
             </h2>
           </div>
 
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
             {/* Company Name */}
             <div className="space-y-1.5">
               <Label htmlFor="companyName" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Company Name
+                Nazwa
               </Label>
               <Input
                 id="companyName"
@@ -173,7 +173,7 @@ export default function OnboardingPage() {
             {/* NIP */}
             <div className="space-y-1.5">
               <Label htmlFor="nip" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                NIP (Tax ID) <span className="text-slate-400 font-normal">— optional</span>
+                NIP (Tax ID) <span className="text-slate-400 font-normal">— opcjonalnie</span>
               </Label>
               <Input
                 id="nip"
@@ -188,14 +188,14 @@ export default function OnboardingPage() {
               {errors.nip ? (
                 <p className="text-xs text-red-500">{errors.nip.message}</p>
               ) : (
-                <p className="text-xs text-slate-400">10-digit Polish tax identification number</p>
+                <p className="text-xs text-slate-400">10-cyfrowy numer NIP</p>
               )}
             </div>
 
             {/* Currency */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Default Currency
+                Waluta
               </Label>
               <Select
                 value={currency}
@@ -236,11 +236,11 @@ export default function OnboardingPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Setting up…
+                  Tworzenie…
                 </>
               ) : (
                 <>
-                  Continue to Dashboard
+                  Przejdź do Panelu głownego
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </>
               )}
@@ -249,16 +249,16 @@ export default function OnboardingPage() {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          You can update these details later in Settings.
+          Możesz później uaktualnić dane w Ustawieniach firmy.
         </p>
         <p className="text-center text-xs text-slate-400 mt-2">
-          By continuing, you agree to our{' '}
+          Kontynuując, wyrażasz zgodę na{' '}
           <Link href="/terms-of-use" className="text-blue-500 hover:text-blue-600 hover:underline transition-colors">
-            Terms of Use
+            Warunki korzystania
           </Link>
-          {' '}and{' '}
+          {' '}i{' '}
           <Link href="/privacy-policy" className="text-blue-500 hover:text-blue-600 hover:underline transition-colors">
-            Privacy Policy
+            Politykę prywatności
           </Link>
           .
         </p>

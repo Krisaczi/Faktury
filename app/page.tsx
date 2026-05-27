@@ -8,33 +8,33 @@ import { HomepageFooter } from '@/components/homepage/homepage-footer';
 const features = [
   {
     icon: Building2,
-    title: 'Vendor Management',
-    desc: 'Centralize all your third-party vendors. Track relationships, status, and risk scores in one place.',
+    title: 'Zarządzanie dostawcami',
+    desc: 'Monitoruj wszystkich swoich dostawców. Śledź relacje, status i ocenę ryzyka w jednym miejscu.',
   },
   {
     icon: FileBarChart2,
-    title: 'Risk Reports',
-    desc: 'Generate comprehensive risk assessments with automated scoring. Instantly see critical, high, medium, and low risks.',
+    title: 'Raporty ryzyka',
+    desc: 'Generuj kompleksowe oceny ryzyka z automatycznym scoringiem. Natychmiast zobacz poziom ryzyka krytycznego, wysokiego, średniego i niskiego.',
   },
   {
     icon: Upload,
-    title: 'Document Upload',
-    desc: 'Upload vendor contracts, SOC 2 reports, and questionnaires. Our engine processes and extracts risk signals automatically.',
+    title: 'Wczytywanie dokumentów',
+    desc: 'Prześlij umowy z dostawcami, raporty SOC 2 i kwestionariusze. Nasz program automatycznie przetwarza i wyodrębnia sygnały ryzyka.',
   },
   {
     icon: TrendingUp,
-    title: 'Real-time Monitoring',
-    desc: 'Continuous monitoring with instant alerts when vendor risk levels change. Never miss a critical issue.',
+    title: 'Monitoring w czasie rzeczywistym',
+    desc: 'Ciągły monitoring z natychmiastowymi alertami w przypadku zmiany poziomu ryzyka dostawcy. Nigdy nie przegap krytycznego problemu.',
   },
   {
     icon: Shield,
-    title: 'Compliance Ready',
-    desc: 'Built-in frameworks aligned to SOC 2, ISO 27001, and NIST standards. Export audit-ready reports.',
+    title: 'Przygotowany do audytu',
+    desc: 'Wbudowane narzędzia zgodne ze standardami SOC 2, ISO 27001 i NIST. Eksport raportów gotowych do audytu.',
   },
   {
     icon: CheckCircle,
-    title: 'Role-based Access',
-    desc: 'Granular permission controls for teams. Admins, reviewers, and viewers — everyone gets the right access.',
+    title: 'Kontrola dostępu',
+    desc: 'Szczegółowa kontrola uprawnień dla zespołów. Administratorzy, recenzenci i przeglądający — każdy ma odpowiedni dostęp..',
   },
 ];
 
@@ -63,29 +63,29 @@ const testimonials = [
 const plans = [
   {
     name: 'Starter',
-    price: '$49',
-    period: '/month',
-    desc: 'Perfect for small teams getting started with vendor risk.',
-    features: ['Up to 25 vendors', '10 risk reports/month', 'File uploads', 'Email support'],
-    cta: 'Start free trial',
+    price: 'PLN 149',
+    period: '/miesięcznie',
+    desc: 'Idealny dla małych firm, które chcą wdrożyć VMD',
+    features: ['Do 25 dostawców', '10 raportów miesięcznie', 'Wczytywanie plików', 'Wsparcie email'],
+    cta: 'Rozpocznij bezpłatny okres próbny',
     highlight: false,
   },
   {
     name: 'Pro',
-    price: '$149',
-    period: '/month',
-    desc: 'For growing security teams with advanced needs.',
-    features: ['Unlimited vendors', 'Unlimited reports', 'API access', 'Priority support', 'Custom frameworks'],
-    cta: 'Start free trial',
+    price: 'PLN 499',
+    period: '/miesięcznie',
+    desc: 'Dla rozwijających się firm o zaawansowanych potrzebach.',
+    features: ['Nielimitowana liczba dostawców', 'Nielimitowane raporty', 'Priorytetowe wsparcie',],
+    cta: 'Rozpocznij bezpłatny okres próbny',
     highlight: true,
   },
   {
-    name: 'Enterprise',
-    price: 'Custom',
+    name: 'Przedsiębiorstwa',
+    price: 'w zależności od wymagań',
     period: '',
-    desc: 'Tailored for large organizations with complex requirements.',
-    features: ['White-labeling', 'SSO / SAML', 'Dedicated CSM', 'SLA guarantee', 'On-premise option'],
-    cta: 'Contact sales',
+    desc: 'Dostosowane do dużych organizacji o złożonych wymaganiach.',
+    features: ['White-labeling', 'SSO / SAML', 'Dedykowany CSM', 'Gwarantowane SLA', 'Wizyty studyjne'],
+    cta: 'Skontaktuj się z nami',
     highlight: false,
   },
 ];
@@ -100,28 +100,28 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">RiskGuard</span>
+            <span className="font-bold text-lg tracking-tight">BezpieczneFaktury</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm">
-            <a href="#features" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Features</a>
-            <a href="#pricing" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Pricing</a>
-            <a href="#testimonials" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Customers</a>
+            <a href="#features" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Usługi</a>
+            <a href="#pricing" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Cennik</a>
+            <a href="#testimonials" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Opinie</a>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/demo">
               <Button variant="ghost" size="sm" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white gap-1.5">
                 <Play className="w-3.5 h-3.5" />
-                Live demo
+                Demo
               </Button>
             </Link>
             <Link href="/login">
               <Button variant="ghost" size="sm" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                Sign in
+                Zaloguj się
               </Button>
             </Link>
             <Link href="/signup">
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
-                Get started
+                Zapisz się
               </Button>
             </Link>
           </div>
@@ -134,20 +134,17 @@ export default function LandingPage() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-blue-50 dark:bg-blue-950/30 rounded-full blur-3xl opacity-60" />
         </div>
         <div className="max-w-4xl mx-auto text-center">
-          <Badge className="mb-6 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0 text-sm px-3 py-1">
-            Trusted by 500+ security teams
-          </Badge>
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight">
-            Vendor risk management{' '}
-            <span className="text-blue-600 dark:text-blue-400">that actually works</span>
+           Zarządzanie danymi dostawców,{' '}
+            <span className="text-blue-600 dark:text-blue-400">które naprawdę działa</span>
           </h1>
           <p className="mt-6 text-xl text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            Identify, assess, and monitor third-party vendor risk in real time. Stop relying on spreadsheets and start making data-driven decisions.
+            Identyfikuj, oceniaj i monitoruj dane dostawców w czasie rzeczywistym. Przestań polegać na arkuszach kalkulacyjnych i zacznij podejmować decyzje w oparciu o dane.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/signup">
               <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white h-12 px-8 text-base shadow-lg shadow-blue-600/20">
-                Start free trial
+                Rozpocznij bezpłatny okres próbny
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -158,7 +155,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
-            No credit card required · 14-day free trial · Cancel anytime
+            Bez karty kredytowej · 14 dniowy okres próbny · Anuluj w dowolnym momencie
           </p>
         </div>
       </section>
@@ -171,10 +168,10 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              Everything you need to manage vendor risk
+              Wszystko, czego potrzebujesz, aby zarządzać danymi dostawców 
             </h2>
             <p className="mt-4 text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
-              From onboarding to continuous monitoring, RiskGuard covers the entire vendor risk lifecycle.
+              BezpieczneFaktury obejmują cały cykl życia ryzyka dostawcy – od wdrażania po ciągły monitoring.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -194,7 +191,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Testimonials 
       <section id="testimonials" className="py-24 px-4 sm:px-6 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
@@ -227,16 +224,17 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      */}
 
       {/* Pricing */}
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              Simple, transparent pricing
+              Prosty i przejrzysty cennik
             </h2>
             <p className="mt-4 text-lg text-slate-500 dark:text-slate-400">
-              Start free, scale as you grow.
+              Zacznij za darmo, dostosuj pakiet w miarę rozwoju.
             </p>
           </div>
           <div className="grid sm:grid-cols-3 gap-6 items-start">
@@ -251,7 +249,7 @@ export default function LandingPage() {
               >
                 {highlight && (
                   <Badge className="mb-3 bg-white/20 text-white border-0 text-xs">
-                    Most popular
+                    Najpopularniejszy
                   </Badge>
                 )}
                 <h3 className={`font-bold text-lg ${highlight ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
@@ -299,21 +297,21 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="p-10 rounded-3xl bg-blue-600 text-white shadow-2xl shadow-blue-600/20">
             <h2 className="text-3xl font-bold mb-4">
-              Start protecting your organization today
+              Zacznij chronić swoją firmę już dziś
             </h2>
             <p className="text-blue-100 mb-8 text-lg">
-              Join 500+ security teams who trust RiskGuard to manage their vendor risk.
+              Dołącz do firm, które zaufały BezpieczneFaktury w zakresie zarządzania kontrolą nad danymi dostawców.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link href="/signup">
                 <Button size="lg" className="bg-white text-blue-600 hover:bg-blue-50 h-12 px-8 text-base font-semibold">
-                  Start your free trial
+                  Rozpocznij bezpłatny okres próbny
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
               <Link href="/signup">
                 <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 h-12 px-8 text-base border border-white/30">
-                  Sign up
+                  Zapisz się
                 </Button>
               </Link>
             </div>
