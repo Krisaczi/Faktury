@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Loader as Loader2, LogIn } from 'lucide-react';
@@ -20,16 +20,15 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { signInSchema, type SignInFormData } from '@/lib/validations/auth';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { isSafeRedirect } from '@/lib/auth/determine-post-login-redirect';
+import { getPostLoginRedirect } from './actions';
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  // Never redirect back to auth or onboarding pages after login
-  const rawRedirect = searchParams.get('redirect') ?? '/dashboard';
-  const BLOCKED_REDIRECTS = ['/login', '/signup', '/onboarding', '/forgot-password'];
-  const redirectPath = BLOCKED_REDIRECTS.some(p => rawRedirect.startsWith(p))
-    ? '/dashboard'
-    : rawRedirect;
+  const rawNext = searchParams.get('redirect') ?? null;
+  // Validate client-side; final decision is made server-side in getPostLoginRedirect
+  const next = rawNext && isSafeRedirect(rawNext) ? rawNext : null;
+
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
 
@@ -69,15 +68,10 @@ function LoginForm() {
       return;
     }
 
-    // Poll until the session cookie is confirmed readable, then hard-navigate
-    // so the server middleware receives the session on the first request.
-    for (let i = 0; i < 10; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    window.location.href = redirectPath;
+    // Ask the server where to redirect — it reads the freshly-set session cookies
+    // and applies the canonical redirect logic (onboarding check, role, safe next).
+    const destination = await getPostLoginRedirect(next);
+    window.location.href = destination;
   }
 
   return (
