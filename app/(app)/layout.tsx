@@ -31,6 +31,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .maybeSingle();
 
     if (!userRecord?.company_id) {
+      // Avoid redirect loop: if somehow layout is reached while already at /onboarding
+      // the middleware should handle this, but guard here too.
       redirect('/onboarding');
     }
   }

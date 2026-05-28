@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   const isAuthPath = AUTH_PATHS.some((path) => pathname === path);
   const isOnboarding = pathname === '/onboarding';
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages to dashboard
   if (user && isAuthPath) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
@@ -50,6 +50,9 @@ export async function middleware(request: NextRequest) {
   if (!user && isOnboarding) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
+
+  // Authenticated users on /onboarding: let the page itself decide
+  // whether to show the form or redirect to /dashboard (it checks company_id client-side)
 
   return supabaseResponse;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -50,11 +50,34 @@ function slugify(name: string): string {
 export default function OnboardingPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
 
   const supabase = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // If user already has a company, skip straight to dashboard
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) {
+        window.location.href = '/login';
+        return;
+      }
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (userRecord?.company_id) {
+        window.location.href = '/dashboard';
+        return;
+      }
+      setChecking(false);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     register,
@@ -100,9 +123,10 @@ export default function OnboardingPage() {
       return;
     }
 
-    const { error: userError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: userError, count } = await (supabase as any)
       .from('users')
-      .update({ company_id: company.id, role: 'owner' })
+      .update({ company_id: company.id, role: 'owner' }, { count: 'exact' })
       .eq('id', user.id);
 
     if (userError) {
@@ -110,10 +134,24 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Refresh the session so server-side middleware picks up the updated user record,
-    // then do a hard navigation to bypass any stale RSC cache.
+    // If RLS blocked the update (0 rows affected), surface a clear error
+    if (count === 0) {
+      setServerError('Could not link your account to the company. Please try signing out and back in.');
+      return;
+    }
+
+    // Refresh session so the server picks up the new company association,
+    // then hard-navigate to bypass any stale RSC cache.
     await supabase.auth.refreshSession();
     window.location.href = '/dashboard';
+  }
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   return (
@@ -268,3 +306,4 @@ export default function OnboardingPage() {
     </div>
   );
 }
+
