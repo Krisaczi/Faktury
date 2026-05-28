@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { DemoProvider } from '@/components/providers/demo-provider';
 import { DemoBanner, DemoExpiredOverlay } from '@/components/layout/demo-banner';
+import { AssumedRoleBanner } from '@/components/layout/assumed-role-banner';
 
 const DEMO_COOKIE = 'rg_demo_session';
 
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <DemoBanner />
+          <AssumedRoleBanner />
           <Topbar />
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             {children}

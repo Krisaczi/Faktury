@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from './sidebar';
+import { RoleSwitcher } from './role-switcher';
 
 const pageLabels: Record<string, string> = {
   '/dashboard':      'Dashboard',
@@ -44,6 +45,7 @@ export function Topbar() {
         </h1>
       </div>
       <div className="flex items-center gap-2">
+        <RoleSwitcher />
         <Button
           variant="ghost"
           size="icon"

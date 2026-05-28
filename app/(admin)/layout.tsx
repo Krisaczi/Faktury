@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { RoleProvider } from '@/components/providers/role-provider';
 import { canAccessInvoicing, type AppRole } from '@/lib/permissions';
+import { AssumedRoleBanner } from '@/components/layout/assumed-role-banner';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabaseServerClient();
@@ -41,6 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Sidebar />
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <AssumedRoleBanner />
           <Topbar />
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             {children}
