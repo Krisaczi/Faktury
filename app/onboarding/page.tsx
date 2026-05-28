@@ -110,8 +110,10 @@ export default function OnboardingPage() {
       return;
     }
 
-    router.push('/dashboard');
-    router.refresh();
+    // Refresh the session so server-side middleware picks up the updated user record,
+    // then do a hard navigation to bypass any stale RSC cache.
+    await supabase.auth.refreshSession();
+    window.location.href = '/dashboard';
   }
 
   return (
