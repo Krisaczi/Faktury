@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, ChartBar as FileBarChart2, Building2, Settings, Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid } from 'lucide-react';
+import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useInvoicingRole } from '@/hooks/use-invoicing-role';
 import { ROLE_LABELS, type AppRole } from '@/lib/permissions';
+import { getVisibleNavItems } from '@/lib/menu-config';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useState } from 'react';
@@ -17,15 +18,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-const navItems = [
-  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
-  { href: '/upload',      label: 'Upload',       icon: Upload },
-  { href: '/invoice',     label: 'Invoices',     icon: FileText },
-  { href: '/risk-report', label: 'Risk Report',  icon: FileBarChart2 },
-  { href: '/vendors',     label: 'Vendors',      icon: Building2 },
-  { href: '/settings',    label: 'Settings',     icon: Settings },
-];
 
 const ROLE_COLORS: Record<AppRole, string> = {
   owner:      'bg-amber-500/15 text-amber-400 ring-amber-500/20',
@@ -41,6 +33,8 @@ export function Sidebar() {
   const { hasInvoicing } = useInvoicingRole();
   const { data: roleData } = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
+
+  const visibleNavItems = getVisibleNavItems(roleData?.role as AppRole | undefined);
 
   const initials = profile?.full_name
     ? profile.full_name
@@ -73,7 +67,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Tooltip key={href}>
