@@ -34,6 +34,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
+  // Authenticated users hitting /onboarding: let the page handle it.
+  // The onboarding page checks company_id client-side and redirects to /dashboard
+  // if the user already completed onboarding.
+  if (user && isOnboarding) {
+    return supabaseResponse;
+  }
+
   // Demo sessions bypass auth requirement for protected routes
   if (isDemo && !isAuthPath) {
     return supabaseResponse;

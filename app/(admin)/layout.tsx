@@ -27,8 +27,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/onboarding');
   }
 
-  // Allow owner, admin, accountant, viewer into the invoicing module.
-  // Plain members (no invoicing access) are redirected back to the app.
   if (!canAccessInvoicing(userRecord.role)) {
     redirect('/dashboard');
   }
@@ -52,3 +50,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </RoleProvider>
   );
 }
+
+

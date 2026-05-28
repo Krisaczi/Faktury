@@ -15,15 +15,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!isDemoSession) {
     const supabase = await getSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       redirect('/login');
     }
 
-    // Check if user has a company assigned; if not, send to onboarding
     const { data: userRecord } = await supabase
       .from('users')
       .select('company_id')
@@ -31,8 +28,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .maybeSingle();
 
     if (!userRecord?.company_id) {
-      // Avoid redirect loop: if somehow layout is reached while already at /onboarding
-      // the middleware should handle this, but guard here too.
       redirect('/onboarding');
     }
   }

@@ -24,7 +24,12 @@ import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') ?? '/dashboard';
+  // Never redirect back to auth or onboarding pages after login
+  const rawRedirect = searchParams.get('redirect') ?? '/dashboard';
+  const BLOCKED_REDIRECTS = ['/login', '/signup', '/onboarding', '/forgot-password'];
+  const redirectPath = BLOCKED_REDIRECTS.some(p => rawRedirect.startsWith(p))
+    ? '/dashboard'
+    : rawRedirect;
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
 
@@ -64,9 +69,15 @@ function LoginForm() {
       return;
     }
 
-    // Give the browser a tick to flush the session cookies before navigating
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    window.location.replace(redirectPath);
+    // Poll until the session cookie is confirmed readable, then hard-navigate
+    // so the server middleware receives the session on the first request.
+    for (let i = 0; i < 10; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    window.location.href = redirectPath;
   }
 
   return (
