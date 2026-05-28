@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getCompanyPackage, getCompanyUsage, checkReportLimit } from '@/lib/packages/get-company-package';
+import { incrementReportUsage } from '@/lib/packages/get-company-package';
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,6 +23,24 @@ export async function GET(req: NextRequest) {
     if (!userRecord?.company_id) {
       return NextResponse.json({ error: 'Company not found' }, { status: 403 });
     }
+
+    const companyId = userRecord.company_id;
+
+    // Package enforcement: report generation limit
+    const [pkg, usage] = await Promise.all([
+      getCompanyPackage(companyId),
+      getCompanyUsage(companyId),
+    ]);
+    const reportCheck = checkReportLimit(pkg.features, usage);
+    if (!reportCheck.allowed) {
+      return NextResponse.json(
+        { error: reportCheck.reason, upgradeRequired: true, upgradeKey: reportCheck.upgradeKey },
+        { status: 403 }
+      );
+    }
+
+    // Increment usage counter after successful check
+    await incrementReportUsage(companyId);
 
     const sp = req.nextUrl.searchParams;
     const from       = sp.get('from')       ?? undefined;

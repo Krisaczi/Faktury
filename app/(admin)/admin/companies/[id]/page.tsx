@@ -1,12 +1,15 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, Receipt } from 'lucide-react';
+import { ArrowLeft, Building2, Phone, Receipt } from 'lucide-react';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { Stack, PageHeader } from '@/components/ui/layout-primitives';
 import { Badge } from '@/components/ui/badge';
 import { getBuyerCompanyById } from '@/app/(admin)/admin/companies/actions';
 import type { BuyerCompanyFormValues } from '@/app/(admin)/admin/companies/types';
 import { CompanyDetailClient } from './company-detail-client';
+import { PackageCard } from '@/components/admin/package-card';
+import { getCompanyPackage, getCompanyUsage } from '@/lib/packages/get-company-package';
+import { getCompanyPackageAudit, getPricingTiers } from '@/lib/packages/actions';
 import type { AppRole } from '@/lib/permissions';
 
 export const metadata = { title: 'Admin — Kontrahent' };
@@ -31,17 +34,28 @@ export default async function CompanyDetailPage({
 
   const { data: u } = await supabase
     .from('users')
-    .select('role')
+    .select('role, company_id')
     .eq('id', user.id)
     .maybeSingle();
 
   const role = (u?.role ?? 'member') as AppRole;
   const isOwner = role === 'owner';
+  const tenantCompanyId = u?.company_id as string | undefined;
 
   const detail = await getBuyerCompanyById(params.id);
   if (!detail) notFound();
 
   const { company, contacts, invoiceCount } = detail;
+
+  // Load package data for the SaaS tenant company
+  const [pkg, usage, tiers, audit] = tenantCompanyId
+    ? await Promise.all([
+        getCompanyPackage(tenantCompanyId),
+        getCompanyUsage(tenantCompanyId),
+        getPricingTiers(),
+        getCompanyPackageAudit(tenantCompanyId, 10),
+      ])
+    : [null, null, [], []];
 
   const addressParts = [company.street, company.postal_code, company.city, company.country]
     .filter(Boolean)
@@ -148,8 +162,20 @@ export default async function CompanyDetailPage({
           </div>
         </div>
 
-        {/* Right: quick actions */}
+        {/* Right: quick actions + package */}
         <div className="space-y-4">
+          {/* Package card */}
+          {isOwner && pkg && usage && tenantCompanyId && (
+            <PackageCard
+              companyId={tenantCompanyId}
+              pkg={pkg}
+              usage={usage}
+              tiers={tiers as unknown as Parameters<typeof PackageCard>[0]['tiers']}
+              audit={audit}
+              isOwner={isOwner}
+            />
+          )}
+
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Akcje</h3>
 

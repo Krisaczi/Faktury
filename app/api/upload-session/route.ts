@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getCompanyPackage, getCompanyUsage, checkFileUploads } from '@/lib/packages/get-company-package';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +27,17 @@ export async function POST(req: NextRequest) {
     }
 
     const companyId = userRecord.company_id;
+
+    // Package enforcement: file_uploads feature check
+    const [pkg] = await Promise.all([getCompanyPackage(companyId)]);
+    const uploadCheck = checkFileUploads(pkg.features);
+    if (!uploadCheck.allowed) {
+      return NextResponse.json(
+        { error: uploadCheck.reason, upgradeRequired: true, upgradeKey: uploadCheck.upgradeKey },
+        { status: 403 }
+      );
+    }
+
     const sessionId = crypto.randomUUID();
     const storagePath = `companies/${companyId}/uploads/${sessionId}`;
 
