@@ -6,8 +6,8 @@ import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, La
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useUserRole } from '@/hooks/use-user-role';
-import { useInvoicingRole } from '@/hooks/use-invoicing-role';
-import { ROLE_LABELS, type AppRole } from '@/lib/permissions';
+import { useRoleSwitch } from '@/hooks/use-role-switch';
+import { ROLE_LABELS, canAccessInvoicing, type AppRole } from '@/lib/permissions';
 import { getVisibleNavItems } from '@/lib/menu-config';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -30,11 +30,17 @@ const ROLE_COLORS: Record<AppRole, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
-  const { hasInvoicing } = useInvoicingRole();
   const { data: roleData } = useUserRole();
+  const { state: switchState } = useRoleSwitch();
   const [collapsed, setCollapsed] = useState(false);
 
-  const visibleNavItems = getVisibleNavItems(roleData?.role as AppRole | undefined);
+  // Use the assumed role when a role-switch session is active, otherwise use the canonical role
+  const effectiveRole: AppRole | undefined = switchState.isActive && switchState.assumedRole
+    ? switchState.assumedRole
+    : (roleData?.role as AppRole | undefined);
+
+  const hasInvoicing = canAccessInvoicing(effectiveRole);
+  const visibleNavItems = getVisibleNavItems(effectiveRole);
 
   const initials = profile?.full_name
     ? profile.full_name
@@ -151,7 +157,7 @@ export function Sidebar() {
               </Tooltip>
 
               {/* Pulpit właściciela — owner only */}
-              {roleData?.role === 'owner' && (
+              {effectiveRole === 'owner' && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {(() => {
@@ -191,7 +197,7 @@ export function Sidebar() {
               )}
 
               {/* Kontrahenci — owner only */}
-              {roleData?.role === 'owner' && (
+              {effectiveRole === 'owner' && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {(() => {
@@ -269,26 +275,26 @@ export function Sidebar() {
                       {profile?.full_name ?? 'User'}
                     </p>
                     <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                    {roleData?.role && (
+                    {effectiveRole && (
                       <span
-                        aria-label={`Rola użytkownika: ${ROLE_LABELS[roleData.role]}`}
+                        aria-label={`Rola użytkownika: ${ROLE_LABELS[effectiveRole]}`}
                         className={cn(
                           'mt-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset leading-none',
-                          ROLE_COLORS[roleData.role]
+                          ROLE_COLORS[effectiveRole]
                         )}
                       >
-                        {ROLE_LABELS[roleData.role]}
+                        {ROLE_LABELS[effectiveRole]}
                       </span>
                     )}
                   </div>
                 )}
               </div>
             </TooltipTrigger>
-            {collapsed && roleData?.role && (
+            {collapsed && effectiveRole && (
               <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
                 <span className="font-medium">{profile?.full_name ?? user?.email}</span>
                 <br />
-                <span className="text-slate-400 text-xs">{ROLE_LABELS[roleData.role]}</span>
+                <span className="text-slate-400 text-xs">{ROLE_LABELS[effectiveRole]}</span>
               </TooltipContent>
             )}
           </Tooltip>
