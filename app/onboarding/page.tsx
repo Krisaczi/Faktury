@@ -7,8 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Shield, Building2, ArrowRight, Loader as Loader2 } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@/types/database';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { completeOnboarding } from './actions';
 
 const onboardingSchema = z.object({
   companyName: z.string().min(2, 'Company name must be at least 2 characters'),
@@ -39,25 +39,13 @@ const CURRENCIES = [
   { value: 'GBP', label: 'GBP – British Pound' },
 ];
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 export default function OnboardingPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getSupabaseBrowserClient();
 
-  // If user already has a company, skip straight to dashboard
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) {
@@ -95,53 +83,17 @@ export default function OnboardingPage() {
   async function onSubmit(data: OnboardingData) {
     setServerError(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const result = await completeOnboarding({
+      companyName: data.companyName,
+      nip: data.nip || null,
+      currency: data.currency,
+    });
 
-    if (!user) {
-      setServerError('Session expired. Please sign in again.');
+    if (!result.ok) {
+      setServerError(result.error);
       return;
     }
 
-    const ingestionEmail = `${slugify(data.companyName)}@invoiceguard.app`;
-
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .insert({
-        name: data.companyName,
-        nip: data.nip || null,
-        currency: data.currency,
-        ingestion_email: ingestionEmail,
-        subscription_status: 'trial',
-      })
-      .select('id')
-      .single();
-
-    if (companyError || !company) {
-      setServerError(companyError?.message ?? 'Failed to create company. Please try again.');
-      return;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: userError, count } = await (supabase as any)
-      .from('users')
-      .update({ company_id: company.id, role: 'owner' }, { count: 'exact' })
-      .eq('id', user.id);
-
-    if (userError) {
-      setServerError(userError.message ?? 'Failed to update user record. Please try again.');
-      return;
-    }
-
-    // If RLS blocked the update (0 rows affected), surface a clear error
-    if (count === 0) {
-      setServerError('Could not link your account to the company. Please try signing out and back in.');
-      return;
-    }
-
-    // Refresh session so the server picks up the new company association,
-    // then hard-navigate to bypass any stale RSC cache.
     await supabase.auth.refreshSession();
     window.location.href = '/dashboard';
   }
@@ -306,4 +258,3 @@ export default function OnboardingPage() {
     </div>
   );
 }
-
