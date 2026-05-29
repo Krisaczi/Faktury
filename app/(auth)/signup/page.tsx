@@ -43,7 +43,7 @@ export default function SignupPage() {
   async function onSubmit(data: SignUpFormData) {
     setServerError('');
     const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
@@ -58,6 +58,14 @@ export default function SignupPage() {
       } else {
         setServerError(error.message);
       }
+      return;
+    }
+
+    // Supabase returns 200 with user=null when the email is already registered
+    // (anti-enumeration behavior). Surface a useful message instead of a false
+    // "check your email" that never arrives.
+    if (!signUpData.user) {
+      setServerError('An account with this email already exists. Please sign in instead.');
       return;
     }
 
