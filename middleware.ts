@@ -29,8 +29,11 @@ export async function middleware(request: NextRequest) {
   const isAuthPath = AUTH_PATHS.some((path) => pathname === path);
   const isOnboarding = pathname === '/onboarding';
 
-  // Redirect authenticated users away from auth pages to dashboard
-  if (user && isAuthPath) {
+  // Redirect authenticated users away from auth pages to dashboard.
+  // Skip for server action POSTs (Next-Action header) — those must be allowed
+  // through so the server action can run and return the correct redirect path.
+  const isServerAction = !!request.headers.get('next-action');
+  if (user && isAuthPath && !isServerAction) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
