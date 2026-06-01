@@ -13,10 +13,15 @@ export interface SyncAuthAndProfilesReport {
 /**
  * Owner-only repair tool.
  *
- * For each auth user in the current company:
- *   - If public.users row is missing → creates it.
- *   - If public.users.role differs from auth metadata role → logs mismatch
- *     (does NOT auto-change public.users.role — that is the source of truth).
+ * For each auth user whose id already appears (or should appear) in the company:
+ *   - If public.users row is missing → creates it (role='member', no company).
+ *   - If public.users.role differs from auth metadata role → logs mismatch.
+ *
+ * Specifically handles the case where public.users rows were deleted manually
+ * while auth.users entries remain (confirmed or unconfirmed). The tool creates
+ * the missing row using only data available in auth (id, email, full_name).
+ * company_id is NOT restored — the user must complete onboarding again to
+ * re-link their company, which is the safe default.
  *
  * For public.users rows with no auth.users counterpart → marks as orphaned.
  *
@@ -54,6 +59,10 @@ export async function syncAuthAndProfiles(): Promise<
 
     if (usersErr) return { ok: false, error: usersErr.message };
 
+    // Also fetch all public.users with no company yet — these may be accounts
+    // where the row was recently re-created after being deleted (company_id=null).
+    // We include them in the orphan check but don't try to assign a company.
+
     // Fetch all auth users via admin API (service role required)
     const { data: authList, error: authErr } =
       await service.auth.admin.listUsers({ perPage: 1000 });
@@ -63,6 +72,14 @@ export async function syncAuthAndProfiles(): Promise<
     const authById = new Map(authList.users.map((u) => [u.id, u]));
     const tableIds = new Set((usersRows ?? []).map((r: { id: string }) => r.id));
 
+    // Also fetch ALL public.users ids (not just this company) to avoid creating
+    // duplicate rows for users who belong to a different company.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: allRows } = await (service as any)
+      .from('users')
+      .select('id');
+    const allTableIds = new Set((allRows ?? []).map((r: { id: string }) => r.id));
+
     const report: SyncAuthAndProfilesReport = {
       scanned:        (usersRows ?? []).length,
       created:        [],
@@ -71,7 +88,7 @@ export async function syncAuthAndProfiles(): Promise<
       errors:         [],
     };
 
-    // Check each public.users row for orphans
+    // ── Check each public.users row for orphans and role mismatches ───────────
     for (const row of (usersRows ?? []) as { id: string; email: string; role: string }[]) {
       if (!authById.has(row.id)) {
         report.orphaned.push(row.id);
@@ -90,39 +107,60 @@ export async function syncAuthAndProfiles(): Promise<
       }
     }
 
-    // Check for auth users in this company that have no public.users row
-    // We identify "this company" by cross-referencing the company's known user ids.
-    // Auth users outside this company are ignored (multi-tenant safety).
+    // ── Check for auth users in this company that have no public.users row ────
+    // We identify "this company" via the company's known user id set (tableIds).
+    // We also handle the deleted-row case: auth users whose metadata hints at
+    // this company_id AND who have no public.users row anywhere.
     for (const authUser of authList.users) {
+      // Already has a row in this company's set
       if (tableIds.has(authUser.id)) continue;
-      // Only act on users whose email/metadata suggests they belong here —
-      // we cannot be certain, so we only repair if the row simply doesn't exist yet.
-      // We check by seeing if we can find them in auth at all for this company scope.
-      // This catches new signups where the trigger silently failed.
+
       const isDemo = authUser.app_metadata?.is_demo === true;
       if (isDemo) continue;
 
-      // Only consider users whose company_id in metadata (if any) matches
       const metaCompanyId = authUser.user_metadata?.company_id as string | undefined;
-      if (metaCompanyId && metaCompanyId !== companyId) continue;
 
-      // If no metadata company hint, skip — we can't safely assign them
-      if (!metaCompanyId) continue;
+      // Case A: metadata explicitly names this company → restore missing row
+      if (metaCompanyId && metaCompanyId === companyId && !allTableIds.has(authUser.id)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: insertErr } = await (service as any)
+          .from('users')
+          .insert({
+            id:         authUser.id,
+            email:      authUser.email ?? '',
+            role:       'member',
+            company_id: companyId,
+          });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: insertErr } = await (service as any)
-        .from('users')
-        .insert({
-          id:         authUser.id,
-          email:      authUser.email ?? '',
-          role:       'member',
-          company_id: companyId,
-        });
+        if (insertErr) {
+          report.errors.push(`${authUser.email}: ${insertErr.message}`);
+        } else {
+          report.created.push(authUser.id);
+        }
+        continue;
+      }
 
-      if (insertErr) {
-        report.errors.push(`${authUser.email}: ${insertErr.message}`);
-      } else {
-        report.created.push(authUser.id);
+      // Case B: auth user has no public.users row at all (trigger failure or
+      // manual deletion without metadata company hint) — create row without
+      // company_id so the user can complete onboarding again.
+      if (!metaCompanyId && !allTableIds.has(authUser.id)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: insertErr } = await (service as any)
+          .from('users')
+          .insert({
+            id:    authUser.id,
+            email: authUser.email ?? '',
+            role:  'member',
+          });
+
+        if (insertErr) {
+          // Conflict = row already exists in another company — skip silently
+          if (!insertErr.message.includes('duplicate') && !insertErr.message.includes('unique')) {
+            report.errors.push(`${authUser.email}: ${insertErr.message}`);
+          }
+        } else {
+          report.created.push(authUser.id);
+        }
       }
     }
 

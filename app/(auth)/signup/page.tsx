@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Loader as Loader2, UserPlus } from 'lucide-react';
@@ -20,14 +19,13 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PasswordStrength } from '@/components/auth/password-strength';
 import { signUpSchema, type SignUpFormData } from '@/lib/validations/auth';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { handleSignupAttempt } from '@/lib/auth/handle-signup-attempt';
 
 export default function SignupPage() {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [successKind, setSuccessKind] = useState<'created' | 'confirmation_resent' | null>(null);
 
   const {
     register,
@@ -42,37 +40,29 @@ export default function SignupPage() {
 
   async function onSubmit(data: SignUpFormData) {
     setServerError('');
-    const supabase = getSupabaseBrowserClient();
-    const { data: signUpData, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { full_name: data.full_name },
-        emailRedirectTo: `${window.location.origin}/verify-email`,
-      },
+
+    const result = await handleSignupAttempt({
+      email:            data.email,
+      password:         data.password,
+      fullName:         data.full_name,
+      emailRedirectTo:  `${window.location.origin}/verify-email`,
     });
 
-    if (error) {
-      if (error.message.includes('already registered')) {
-        setServerError('An account with this email already exists.');
-      } else {
-        setServerError(error.message);
-      }
+    if (result.status === 'error') {
+      setServerError(result.message);
       return;
     }
 
-    // Supabase returns 200 with user=null when the email is already registered
-    // (anti-enumeration behavior). Surface a useful message instead of a false
-    // "check your email" that never arrives.
-    if (!signUpData.user) {
+    if (result.status === 'already_confirmed') {
       setServerError('An account with this email already exists. Please sign in instead.');
       return;
     }
 
-    setSuccess(true);
+    setSuccessKind(result.status);
   }
 
-  if (success) {
+  if (successKind) {
+    const isResent = successKind === 'confirmation_resent';
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
         <CardHeader className="pb-4">
@@ -85,7 +75,9 @@ export default function SignupPage() {
             Check your email
           </CardTitle>
           <CardDescription className="text-center text-slate-500 dark:text-slate-400">
-            We sent a verification link to your email address. Click it to activate your account.
+            {isResent
+              ? 'A new confirmation link has been sent to your email address. Click it to activate your account.'
+              : 'We sent a verification link to your email address. Click it to activate your account.'}
           </CardDescription>
         </CardHeader>
         <CardFooter className="justify-center">
