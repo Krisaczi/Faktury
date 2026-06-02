@@ -3,15 +3,17 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, UserCog, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, UserCog, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Crown, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { assignRole, revokeRole, syncAuthMetadataToUsers } from '@/lib/auth/role-actions';
+import { grantOwnerRole } from '@/lib/auth/grant-owner-role';
+import { repairMisassignedOwners } from '@/lib/auth/repair-misassigned-owners';
 import { ROLE_LABELS, type AppRole } from '@/lib/permissions';
 import type { CompanyUser, RoleChangeLog } from '@/lib/auth/role-actions';
 
@@ -199,7 +201,275 @@ const ROLE_DESCRIPTIONS: Record<AppRole, string> = {
   member:     'Brak dostępu do fakturowania',
 };
 
-// ─── Audit trail ─────────────────────────────────────────────────────────────
+// ─── Grant Owner Modal ────────────────────────────────────────────────────────
+
+interface GrantOwnerModalProps {
+  target:    CompanyUser;
+  onClose:   () => void;
+  onSuccess: () => void;
+}
+
+function GrantOwnerModal({ target, onClose, onSuccess }: GrantOwnerModalProps) {
+  const [reason, setReason]     = useState('');
+  const [step, setStep]         = useState<'confirm' | 'final'>('confirm');
+  const [isPending, start]      = useTransition();
+  const [error, setError]       = useState<string | null>(null);
+
+  function handleGrant() {
+    if (step === 'confirm') { setStep('final'); return; }
+    setError(null);
+    start(async () => {
+      const res = await grantOwnerRole({ targetUserId: target.id, reason: reason || undefined });
+      if (res.ok) {
+        onSuccess();
+      } else {
+        setError(res.error);
+        setStep('confirm');
+      }
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Crown className="w-4 h-4 text-amber-500" />
+            Nadaj rolę Właściciela
+          </DialogTitle>
+          <DialogDescription>
+            Ta operacja nie może być cofnięta przez panelu — tylko inny właściciel może zmienić tę rolę z powrotem.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                {(target.full_name ?? target.email)[0]?.toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                {target.full_name ?? target.email}
+              </p>
+              <p className="text-xs text-slate-500 truncate">{target.email}</p>
+            </div>
+            <Badge className={cn('ml-auto flex-shrink-0 text-xs border', ROLE_COLORS[target.role])}>
+              {ROLE_LABELS[target.role]}
+            </Badge>
+          </div>
+
+          {step === 'confirm' ? (
+            <>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Właściciel ma pełny dostęp do wszystkich funkcji systemu, w tym do zarządzania rolami i usuwania konta firmy.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-500">Powód nadania (opcjonalnie)</Label>
+                <Input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="np. przekazanie własności firmy"
+                  className="h-9 text-sm"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    Ostateczne potwierdzenie
+                  </p>
+                  <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                    Czy na pewno nadać rolę <strong>Właściciela</strong> użytkownikowi{' '}
+                    <strong>{target.full_name ?? target.email}</strong>? Ta akcja zostanie zapisana w dzienniku audytu.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={step === 'final' ? () => setStep('confirm') : onClose} disabled={isPending}>
+            {step === 'final' ? 'Wróć' : 'Anuluj'}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleGrant}
+            disabled={isPending}
+            className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+            <Crown className="w-3.5 h-3.5" />
+            {step === 'confirm' ? 'Dalej' : 'Potwierdź nadanie roli'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Repair Modal ─────────────────────────────────────────────────────────────
+
+interface RepairModalProps {
+  onClose: () => void;
+}
+
+function RepairModal({ onClose }: RepairModalProps) {
+  const [isPending, start]   = useTransition();
+  const [phase, setPhase]    = useState<'idle' | 'dry' | 'apply'>('idle');
+  const [report, setReport]  = useState<Awaited<ReturnType<typeof repairMisassignedOwners>> | null>(null);
+  const [error, setError]    = useState<string | null>(null);
+
+  function runDry() {
+    setError(null);
+    start(async () => {
+      const res = await repairMisassignedOwners({ dryRun: true });
+      setReport(res);
+      if (!res.ok) setError(res.error);
+      else setPhase('dry');
+    });
+  }
+
+  function runApply() {
+    setError(null);
+    start(async () => {
+      const res = await repairMisassignedOwners({ dryRun: false });
+      setReport(res);
+      if (!res.ok) setError(res.error);
+      else setPhase('apply');
+    });
+  }
+
+  const flaggedCount = report?.ok ? report.report.flagged.length : 0;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 text-slate-500" />
+            Naprawa nieprawidłowych właścicieli
+          </DialogTitle>
+          <DialogDescription>
+            Skanuje konta z rolą właściciela, które mogły zostać nieprawidłowo przypisane podczas rejestracji.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {phase === 'idle' && (
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Najpierw uruchom skanowanie (tryb podglądu), aby zobaczyć jakie zmiany zostaną wprowadzone, bez ich stosowania.
+            </p>
+          )}
+
+          {report?.ok && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-slate-500">Przeskanowano</span>
+                <span className="font-medium">{report.report.scanned}</span>
+              </div>
+              <div className="flex justify-between px-4 py-2.5">
+                <span className="text-slate-500">Podejrzanych kont</span>
+                <span className={cn('font-medium', flaggedCount > 0 ? 'text-amber-600' : 'text-emerald-600')}>
+                  {flaggedCount}
+                </span>
+              </div>
+              {!report.report.dryRun && (
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-slate-500">Naprawiono</span>
+                  <span className="font-medium text-emerald-600">{report.report.repaired.length}</span>
+                </div>
+              )}
+              {report.report.errors.length > 0 && (
+                <div className="px-4 py-2.5">
+                  <p className="text-red-600 text-xs">{report.report.errors.join(', ')}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {phase === 'dry' && flaggedCount > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Znaleziono {flaggedCount} kont z nieprawidłową rolą właściciela. Kliknij "Zastosuj naprawę", aby zmienić ich rolę na "Członek".
+              </p>
+            </div>
+          )}
+
+          {phase === 'dry' && flaggedCount === 0 && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                Nie znaleziono nieprawidłowych właścicieli.
+              </p>
+            </div>
+          )}
+
+          {phase === 'apply' && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                Naprawa zakończona. Naprawiono {report?.ok ? report.report.repaired.length : 0} kont.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Zamknij
+          </Button>
+          {phase !== 'apply' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runDry}
+              disabled={isPending}
+              className="gap-2"
+            >
+              {isPending && phase === 'idle' && <Loader className="w-3.5 h-3.5 animate-spin" />}
+              Skanuj (podgląd)
+            </Button>
+          )}
+          {phase === 'dry' && flaggedCount > 0 && (
+            <Button
+              size="sm"
+              onClick={runApply}
+              disabled={isPending}
+              className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+              Zastosuj naprawę
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 
 function AuditTrail({ logs }: { logs: RoleChangeLog[] }) {
   const [open, setOpen] = useState(false);
@@ -263,11 +533,13 @@ export interface UsersClientProps {
 export function UsersClient({
   currentUserId, isOwner, initialUsers, initialLogs,
 }: UsersClientProps) {
-  const router                          = useRouter();
-  const [search, setSearch]             = useState('');
-  const [editingUser, setEditingUser]   = useState<CompanyUser | null>(null);
-  const [syncing, startSync]            = useTransition();
-  const [syncResult, setSyncResult]     = useState<string | null>(null);
+  const router                              = useRouter();
+  const [search, setSearch]                 = useState('');
+  const [editingUser, setEditingUser]       = useState<CompanyUser | null>(null);
+  const [grantingOwner, setGrantingOwner]   = useState<CompanyUser | null>(null);
+  const [showRepair, setShowRepair]         = useState(false);
+  const [syncing, startSync]                = useTransition();
+  const [syncResult, setSyncResult]         = useState<string | null>(null);
 
   const filtered = initialUsers.filter((u) =>
     !search || u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -295,8 +567,8 @@ export function UsersClient({
   return (
     <div className="space-y-6">
       {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
             value={search}
@@ -306,18 +578,29 @@ export function UsersClient({
           />
         </div>
         {isOwner && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={syncing}
-            className="gap-2 text-slate-600 dark:text-slate-400"
-          >
-            {syncing
-              ? <Loader className="w-3.5 h-3.5 animate-spin" />
-              : <RefreshCw className="w-3.5 h-3.5" />}
-            Synchronizuj role
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={syncing}
+              className="gap-2 text-slate-600 dark:text-slate-400"
+            >
+              {syncing
+                ? <Loader className="w-3.5 h-3.5 animate-spin" />
+                : <RefreshCw className="w-3.5 h-3.5" />}
+              Synchronizuj role
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRepair(true)}
+              className="gap-2 text-slate-600 dark:text-slate-400"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              Napraw właścicieli
+            </Button>
+          </>
         )}
       </div>
 
@@ -342,8 +625,9 @@ export function UsersClient({
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {sorted.map((u) => {
-              const isSelf = u.id === currentUserId;
-              const isProtected = u.role === 'owner' || isSelf;
+              const isSelf      = u.id === currentUserId;
+              const isOwnerRow  = u.role === 'owner';
+              const isProtected = isOwnerRow || isSelf;
 
               return (
                 <div
@@ -382,20 +666,36 @@ export function UsersClient({
                     {format(new Date(u.created_at), 'dd.MM.yyyy')}
                   </time>
 
-                  {/* Action */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={isProtected}
-                    onClick={() => !isProtected && setEditingUser(u)}
-                    className={cn(
-                      'h-8 w-8 p-0 flex-shrink-0',
-                      isProtected ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* Grant owner — only shown to owner, only for non-owner non-self users */}
+                    {isOwner && !isOwnerRow && !isSelf && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setGrantingOwner(u)}
+                        className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        title="Nadaj rolę właściciela"
+                      >
+                        <Crown className="w-4 h-4" />
+                      </Button>
                     )}
-                    title={isProtected ? 'Nie można zmienić tej roli' : 'Zmień rolę'}
-                  >
-                    <UserCog className="w-4 h-4" />
-                  </Button>
+
+                    {/* Change role */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isProtected}
+                      onClick={() => !isProtected && setEditingUser(u)}
+                      className={cn(
+                        'h-8 w-8 p-0',
+                        isProtected ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'
+                      )}
+                      title={isProtected ? 'Nie można zmienić tej roli' : 'Zmień rolę'}
+                    >
+                      <UserCog className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -439,6 +739,20 @@ export function UsersClient({
           onClose={() => setEditingUser(null)}
           onSuccess={() => { setEditingUser(null); router.refresh(); }}
         />
+      )}
+
+      {/* Grant owner modal */}
+      {grantingOwner && (
+        <GrantOwnerModal
+          target={grantingOwner}
+          onClose={() => setGrantingOwner(null)}
+          onSuccess={() => { setGrantingOwner(null); router.refresh(); }}
+        />
+      )}
+
+      {/* Repair modal */}
+      {showRepair && (
+        <RepairModal onClose={() => { setShowRepair(false); router.refresh(); }} />
       )}
     </div>
   );
