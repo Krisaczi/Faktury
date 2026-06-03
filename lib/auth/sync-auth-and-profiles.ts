@@ -4,10 +4,12 @@ import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabas
 
 export interface SyncAuthAndProfilesReport {
   scanned:         number;
-  created:         string[];   // user ids where public.users row was missing and was created
-  orphaned:        string[];   // public.users ids with no corresponding auth user
+  created:         string[];
+  wouldCreate:     string[];   // dry-run only: ids that would be created
+  orphaned:        string[];
   roleMismatches:  Array<{ id: string; email: string; tableRole: string; metaRole: string }>;
   errors:          string[];
+  dryRun:          boolean;
 }
 
 /**
@@ -27,9 +29,12 @@ export interface SyncAuthAndProfilesReport {
  *
  * Results are logged to admin_audit_logs if that table exists.
  */
-export async function syncAuthAndProfiles(): Promise<
+export async function syncAuthAndProfiles(params: {
+  dryRun?: boolean;
+} = {}): Promise<
   { ok: true; report: SyncAuthAndProfilesReport } | { ok: false; error: string }
 > {
+  const { dryRun = false } = params;
   try {
     // Verify caller is an owner
     const sessionClient = await getSupabaseServerClient();
@@ -83,9 +88,11 @@ export async function syncAuthAndProfiles(): Promise<
     const report: SyncAuthAndProfilesReport = {
       scanned:        (usersRows ?? []).length,
       created:        [],
+      wouldCreate:    [],
       orphaned:       [],
       roleMismatches: [],
       errors:         [],
+      dryRun,
     };
 
     // ── Check each public.users row for orphans and role mismatches ───────────
@@ -122,6 +129,10 @@ export async function syncAuthAndProfiles(): Promise<
 
       // Case A: metadata explicitly names this company → restore missing row
       if (metaCompanyId && metaCompanyId === companyId && !allTableIds.has(authUser.id)) {
+        if (dryRun) {
+          report.wouldCreate.push(authUser.id);
+          continue;
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: insertErr } = await (service as any)
           .from('users')
@@ -144,6 +155,10 @@ export async function syncAuthAndProfiles(): Promise<
       // manual deletion without metadata company hint) — create row without
       // company_id so the user can complete onboarding again.
       if (!metaCompanyId && !allTableIds.has(authUser.id)) {
+        if (dryRun) {
+          report.wouldCreate.push(authUser.id);
+          continue;
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: insertErr } = await (service as any)
           .from('users')
@@ -168,7 +183,7 @@ export async function syncAuthAndProfiles(): Promise<
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (service as any).from('admin_audit_logs').insert({
-        action:     'sync_auth_and_profiles',
+        action:     dryRun ? 'sync_auth_and_profiles_dry_run' : 'sync_auth_and_profiles',
         actor_id:   caller.id,
         company_id: companyId,
         payload:    report,
