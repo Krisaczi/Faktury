@@ -13,13 +13,14 @@ const PUBLIC_PATHS = [
   '/pricing',
   '/demo',
   '/api/demo',
+  '/account-inactive',
 ];
 
 const AUTH_PATHS = ['/login', '/signup', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, user, supabase } = await updateSession(request);
 
   const isDemo = !!request.cookies.get(DEMO_COOKIE)?.value;
 
@@ -30,16 +31,11 @@ export async function middleware(request: NextRequest) {
   const isOnboarding = pathname === '/onboarding';
 
   // Redirect authenticated users away from auth pages to dashboard.
-  // Skip for server action POSTs (Next-Action header) — those must be allowed
-  // through so the server action can run and return the correct redirect path.
   const isServerAction = !!request.headers.get('next-action');
   if (user && isAuthPath && !isServerAction) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Authenticated users hitting /onboarding: let the page handle it.
-  // The onboarding page checks company_id client-side and redirects to /dashboard
-  // if the user already completed onboarding.
   if (user && isOnboarding) {
     return supabaseResponse;
   }
@@ -56,13 +52,34 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Unauthenticated users cannot access onboarding
   if (!user && isOnboarding) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Authenticated users on /onboarding: let the page itself decide
-  // whether to show the form or redirect to /dashboard (it checks company_id client-side)
+  // ── Active flag check for authenticated, non-public, non-demo routes ────────
+  // Skip API routes (they do their own auth) and the inactive page itself.
+  if (
+    user &&
+    !isPublicPath &&
+    !isOnboarding &&
+    !isDemo &&
+    !pathname.startsWith('/api/') &&
+    !isServerAction
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userRow } = await (supabase as any)
+      .from('users')
+      .select('active')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // If the row exists and active is explicitly false, block access.
+    // If the row is missing (onboarding not complete), let the page handle it.
+    if (userRow && userRow.active === false) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(new URL('/account-inactive', request.url));
+    }
+  }
 
   return supabaseResponse;
 }

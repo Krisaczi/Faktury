@@ -15,6 +15,7 @@ export interface CompanyUser {
   email:        string;
   full_name:    string | null;
   role:         AppRole;
+  active:       boolean;
   company_id:   string | null;
   created_at:   string;
 }
@@ -154,7 +155,7 @@ export async function getUsersWithRoles(params: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from('users')
-      .select('id, email, role, company_id, created_at', { count: 'exact' })
+      .select('id, email, role, company_id, active, created_at', { count: 'exact' })
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -179,12 +180,14 @@ export async function getUsersWithRoles(params: {
     );
 
     const rows: CompanyUser[] = (data ?? []).map((u: {
-      id: string; email: string; role: string; company_id: string | null; created_at: string;
+      id: string; email: string; role: string; company_id: string | null;
+      active: boolean; created_at: string;
     }) => ({
       id:         u.id,
       email:      u.email,
       full_name:  (profileMap.get(u.id) as string | null) ?? null,
       role:       (u.role ?? 'member') as AppRole,
+      active:     u.active ?? true,
       company_id: u.company_id,
       created_at: u.created_at,
     }));

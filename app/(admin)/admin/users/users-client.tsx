@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, UserCog, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Crown, Wrench } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, UserCog, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Crown, Wrench, UserX, UserCheck, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { assignRole, revokeRole, syncAuthMetadataToUsers } from '@/lib/auth/role-actions';
 import { grantOwnerRole } from '@/lib/auth/grant-owner-role';
 import { repairMisassignedOwners } from '@/lib/auth/repair-misassigned-owners';
+import { deactivateUser, reactivateUser } from '@/lib/auth/user-status-actions';
 import { ROLE_LABELS, type AppRole } from '@/lib/permissions';
 import type { CompanyUser, RoleChangeLog } from '@/lib/auth/role-actions';
 
@@ -184,6 +186,190 @@ function ChangeRoleModal({ target, isOwner, onClose, onSuccess }: ChangeRoleModa
           >
             {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
             {confirming ? 'Potwierdź nadanie admina' : isAdminGrant ? 'Dalej' : 'Zapisz zmianę'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Deactivate Modal ─────────────────────────────────────────────────────────
+
+interface DeactivateModalProps {
+  target:    CompanyUser;
+  onClose:   () => void;
+  onSuccess: () => void;
+}
+
+function DeactivateModal({ target, onClose, onSuccess }: DeactivateModalProps) {
+  const [reason, setReason]    = useState('');
+  const [isPending, start]     = useTransition();
+  const [error, setError]      = useState<string | null>(null);
+
+  function handleConfirm() {
+    setError(null);
+    start(async () => {
+      const res = await deactivateUser({ targetUserId: target.id, reason: reason || undefined });
+      if (res.ok) onSuccess();
+      else setError(res.error);
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserX className="w-4 h-4 text-red-500" />
+            Dezaktywuj konto
+          </DialogTitle>
+          <DialogDescription>
+            Użytkownik zostanie natychmiast wylogowany i nie będzie mógł się zalogować.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                {(target.full_name ?? target.email)[0]?.toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                {target.full_name ?? target.email}
+              </p>
+              <p className="text-xs text-slate-500 truncate">{target.email}</p>
+            </div>
+            <Badge className={cn('ml-auto flex-shrink-0 text-xs border', ROLE_COLORS[target.role])}>
+              {ROLE_LABELS[target.role]}
+            </Badge>
+          </div>
+
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 dark:text-red-400">
+              Wszystkie aktywne sesje tego użytkownika zostaną zakończone. Zmiana zostanie zapisana w dzienniku audytu.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Powód dezaktywacji (opcjonalnie)</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="np. zakończenie współpracy, naruszenie regulaminu"
+              className="text-sm resize-none h-20"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Anuluj
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={isPending}
+            className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+          >
+            {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+            <UserX className="w-3.5 h-3.5" />
+            Dezaktywuj
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Reactivate Modal ─────────────────────────────────────────────────────────
+
+interface ReactivateModalProps {
+  target:    CompanyUser;
+  onClose:   () => void;
+  onSuccess: () => void;
+}
+
+function ReactivateModal({ target, onClose, onSuccess }: ReactivateModalProps) {
+  const [reason, setReason]    = useState('');
+  const [isPending, start]     = useTransition();
+  const [error, setError]      = useState<string | null>(null);
+
+  function handleConfirm() {
+    setError(null);
+    start(async () => {
+      const res = await reactivateUser({ targetUserId: target.id, reason: reason || undefined });
+      if (res.ok) onSuccess();
+      else setError(res.error);
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-emerald-500" />
+            Reaktywuj konto
+          </DialogTitle>
+          <DialogDescription>
+            Użytkownik odzyska możliwość logowania się do systemu.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                {(target.full_name ?? target.email)[0]?.toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                {target.full_name ?? target.email}
+              </p>
+              <p className="text-xs text-slate-500 truncate">{target.email}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Powód reaktywacji (opcjonalnie)</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="np. powrót do współpracy"
+              className="text-sm resize-none h-20"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Anuluj
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={isPending}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+            <UserCheck className="w-3.5 h-3.5" />
+            Reaktywuj
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -537,6 +723,8 @@ export function UsersClient({
   const [search, setSearch]                 = useState('');
   const [editingUser, setEditingUser]       = useState<CompanyUser | null>(null);
   const [grantingOwner, setGrantingOwner]   = useState<CompanyUser | null>(null);
+  const [deactivating, setDeactivating]     = useState<CompanyUser | null>(null);
+  const [reactivating, setReactivating]     = useState<CompanyUser | null>(null);
   const [showRepair, setShowRepair]         = useState(false);
   const [syncing, startSync]                = useTransition();
   const [syncResult, setSyncResult]         = useState<string | null>(null);
@@ -625,18 +813,32 @@ export function UsersClient({
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {sorted.map((u) => {
-              const isSelf      = u.id === currentUserId;
-              const isOwnerRow  = u.role === 'owner';
-              const isProtected = isOwnerRow || isSelf;
+              const isSelf        = u.id === currentUserId;
+              const isOwnerRow    = u.role === 'owner';
+              const isProtected   = isOwnerRow || isSelf;
+              const isInactive    = u.active === false;
 
               return (
                 <div
                   key={u.id}
-                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                  className={cn(
+                    'flex items-center gap-4 px-5 py-3.5 transition-colors',
+                    isInactive
+                      ? 'bg-slate-50/80 dark:bg-slate-800/20 opacity-75'
+                      : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                  )}
                 >
                   {/* Avatar */}
-                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                  <div className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
+                    isInactive
+                      ? 'bg-slate-200 dark:bg-slate-700'
+                      : 'bg-blue-100 dark:bg-blue-900/30'
+                  )}>
+                    <span className={cn(
+                      'text-xs font-bold',
+                      isInactive ? 'text-slate-400 dark:text-slate-500' : 'text-blue-600 dark:text-blue-400'
+                    )}>
                       {(u.full_name ?? u.email)[0]?.toUpperCase()}
                     </span>
                   </div>
@@ -644,17 +846,26 @@ export function UsersClient({
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                      <p className={cn(
+                        'text-sm font-medium truncate',
+                        isInactive ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-200'
+                      )}>
                         {u.full_name ?? u.email}
                       </p>
-                      {isSelf && (
-                        <span className="text-xs text-slate-400">(Ty)</span>
-                      )}
+                      {isSelf && <span className="text-xs text-slate-400">(Ty)</span>}
                     </div>
                     {u.full_name && (
                       <p className="text-xs text-slate-500 truncate">{u.email}</p>
                     )}
                   </div>
+
+                  {/* Active badge */}
+                  {isInactive && (
+                    <Badge className="text-xs border bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 flex-shrink-0 gap-1">
+                      <Clock className="w-3 h-3" />
+                      Nieaktywny
+                    </Badge>
+                  )}
 
                   {/* Role badge */}
                   <Badge className={cn('text-xs border flex-shrink-0', ROLE_COLORS[u.role])}>
@@ -668,8 +879,8 @@ export function UsersClient({
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Grant owner — only shown to owner, only for non-owner non-self users */}
-                    {isOwner && !isOwnerRow && !isSelf && (
+                    {/* Grant owner — only shown to owner, only for non-owner non-self active users */}
+                    {isOwner && !isOwnerRow && !isSelf && !isInactive && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -681,17 +892,43 @@ export function UsersClient({
                       </Button>
                     )}
 
-                    {/* Change role */}
+                    {/* Deactivate — owner only, not self, not owner row, not already inactive */}
+                    {isOwner && !isSelf && !isOwnerRow && !isInactive && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeactivating(u)}
+                        className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Dezaktywuj konto"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Reactivate — owner only, inactive users */}
+                    {isOwner && isInactive && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReactivating(u)}
+                        className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                        title="Reaktywuj konto"
+                      >
+                        <UserCheck className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Change role — disabled for inactive, owner, or self */}
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={isProtected}
-                      onClick={() => !isProtected && setEditingUser(u)}
+                      disabled={isProtected || isInactive}
+                      onClick={() => !isProtected && !isInactive && setEditingUser(u)}
                       className={cn(
                         'h-8 w-8 p-0',
-                        isProtected ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'
+                        isProtected || isInactive ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'
                       )}
-                      title={isProtected ? 'Nie można zmienić tej roli' : 'Zmień rolę'}
+                      title={isInactive ? 'Reaktywuj konto, aby zmienić rolę' : isProtected ? 'Nie można zmienić tej roli' : 'Zmień rolę'}
                     >
                       <UserCog className="w-4 h-4" />
                     </Button>
@@ -753,6 +990,24 @@ export function UsersClient({
       {/* Repair modal */}
       {showRepair && (
         <RepairModal onClose={() => { setShowRepair(false); router.refresh(); }} />
+      )}
+
+      {/* Deactivate modal */}
+      {deactivating && (
+        <DeactivateModal
+          target={deactivating}
+          onClose={() => setDeactivating(null)}
+          onSuccess={() => { setDeactivating(null); router.refresh(); }}
+        />
+      )}
+
+      {/* Reactivate modal */}
+      {reactivating && (
+        <ReactivateModal
+          target={reactivating}
+          onClose={() => setReactivating(null)}
+          onSuccess={() => { setReactivating(null); router.refresh(); }}
+        />
       )}
     </div>
   );
