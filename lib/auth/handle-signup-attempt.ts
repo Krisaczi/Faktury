@@ -107,6 +107,52 @@ export async function handleSignupAttempt(params: {
     }
 
     // ── Case 3: Auth user exists and is confirmed ─────────────────────────────
+    // Check whether a public.users row exists for this auth user.
+    // If not, the auth record is orphaned (e.g. the DB was wiped). Delete it so
+    // the caller can register fresh — the trigger will recreate public.users.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingRow } = await (service as any)
+      .from('users')
+      .select('id')
+      .eq('id', existing.id)
+      .maybeSingle();
+
+    if (!existingRow) {
+      // Orphaned auth record — delete and fall through to create a new user.
+      const { error: deleteErr } = await service.auth.admin.deleteUser(existing.id);
+      if (deleteErr) {
+        console.error('[handleSignupAttempt] deleteUser (orphan) failed:', deleteErr.message);
+        return { status: 'error', message: 'Sign up failed. Please try again.' };
+      }
+
+      const { data: created, error: createErr } = await service.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: false,
+        user_metadata: { full_name: fullName },
+        app_metadata:  {},
+      });
+
+      if (createErr || !created.user) {
+        console.error('[handleSignupAttempt] createUser (after orphan delete) failed:', createErr?.message);
+        return { status: 'error', message: 'Sign up failed. Please try again.' };
+      }
+
+      const { error: resendErr } = await service.auth.resend({
+        type:    'signup',
+        email,
+        options: { emailRedirectTo },
+      });
+
+      if (resendErr) {
+        await service.auth.admin.deleteUser(created.user.id);
+        console.error('[handleSignupAttempt] resend after orphan-recreate failed:', resendErr.message);
+        return { status: 'error', message: 'Failed to send confirmation email. Please try again.' };
+      }
+
+      return { status: 'created' };
+    }
+
     return { status: 'already_confirmed' };
   } catch (e) {
     console.error('[handleSignupAttempt] unexpected error:', e);
