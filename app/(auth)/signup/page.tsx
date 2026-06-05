@@ -25,7 +25,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState('');
-  const [successKind, setSuccessKind] = useState<'created' | 'confirmation_resent' | 'already_confirmed' | 'profile_repaired' | null>(null);
+  const [successKind, setSuccessKind] = useState<'created' | 'confirmation_resent' | 'already_confirmed' | null>(null);
 
   const {
     register,
@@ -53,7 +53,7 @@ export default function SignupPage() {
       return;
     }
 
-    if (result.status === 'already_confirmed' || result.status === 'profile_repaired') {
+    if (result.status === 'already_confirmed') {
       setSuccessKind(result.status);
       return;
     }
@@ -61,29 +61,20 @@ export default function SignupPage() {
     setSuccessKind(result.status);
   }
 
-  if (successKind === 'already_confirmed' || successKind === 'profile_repaired') {
-    const isRepaired = successKind === 'profile_repaired';
+  if (successKind === 'already_confirmed') {
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
         <CardHeader className="pb-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${isRepaired ? 'bg-green-100 dark:bg-green-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
-            {isRepaired ? (
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            )}
+          <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
           </div>
           <CardTitle className="text-xl text-center text-slate-900 dark:text-white">
-            {isRepaired ? 'Account restored' : 'Account already exists'}
+            Account already exists
           </CardTitle>
           <CardDescription className="text-center text-slate-500 dark:text-slate-400">
-            {isRepaired
-              ? 'Your account was confirmed but your profile was missing. It has been restored — you can sign in now with your original password, or reset it if you have forgotten it.'
-              : 'An account with this email is already registered. Sign in or reset your password if you have forgotten it.'}
+            An account with this email is already registered. Sign in or reset your password if you have forgotten it.
           </CardDescription>
         </CardHeader>
         <CardFooter className="flex flex-col gap-2 pt-0">

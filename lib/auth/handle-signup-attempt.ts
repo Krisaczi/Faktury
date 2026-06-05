@@ -6,7 +6,6 @@ export type SignupOutcome =
   | { status: 'created' }
   | { status: 'confirmation_resent' }
   | { status: 'already_confirmed' }
-  | { status: 'profile_repaired' }
   | { status: 'error'; message: string };
 
 /**
@@ -108,27 +107,6 @@ export async function handleSignupAttempt(params: {
     }
 
     // ── Case 3: Auth user exists and is confirmed ─────────────────────────────
-    // Check whether public.users row is already present before repairing.
-    // Use the auth user's own metadata for the name — not the form input —
-    // since this is a repair of an existing account, not a new registration.
-    const existingFullName =
-      (existing.user_metadata?.full_name as string | undefined) ?? fullName;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingRow } = await (service as any)
-      .from('users')
-      .select('id')
-      .eq('id', existing.id)
-      .maybeSingle();
-
-    await ensurePublicUserRow(service, existing.id, email, existingFullName);
-
-    // If the row was absent, signal that the profile has been restored so the
-    // UI can show a more accurate message than "account already exists".
-    if (!existingRow) {
-      return { status: 'profile_repaired' };
-    }
-
     return { status: 'already_confirmed' };
   } catch (e) {
     console.error('[handleSignupAttempt] unexpected error:', e);
