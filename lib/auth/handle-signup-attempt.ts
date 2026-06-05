@@ -108,8 +108,9 @@ export async function handleSignupAttempt(params: {
 
     // ── Case 3: Auth user exists and is confirmed ─────────────────────────────
     // Check whether a public.users row exists for this auth user.
-    // If not, the auth record is orphaned (e.g. the DB was wiped). Delete it so
-    // the caller can register fresh — the trigger will recreate public.users.
+    // If not, the auth record is orphaned (e.g. the DB was wiped). Update the
+    // auth credentials to match the submitted form and create the missing
+    // public.users row so the user can sign in and reach onboarding.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingRow } = await (service as any)
       .from('users')
@@ -118,39 +119,16 @@ export async function handleSignupAttempt(params: {
       .maybeSingle();
 
     if (!existingRow) {
-      // Orphaned auth record — delete and fall through to create a new user.
-      const { error: deleteErr } = await service.auth.admin.deleteUser(existing.id);
-      if (deleteErr) {
-        console.error('[handleSignupAttempt] deleteUser (orphan) failed:', deleteErr.message);
-        return { status: 'error', message: 'Sign up failed. Please try again.' };
-      }
-
-      const { data: created, error: createErr } = await service.auth.admin.createUser({
-        email,
+      // Update password + metadata in-place (no delete → no re-create race condition).
+      await service.auth.admin.updateUserById(existing.id, {
         password,
-        email_confirm: false,
         user_metadata: { full_name: fullName },
-        app_metadata:  {},
       });
 
-      if (createErr || !created.user) {
-        console.error('[handleSignupAttempt] createUser (after orphan delete) failed:', createErr?.message);
-        return { status: 'error', message: 'Sign up failed. Please try again.' };
-      }
+      // Create the missing application rows so the user can sign in and onboard.
+      await ensurePublicUserRow(service, existing.id, email, fullName);
 
-      const { error: resendErr } = await service.auth.resend({
-        type:    'signup',
-        email,
-        options: { emailRedirectTo },
-      });
-
-      if (resendErr) {
-        await service.auth.admin.deleteUser(created.user.id);
-        console.error('[handleSignupAttempt] resend after orphan-recreate failed:', resendErr.message);
-        return { status: 'error', message: 'Failed to send confirmation email. Please try again.' };
-      }
-
-      return { status: 'created' };
+      return { status: 'already_confirmed' };
     }
 
     return { status: 'already_confirmed' };
