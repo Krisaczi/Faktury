@@ -119,16 +119,28 @@ export async function handleSignupAttempt(params: {
       .maybeSingle();
 
     if (!existingRow) {
-      // Update password + metadata in-place (no delete → no re-create race condition).
+      // Orphaned confirmed auth user — all application data was wiped.
+      // Unconfirm their email and update credentials so a fresh confirmation
+      // email is sent and they go through the normal verification flow.
       await service.auth.admin.updateUserById(existing.id, {
         password,
-        user_metadata: { full_name: fullName },
+        email_confirm:  false,
+        user_metadata:  { full_name: fullName },
       });
 
-      // Create the missing application rows so the user can sign in and onboard.
-      await ensurePublicUserRow(service, existing.id, email, fullName);
+      const { error: resendErr } = await service.auth.resend({
+        type:    'signup',
+        email,
+        options: { emailRedirectTo },
+      });
 
-      return { status: 'already_confirmed' };
+      if (resendErr) {
+        console.error('[handleSignupAttempt] resend for orphan failed:', resendErr.message);
+        // Password was updated — let them sign in directly.
+        return { status: 'already_confirmed' };
+      }
+
+      return { status: 'created' };
     }
 
     return { status: 'already_confirmed' };
