@@ -41,7 +41,7 @@ async function requireInvoicingUser() {
     .maybeSingle();
 
   if (!u?.company_id) throw new Error('No company');
-  const role = (u.role ?? 'member') as AppRole;
+  const role = (u.role ?? 'accountant') as AppRole;
   if (!canAccessInvoicing(role)) throw new Error('Brak dostępu do modułu fakturowania.');
   return { user, companyId: u.company_id as string, role };
 }

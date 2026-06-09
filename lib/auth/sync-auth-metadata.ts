@@ -56,7 +56,7 @@ export async function syncAuthMetadataWithUsers(): Promise<SyncReport> {
     // We can't call auth.admin.getUserById without a service key,
     // so we report what we can from the public.users table.
     // The "missing rows" case is the opposite — handled separately below.
-    const VALID_ROLES = ['owner', 'admin', 'accountant', 'viewer', 'member'];
+    const VALID_ROLES = ['owner', 'admin', 'accountant'];
     if (!VALID_ROLES.includes(row.role)) {
       report.roleMismatches.push({
         id: row.id,

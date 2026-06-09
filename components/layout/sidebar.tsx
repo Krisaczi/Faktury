@@ -23,8 +23,6 @@ const ROLE_COLORS: Record<AppRole, string> = {
   owner:      'bg-amber-500/15 text-amber-400 ring-amber-500/20',
   admin:      'bg-blue-500/15 text-blue-400 ring-blue-500/20',
   accountant: 'bg-emerald-500/15 text-emerald-400 ring-emerald-500/20',
-  viewer:     'bg-slate-500/15 text-slate-400 ring-slate-500/20',
-  member:     'bg-slate-500/10 text-slate-500 ring-slate-500/10',
 };
 
 export function Sidebar() {

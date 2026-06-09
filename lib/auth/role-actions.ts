@@ -1,23 +1,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import type { AppRole } from '@/lib/permissions';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type RoleActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
 export interface CompanyUser {
-  id:           string;
-  email:        string;
-  full_name:    string | null;
-  role:         AppRole;
-  active:       boolean;
-  company_id:   string | null;
-  created_at:   string;
+  id:         string;
+  email:      string;
+  full_name:  string | null;
+  role:       AppRole;
+  active:     boolean;
+  company_id: string | null;
+  created_at: string;
 }
 
 export interface RoleChangeLog {
@@ -32,95 +32,139 @@ export interface RoleChangeLog {
   created_at:    string;
 }
 
-// ─── Allowed roles an owner may assign ─────────────────────────────────────
+// ─── Auth guard ─────────────────────────────────────────────────────────────────
 
-const ASSIGNABLE_ROLES: AppRole[] = ['admin', 'accountant', 'viewer', 'member'];
-
-// ─── Auth guard ─────────────────────────────────────────────────────────────
-
-async function requireOwnerOrAdmin() {
+/**
+ * Verifies the caller is the active owner as defined by OWNER_USER_ID env var.
+ * Returns caller context on success, throws on failure.
+ */
+async function requireOwner() {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthenticated');
 
-  const { data: u } = await supabase
+  const ownerId = process.env.OWNER_USER_ID;
+  if (!ownerId) throw new Error('OWNER_USER_ID not configured.');
+  if (user.id !== ownerId) throw new Error('Tylko właściciel może zarządzać rolami.');
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: u } = await (supabase as any)
     .from('users')
-    .select('role, company_id')
+    .select('role, company_id, active')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!u || !['owner', 'admin'].includes(u.role ?? '')) {
-    throw new Error('Brak uprawnień do zarządzania rolami.');
+  if (!u || u.role !== 'owner' || u.active === false) {
+    throw new Error('Tylko aktywny właściciel może zarządzać rolami.');
   }
 
-  return { user, supabase, role: u.role as AppRole, companyId: u.company_id as string };
+  return { user, supabase, companyId: u.company_id as string };
 }
 
-async function requireOwner() {
-  const ctx = await requireOwnerOrAdmin();
-  if (ctx.role !== 'owner') throw new Error('Tylko właściciel może zarządzać rolami administratora.');
-  return ctx;
-}
+// ─── writeRoleAuditLog ──────────────────────────────────────────────────────────
 
-// ─── assignRole ─────────────────────────────────────────────────────────────
-
-export async function assignRole(params: {
+async function writeRoleAuditLog(opts: {
   targetUserId: string;
-  newRole:      AppRole;
+  changedBy:    string;
+  previousRole: string;
+  newRole:      string;
+  reason:       string | null;
+}): Promise<void> {
+  const service = getSupabaseServiceClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (service as any).from('role_change_logs').insert({
+    user_id:       opts.targetUserId,
+    changed_by:    opts.changedBy,
+    previous_role: opts.previousRole,
+    new_role:      opts.newRole,
+    reason:        opts.reason ?? null,
+  });
+}
+
+// ─── getUser ────────────────────────────────────────────────────────────────────
+
+export async function getUser(
+  targetUserId: string,
+): Promise<RoleActionResult<CompanyUser>> {
+  try {
+    const { supabase, companyId } = await requireOwner();
+    const service = getSupabaseServiceClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: u, error } = await (service as any)
+      .from('users')
+      .select('id, email, role, company_id, active, created_at')
+      .eq('id', targetUserId)
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (error || !u) return { ok: false, error: 'Użytkownik nie istnieje.' };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase as any)
+      .from('profiles')
+      .select('full_name')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    return {
+      ok: true,
+      data: {
+        id:         u.id,
+        email:      u.email,
+        full_name:  profile?.full_name ?? null,
+        role:       (u.role ?? 'accountant') as AppRole,
+        active:     u.active ?? true,
+        company_id: u.company_id,
+        created_at: u.created_at,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
+}
+
+// ─── promoteToAdmin ─────────────────────────────────────────────────────────────
+
+export async function promoteToAdmin(params: {
+  targetUserId: string;
   reason?:      string;
 }): Promise<RoleActionResult> {
-  const { targetUserId, newRole, reason } = params;
+  const { targetUserId, reason } = params;
 
   try {
-    // Granting admin requires owner; other roles require owner or admin
-    const { user, supabase, role: callerRole, companyId } = newRole === 'admin'
-      ? await requireOwner()
-      : await requireOwnerOrAdmin();
+    const { user, companyId } = await requireOwner();
+    const service = getSupabaseServiceClient();
 
-    if (!ASSIGNABLE_ROLES.includes(newRole)) {
-      return { ok: false, error: `Rola "${newRole}" nie jest dozwolona.` };
-    }
-
-    // Target must be in the same company
-    const { data: target } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: target } = await (service as any)
       .from('users')
-      .select('id, role, company_id, email')
+      .select('id, role, company_id, email, active')
       .eq('id', targetUserId)
       .maybeSingle();
 
     if (!target) return { ok: false, error: 'Użytkownik nie istnieje.' };
-    if (target.company_id !== companyId) {
-      return { ok: false, error: 'Nie możesz zmieniać ról użytkowników z innych firm.' };
-    }
-    if (target.id === user.id) {
-      return { ok: false, error: 'Nie możesz zmienić własnej roli.' };
-    }
-    if (target.role === 'owner') {
-      return { ok: false, error: 'Nie można zmienić roli właściciela.' };
-    }
+    if (target.company_id !== companyId) return { ok: false, error: 'Brak uprawnień.' };
+    if (target.id === user.id) return { ok: false, error: 'Nie możesz zmienić własnej roli.' };
+    if (target.role === 'owner') return { ok: false, error: 'Nie można zmienić roli właściciela.' };
+    if (target.role === 'admin') return { ok: false, error: 'Użytkownik jest już administratorem.' };
+    if (!target.active) return { ok: false, error: 'Nie można zmienić roli nieaktywnego użytkownika.' };
 
-    const previousRole = target.role as string;
-
-    // Update users.role — cast required because generated types predate accountant/viewer roles
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase as any)
+    const { error: updateErr } = await (service as any)
       .from('users')
-      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .update({ role: 'admin', updated_at: new Date().toISOString() })
       .eq('id', targetUserId);
 
     if (updateErr) return { ok: false, error: updateErr.message };
 
-    // Write audit log
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from('role_change_logs')
-      .insert({
-        user_id:       targetUserId,
-        changed_by:    user.id,
-        previous_role: previousRole,
-        new_role:      newRole,
-        reason:        reason ?? null,
-      });
+    await writeRoleAuditLog({
+      targetUserId,
+      changedBy:    user.id,
+      previousRole: target.role,
+      newRole:      'admin',
+      reason:       reason ?? null,
+    });
 
     revalidatePath('/admin/users');
     return { ok: true, data: undefined };
@@ -129,16 +173,55 @@ export async function assignRole(params: {
   }
 }
 
-// ─── revokeRole (reset to member) ───────────────────────────────────────────
+// ─── demoteAdmin ────────────────────────────────────────────────────────────────
 
-export async function revokeRole(params: {
+export async function demoteAdmin(params: {
   targetUserId: string;
   reason?:      string;
 }): Promise<RoleActionResult> {
-  return assignRole({ ...params, newRole: 'member' });
+  const { targetUserId, reason } = params;
+
+  try {
+    const { user, companyId } = await requireOwner();
+    const service = getSupabaseServiceClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: target } = await (service as any)
+      .from('users')
+      .select('id, role, company_id, email, active')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    if (!target) return { ok: false, error: 'Użytkownik nie istnieje.' };
+    if (target.company_id !== companyId) return { ok: false, error: 'Brak uprawnień.' };
+    if (target.id === user.id) return { ok: false, error: 'Nie możesz zmienić własnej roli.' };
+    if (target.role === 'owner') return { ok: false, error: 'Nie można zmienić roli właściciela.' };
+    if (target.role !== 'admin') return { ok: false, error: 'Użytkownik nie jest administratorem.' };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateErr } = await (service as any)
+      .from('users')
+      .update({ role: 'accountant', updated_at: new Date().toISOString() })
+      .eq('id', targetUserId);
+
+    if (updateErr) return { ok: false, error: updateErr.message };
+
+    await writeRoleAuditLog({
+      targetUserId,
+      changedBy:    user.id,
+      previousRole: target.role,
+      newRole:      'accountant',
+      reason:       reason ?? null,
+    });
+
+    revalidatePath('/admin/users');
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
 }
 
-// ─── getUsersWithRoles ──────────────────────────────────────────────────────
+// ─── getUsersWithRoles ──────────────────────────────────────────────────────────
 
 export async function getUsersWithRoles(params: {
   page?:     number;
@@ -146,7 +229,7 @@ export async function getUsersWithRoles(params: {
   search?:   string;
 } = {}): Promise<RoleActionResult<{ rows: CompanyUser[]; totalCount: number }>> {
   try {
-    const { supabase, companyId } = await requireOwnerOrAdmin();
+    const { supabase, companyId } = await requireOwner();
     const { page = 1, pageSize = 50, search } = params;
 
     const from = (page - 1) * pageSize;
@@ -167,7 +250,6 @@ export async function getUsersWithRoles(params: {
     const { data, count, error } = await query;
     if (error) return { ok: false, error: error.message };
 
-    // Fetch profiles for full_name
     const userIds = (data ?? []).map((u: { id: string }) => u.id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: profiles } = await (supabase as any)
@@ -186,7 +268,7 @@ export async function getUsersWithRoles(params: {
       id:         u.id,
       email:      u.email,
       full_name:  (profileMap.get(u.id) as string | null) ?? null,
-      role:       (u.role ?? 'member') as AppRole,
+      role:       (u.role ?? 'accountant') as AppRole,
       active:     u.active ?? true,
       company_id: u.company_id,
       created_at: u.created_at,
@@ -198,14 +280,14 @@ export async function getUsersWithRoles(params: {
   }
 }
 
-// ─── getRoleChangeLogs ──────────────────────────────────────────────────────
+// ─── getRoleChangeLogs ──────────────────────────────────────────────────────────
 
 export async function getRoleChangeLogs(
   targetUserId?: string,
   limit = 30,
 ): Promise<RoleChangeLog[]> {
   try {
-    const { supabase } = await requireOwnerOrAdmin();
+    const { supabase } = await requireOwner();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
@@ -221,7 +303,6 @@ export async function getRoleChangeLogs(
     const { data } = await query;
     if (!data) return [];
 
-    // Enrich with emails
     const ids = (data as { user_id: string; changed_by: string }[]).flatMap((r) => [r.user_id, r.changed_by]);
     const allUserIds = ids.filter((id, i) => ids.indexOf(id) === i);
 
@@ -254,24 +335,24 @@ export async function getRoleChangeLogs(
   }
 }
 
-// ─── syncAuthMetadataToUsers ────────────────────────────────────────────────
-// One-shot repair tool: ensures users.role is the source of truth and
-// backfills missing users rows for any auth accounts.
+// ─── syncRolesToCanonical ───────────────────────────────────────────────────────
+// One-shot repair: ensures all users.role values are valid canonical roles.
 
-export async function syncAuthMetadataToUsers(): Promise<RoleActionResult<{
+export async function syncRolesToCanonical(): Promise<RoleActionResult<{
   updated: number;
   skipped: number;
   errors:  string[];
 }>> {
   try {
     const { user: callerUser, supabase } = await requireOwner();
+    const service = getSupabaseServiceClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: usersRows } = await (supabase as any)
+    const { data: usersRows } = await (service as any)
       .from('users')
       .select('id, email, role, company_id');
 
-    const ALLOWED = new Set(['owner', 'admin', 'accountant', 'viewer', 'member']);
+    const VALID = new Set(['owner', 'admin', 'accountant']);
     let updated = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -279,11 +360,12 @@ export async function syncAuthMetadataToUsers(): Promise<RoleActionResult<{
     for (const row of (usersRows ?? []) as {
       id: string; email: string; role: string; company_id: string | null;
     }[]) {
-      const canonicalRole = ALLOWED.has(row.role) ? row.role : 'member';
+      // Legacy roles → accountant
+      const canonicalRole = VALID.has(row.role) ? row.role : 'accountant';
 
       if (canonicalRole !== row.role) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { error } = await (service as any)
           .from('users')
           .update({ role: canonicalRole, updated_at: new Date().toISOString() })
           .eq('id', row.id);
@@ -291,13 +373,12 @@ export async function syncAuthMetadataToUsers(): Promise<RoleActionResult<{
         if (error) {
           errors.push(`${row.email}: ${error.message}`);
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from('role_change_logs').insert({
-            user_id:       row.id,
-            changed_by:    callerUser.id,
-            previous_role: row.role,
-            new_role:      canonicalRole,
-            reason:        'sync: mapped invalid role to member',
+          await writeRoleAuditLog({
+            targetUserId: row.id,
+            changedBy:    callerUser.id,
+            previousRole: row.role,
+            newRole:      canonicalRole,
+            reason:       'sync: mapped invalid role to accountant',
           });
           updated++;
         }

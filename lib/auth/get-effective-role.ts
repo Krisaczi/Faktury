@@ -36,7 +36,7 @@ export async function getEffectiveRole(): Promise<EffectiveRoleResult | null> {
     .eq('id', user.id)
     .maybeSingle();
 
-  const canonicalRole = ((userRow?.role ?? 'member') as AppRole);
+  const canonicalRole = ((userRow?.role ?? 'accountant') as AppRole);
 
   // Check for active role-switch cookie
   const cookieStore = await cookies();

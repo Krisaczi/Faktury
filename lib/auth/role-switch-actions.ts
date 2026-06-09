@@ -6,7 +6,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { ROLE_SWITCH_COOKIE } from '@/lib/auth/get-effective-role';
 import type { AppRole } from '@/lib/permissions';
 
-const ALLOWED_ASSUMED_ROLES: AppRole[] = ['admin', 'accountant', 'viewer'];
+const ALLOWED_ASSUMED_ROLES: AppRole[] = ['admin', 'accountant'];
 const DEFAULT_DURATION_MINUTES = 30;
 const MAX_DURATION_MINUTES = 120;
 

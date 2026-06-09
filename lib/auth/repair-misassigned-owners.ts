@@ -131,7 +131,7 @@ export async function repairMisassignedOwners(params: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: updateErr } = await (service as any)
           .from('users')
-          .update({ role: 'member', updated_at: new Date().toISOString() })
+          .update({ role: 'accountant', updated_at: new Date().toISOString() })
           .eq('id', flagged.id);
 
         if (updateErr) {
@@ -145,7 +145,7 @@ export async function repairMisassignedOwners(params: {
           user_id:       flagged.id,
           changed_by:    caller.id,
           previous_role: 'owner',
-          new_role:      'member',
+          new_role:      'accountant',
           reason:        `repair: misassigned owner — ${flagged.reason}`,
         });
 

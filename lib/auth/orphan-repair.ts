@@ -182,7 +182,7 @@ export async function repairOrphanedAuthUser(
         // ON CONFLICT (id) DO NOTHING — idempotent
         await Promise.allSettled([
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (service as any).from('users').insert({ id: authUserId, email, role: 'member' }),
+          (service as any).from('users').insert({ id: authUserId, email, role: 'accountant' }),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (service as any).from('profiles').insert({ id: authUserId, email, full_name: fullName || null, role: 'user' }),
         ]);

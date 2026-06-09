@@ -166,12 +166,14 @@ async function ensurePublicUserRow(
   fullName: string
 ): Promise<void> {
   await Promise.allSettled([
-    service.from('users').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (service as any).from('users').insert({
       id:    authUserId,
       email,
-      role:  'member',
+      role:  'accountant',
     }),
-    service.from('profiles').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (service as any).from('profiles').insert({
       id:        authUserId,
       email,
       full_name: fullName || null,

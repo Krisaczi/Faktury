@@ -37,6 +37,10 @@ async function requireActiveOwner() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthenticated');
 
+  const ownerId = process.env.OWNER_USER_ID;
+  if (!ownerId) throw new Error('OWNER_USER_ID not configured.');
+  if (user.id !== ownerId) throw new Error('Tylko aktywny właściciel może zarządzać statusem kont.');
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: u } = await (supabase as any)
     .from('users')
@@ -344,5 +348,75 @@ export async function getStatusChangeLogs(
     }));
   } catch {
     return [];
+  }
+}
+
+// ─── onboardNewUser ───────────────────────────────────────────────────────────
+/**
+ * Owner-initiated creation of a new company user with role='accountant'.
+ * The new user receives a password-reset email so they can set their own password.
+ */
+export async function onboardNewUser(params: {
+  email:    string;
+  fullName: string;
+}): Promise<StatusActionResult<{ userId: string }>> {
+  const { email, fullName } = params;
+
+  try {
+    const { callerId, companyId } = await requireActiveOwner();
+    const service = getSupabaseServiceClient();
+
+    // Check if user already exists in this company
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (service as any)
+      .from('users')
+      .select('id, active')
+      .eq('email', email.toLowerCase())
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: false, error: 'Użytkownik z tym adresem e-mail już istnieje w firmie.' };
+    }
+
+    // Create auth user (unconfirmed); trigger creates public.users with role=accountant
+    const { data: created, error: createErr } = await service.auth.admin.createUser({
+      email,
+      email_confirm: false,
+      user_metadata: { full_name: fullName },
+    });
+
+    if (createErr || !created.user) {
+      return { ok: false, error: createErr?.message ?? 'Nie udało się utworzyć konta.' };
+    }
+
+    // Link to company via service client (bypasses RLS)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (service as any)
+      .from('users')
+      .update({ company_id: companyId, role: 'accountant', updated_at: new Date().toISOString() })
+      .eq('id', created.user.id);
+
+    // Write audit entry
+    await writeStatusAuditLog({
+      targetUserId:   created.user.id,
+      changedBy:      callerId,
+      previousActive: false,
+      newActive:      true,
+      reason:         `onboarded by owner as accountant`,
+      ip:             null,
+    });
+
+    // Send password-reset email so user can set their own password
+    const siteUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('supabase.co', 'vercel.app') ?? '';
+    await service.auth.admin.generateLink({
+      type:  'recovery',
+      email,
+      options: { redirectTo: `${siteUrl}/reset-password` },
+    });
+
+    return { ok: true, data: { userId: created.user.id } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
   }
 }

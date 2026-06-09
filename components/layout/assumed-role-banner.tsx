@@ -21,9 +21,7 @@ function formatCountdown(expiresAt: Date): string {
 const ROLE_ACCENT: Record<AppRole, string> = {
   admin:      'bg-blue-600   border-blue-500',
   accountant: 'bg-emerald-600 border-emerald-500',
-  viewer:     'bg-slate-600  border-slate-500',
   owner:      'bg-amber-600  border-amber-500',
-  member:     'bg-slate-600  border-slate-500',
 };
 
 export function AssumedRoleBanner() {
@@ -42,7 +40,7 @@ export function AssumedRoleBanner() {
 
   if (!state.isActive || !state.assumedRole) return null;
 
-  const accent = ROLE_ACCENT[state.assumedRole] ?? ROLE_ACCENT.member;
+  const accent = ROLE_ACCENT[state.assumedRole] ?? ROLE_ACCENT.accountant;
 
   return (
     <div

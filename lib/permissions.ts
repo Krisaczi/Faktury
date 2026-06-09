@@ -1,17 +1,14 @@
 /**
- * Invoicing module permission utilities.
- *
- * Role hierarchy (invoicing):
- *   owner / admin  — full access: create, edit, delete, send to KSeF, view
- *   accountant     — create, edit, issue, send to KSeF, view (no delete)
- *   viewer         — read-only: view list and detail, no edits
- *   member         — no access to invoicing module
+ * Role hierarchy:
+ *   owner      — singleton; full access to all features and user management
+ *   admin      — full invoicing access; cannot manage roles or active status
+ *   accountant — create, edit, issue, send to KSeF; no delete
  */
 
-export type AppRole = 'owner' | 'admin' | 'accountant' | 'viewer' | 'member';
+export type AppRole = 'owner' | 'admin' | 'accountant';
 
 /** Roles that may access any part of the invoicing module. */
-export const INVOICING_ROLES: AppRole[] = ['owner', 'admin', 'accountant', 'viewer'];
+export const INVOICING_ROLES: AppRole[] = ['owner', 'admin', 'accountant'];
 
 /** Roles allowed to create and edit invoice drafts. */
 export const CAN_WRITE_INVOICE: AppRole[] = ['owner', 'admin', 'accountant'];
@@ -53,14 +50,10 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   owner:      'Właściciel',
   admin:      'Administrator',
   accountant: 'Księgowy',
-  viewer:     'Przeglądający',
-  member:     'Członek',
 };
 
 export const ROLE_DESCRIPTIONS: Record<AppRole, string> = {
-  owner:      'Pełny dostęp do wszystkich funkcji',
-  admin:      'Pełny dostęp do fakturowania',
+  owner:      'Pełny dostęp do wszystkich funkcji i zarządzania użytkownikami',
+  admin:      'Pełny dostęp do fakturowania i podglądu',
   accountant: 'Tworzenie, edycja i wysyłanie faktur',
-  viewer:     'Tylko podgląd faktur',
-  member:     'Brak dostępu do fakturowania',
 };

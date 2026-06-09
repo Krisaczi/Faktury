@@ -139,7 +139,7 @@ export async function syncAuthAndProfiles(params: {
           .insert({
             id:         authUser.id,
             email:      authUser.email ?? '',
-            role:       'member',
+            role:       'accountant',
             company_id: companyId,
           });
 
@@ -165,7 +165,7 @@ export async function syncAuthAndProfiles(params: {
           .insert({
             id:    authUser.id,
             email: authUser.email ?? '',
-            role:  'member',
+            role:  'accountant',
           });
 
         if (insertErr) {

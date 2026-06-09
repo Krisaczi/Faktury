@@ -51,7 +51,7 @@ export async function resolveUserContext(): Promise<UserContext | null> {
       service.from('profiles').insert({ id: user.id, email: user.email ?? '', full_name: fullName, role: 'user' }),
     ]);
 
-    const metaRole = (user.user_metadata?.role as AppRole | undefined) ?? 'member';
+    const metaRole = (user.user_metadata?.role as AppRole | undefined) ?? 'accountant';
     return {
       id: user.id,
       email: user.email ?? '',

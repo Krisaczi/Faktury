@@ -31,7 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/dashboard');
   }
 
-  const role = (userRecord.role ?? 'member') as AppRole;
+  const role = (userRecord.role ?? 'accountant') as AppRole;
 
   return (
     <RoleProvider role={role}>

@@ -88,9 +88,9 @@ function simulateReactivate(opts: {
 // ─── Shared fixtures ─────────────────────────────────────────────────────────
 
 function makeFixtures() {
-  const owner: UserRow   = { id: 'owner-1', email: 'owner@co.com', role: 'owner',  company_id: 'co-1', active: true };
-  const member: UserRow  = { id: 'user-1',  email: 'user@co.com',  role: 'member', company_id: 'co-1', active: true };
-  const other: UserRow   = { id: 'user-2',  email: 'other@co.com', role: 'member', company_id: 'co-2', active: true };
+  const owner: UserRow   = { id: 'owner-1', email: 'owner@co.com', role: 'owner',     company_id: 'co-1', active: true };
+  const member: UserRow  = { id: 'user-1',  email: 'user@co.com',  role: 'accountant', company_id: 'co-1', active: true };
+  const other: UserRow   = { id: 'user-2',  email: 'other@co.com', role: 'accountant', company_id: 'co-2', active: true };
   const store            = new Map<string, UserRow>([[owner.id, owner], [member.id, member], [other.id, other]]);
   const auditLog: Array<{ targetId: string; newActive: boolean; reason: string | null }> = [];
   return { owner, member, other, store, auditLog };
@@ -112,7 +112,7 @@ describe('deactivateUser', () => {
 
   it('non-owner is rejected', () => {
     const { member, store, auditLog } = makeFixtures();
-    const anotherMember: UserRow = { id: 'user-9', email: 'x@co.com', role: 'member', company_id: 'co-1', active: true };
+    const anotherMember: UserRow = { id: 'user-9', email: 'x@co.com', role: 'accountant', company_id: 'co-1', active: true };
     const result = simulateDeactivate({ caller: member, target: anotherMember, store, auditLog });
 
     assert.equal(result.ok, false);
@@ -200,7 +200,7 @@ describe('reactivateUser', () => {
 
   it('non-owner is rejected', () => {
     const { member, store, auditLog } = makeFixtures();
-    const inactive: UserRow = { id: 'user-3', email: 'u3@co.com', role: 'member', company_id: 'co-1', active: false };
+    const inactive: UserRow = { id: 'user-3', email: 'u3@co.com', role: 'accountant', company_id: 'co-1', active: false };
     const result = simulateReactivate({ caller: member, target: inactive, store, auditLog });
 
     assert.equal(result.ok, false);
@@ -219,7 +219,7 @@ describe('reactivateUser', () => {
   it('cannot reactivate user from a different company', () => {
     const { owner, auditLog } = makeFixtures();
     const store = new Map<string, UserRow>();
-    const foreign: UserRow = { id: 'f-1', email: 'f@other.com', role: 'member', company_id: 'co-9', active: false };
+    const foreign: UserRow = { id: 'f-1', email: 'f@other.com', role: 'accountant', company_id: 'co-9', active: false };
     const result = simulateReactivate({ caller: owner, target: foreign, store, auditLog });
 
     assert.equal(result.ok, false);

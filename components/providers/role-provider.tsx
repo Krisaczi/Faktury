@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react';
 import type { AppRole } from '@/lib/permissions';
 
-const RoleContext = createContext<AppRole>('member');
+const RoleContext = createContext<AppRole>('accountant');
 
 export function RoleProvider({
   role,

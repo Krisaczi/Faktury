@@ -19,8 +19,6 @@ const ROLE_DEFAULT_PATHS: Record<AppRole, string> = {
   owner:      '/dashboard',
   admin:      '/dashboard',
   accountant: '/dashboard',
-  viewer:     '/dashboard',
-  member:     '/dashboard',
 };
 
 /**
