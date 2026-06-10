@@ -1,5 +1,6 @@
 'use server';
 
+import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServiceClient } from '@/lib/supabase/server';
 
 export type SignupOutcome =
@@ -9,15 +10,27 @@ export type SignupOutcome =
   | { status: 'error'; message: string };
 
 /**
+ * Returns a Supabase client using the ANON key.
+ * auth.resend() and auth.signUp() must use the anon key — the GoTrue
+ * /auth/v1/resend endpoint rejects requests made with the service role key.
+ */
+function getAnonClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
+/**
  * Server-side signup handler that uses the Admin API to detect the auth state
  * for the given email and respond correctly in all cases:
  *
- * 1. No auth user → create via admin API and send confirmation email via
- *    generateLink (the only reliable server-side method).
- * 2. Auth user exists, unconfirmed → resend confirmation via generateLink.
- *    Also repairs public.users row if missing (trigger won't re-fire).
+ * 1. No auth user → create via admin API, then send confirmation email via
+ *    anon client signUp (the only reliable server-side email trigger).
+ * 2. Auth user exists, unconfirmed → resend confirmation via anon client.
+ *    Also repairs public.users row if missing.
  * 3. Auth user exists, confirmed → return "already_confirmed".
- *    Also repairs public.users row if missing (deleted manually).
  */
 export async function handleSignupAttempt(params: {
   email: string;
@@ -29,6 +42,7 @@ export async function handleSignupAttempt(params: {
 
   try {
     const service = getSupabaseServiceClient();
+    const anon    = getAnonClient();
 
     // Look up auth user by email via admin API (requires service role)
     const { data: listData, error: listErr } =
@@ -45,39 +59,24 @@ export async function handleSignupAttempt(params: {
 
     // ── Case 1: No existing auth user ─────────────────────────────────────────
     if (!existing) {
-      const { data: created, error: createErr } =
-        await service.auth.admin.createUser({
-          email,
-          password,
-          email_confirm:  false,
-          user_metadata:  { full_name: fullName },
-          app_metadata:   {},
-        });
-
-      if (createErr) {
-        console.error('[handleSignupAttempt] createUser failed:', createErr.message);
-        return { status: 'error', message: createErr.message };
-      }
-
-      if (!created.user) {
-        return { status: 'error', message: 'Sign up failed. Please try again.' };
-      }
-
-      // generateLink is the reliable server-side way to send a confirmation email.
-      // It uses Supabase's configured SMTP and honours the redirectTo option.
-      // Note: type 'signup' requires password per the Admin API contract.
-      const { error: linkErr } = await service.auth.admin.generateLink({
-        type:     'signup',
+      // signUp via anon client creates the user AND sends the confirmation email
+      // in a single call — this is the reliable path for email delivery.
+      const { data, error: signUpErr } = await anon.auth.signUp({
         email,
         password,
-        options:  { redirectTo: emailRedirectTo },
+        options: {
+          data:         { full_name: fullName },
+          emailRedirectTo,
+        },
       });
 
-      if (linkErr) {
-        // User was created but email failed — delete to allow a clean retry
-        await service.auth.admin.deleteUser(created.user.id);
-        console.error('[handleSignupAttempt] generateLink after create failed:', linkErr.message);
-        return { status: 'error', message: 'Failed to send confirmation email. Please try again.' };
+      if (signUpErr) {
+        console.error('[handleSignupAttempt] signUp failed:', signUpErr.message);
+        return { status: 'error', message: signUpErr.message };
+      }
+
+      if (!data.user) {
+        return { status: 'error', message: 'Sign up failed. Please try again.' };
       }
 
       return { status: 'created' };
@@ -85,21 +84,21 @@ export async function handleSignupAttempt(params: {
 
     // ── Case 2: Auth user exists but email not yet confirmed ──────────────────
     if (!existing.email_confirmed_at) {
-      // Update password in case the user is retrying with different credentials
+      // Update credentials in case the user is retrying with different values
       await service.auth.admin.updateUserById(existing.id, {
         password,
         user_metadata: { full_name: fullName },
       });
 
-      const { error: linkErr } = await service.auth.admin.generateLink({
-        type:     'signup',
+      // anon client resend triggers the confirmation email reliably
+      const { error: resendErr } = await anon.auth.resend({
+        type:    'signup',
         email,
-        password,
-        options:  { redirectTo: emailRedirectTo },
+        options: { emailRedirectTo },
       });
 
-      if (linkErr) {
-        console.error('[handleSignupAttempt] generateLink for unconfirmed failed:', linkErr.message);
+      if (resendErr) {
+        console.error('[handleSignupAttempt] resend for unconfirmed failed:', resendErr.message);
         return { status: 'error', message: 'Failed to resend confirmation. Please try again.' };
       }
 
@@ -118,22 +117,21 @@ export async function handleSignupAttempt(params: {
       .maybeSingle();
 
     if (!existingRow) {
-      // Orphaned confirmed auth user — unconfirm so they go through verification again.
+      // Orphaned confirmed auth user — unconfirm and resend via anon client
       await service.auth.admin.updateUserById(existing.id, {
         password,
         email_confirm:  false,
         user_metadata:  { full_name: fullName },
       });
 
-      const { error: linkErr } = await service.auth.admin.generateLink({
-        type:     'signup',
+      const { error: resendErr } = await anon.auth.resend({
+        type:    'signup',
         email,
-        password,
-        options:  { redirectTo: emailRedirectTo },
+        options: { emailRedirectTo },
       });
 
-      if (linkErr) {
-        console.error('[handleSignupAttempt] generateLink for orphan failed:', linkErr.message);
+      if (resendErr) {
+        console.error('[handleSignupAttempt] resend for orphan failed:', resendErr.message);
         // Password was updated — let them sign in directly
         return { status: 'already_confirmed' };
       }
