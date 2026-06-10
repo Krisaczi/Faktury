@@ -12,15 +12,12 @@ export type SignupOutcome =
  * Server-side signup handler that uses the Admin API to detect the auth state
  * for the given email and respond correctly in all cases:
  *
- * 1. No auth user → create via admin API (triggers on_auth_user_created trigger
- *    which creates public.users) and send confirmation email.
- * 2. Auth user exists, unconfirmed → resend confirmation email.
+ * 1. No auth user → create via admin API and send confirmation email via
+ *    generateLink (the only reliable server-side method).
+ * 2. Auth user exists, unconfirmed → resend confirmation via generateLink.
  *    Also repairs public.users row if missing (trigger won't re-fire).
  * 3. Auth user exists, confirmed → return "already_confirmed".
  *    Also repairs public.users row if missing (deleted manually).
- *
- * The Admin API bypasses Supabase's anti-enumeration behavior, so a confirmation
- * email is always sent when appropriate even for existing unconfirmed accounts.
  */
 export async function handleSignupAttempt(params: {
   email: string;
@@ -48,9 +45,6 @@ export async function handleSignupAttempt(params: {
 
     // ── Case 1: No existing auth user ─────────────────────────────────────────
     if (!existing) {
-      // admin.createUser with email_confirm: false sends the confirmation email
-      // automatically (respects the project's SMTP config) AND fires the
-      // on_auth_user_created trigger that creates the public.users row.
       const { data: created, error: createErr } =
         await service.auth.admin.createUser({
           email,
@@ -69,18 +63,20 @@ export async function handleSignupAttempt(params: {
         return { status: 'error', message: 'Sign up failed. Please try again.' };
       }
 
-      // Send the confirmation email. admin.createUser does NOT send it by itself
-      // when email_confirm is false — we must call resend or generateLink.
-      const { error: resendErr } = await service.auth.resend({
-        type:    'signup',
+      // generateLink is the reliable server-side way to send a confirmation email.
+      // It uses Supabase's configured SMTP and honours the redirectTo option.
+      // Note: type 'signup' requires password per the Admin API contract.
+      const { error: linkErr } = await service.auth.admin.generateLink({
+        type:     'signup',
         email,
-        options: { emailRedirectTo },
+        password,
+        options:  { redirectTo: emailRedirectTo },
       });
 
-      if (resendErr) {
+      if (linkErr) {
         // User was created but email failed — delete to allow a clean retry
         await service.auth.admin.deleteUser(created.user.id);
-        console.error('[handleSignupAttempt] resend after create failed:', resendErr.message);
+        console.error('[handleSignupAttempt] generateLink after create failed:', linkErr.message);
         return { status: 'error', message: 'Failed to send confirmation email. Please try again.' };
       }
 
@@ -89,14 +85,21 @@ export async function handleSignupAttempt(params: {
 
     // ── Case 2: Auth user exists but email not yet confirmed ──────────────────
     if (!existing.email_confirmed_at) {
-      const { error: resendErr } = await service.auth.resend({
-        type:    'signup',
-        email,
-        options: { emailRedirectTo },
+      // Update password in case the user is retrying with different credentials
+      await service.auth.admin.updateUserById(existing.id, {
+        password,
+        user_metadata: { full_name: fullName },
       });
 
-      if (resendErr) {
-        console.error('[handleSignupAttempt] resend for unconfirmed failed:', resendErr.message);
+      const { error: linkErr } = await service.auth.admin.generateLink({
+        type:     'signup',
+        email,
+        password,
+        options:  { redirectTo: emailRedirectTo },
+      });
+
+      if (linkErr) {
+        console.error('[handleSignupAttempt] generateLink for unconfirmed failed:', linkErr.message);
         return { status: 'error', message: 'Failed to resend confirmation. Please try again.' };
       }
 
@@ -107,10 +110,6 @@ export async function handleSignupAttempt(params: {
     }
 
     // ── Case 3: Auth user exists and is confirmed ─────────────────────────────
-    // Check whether a public.users row exists for this auth user.
-    // If not, the auth record is orphaned (e.g. the DB was wiped). Update the
-    // auth credentials to match the submitted form and create the missing
-    // public.users row so the user can sign in and reach onboarding.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingRow } = await (service as any)
       .from('users')
@@ -119,24 +118,23 @@ export async function handleSignupAttempt(params: {
       .maybeSingle();
 
     if (!existingRow) {
-      // Orphaned confirmed auth user — all application data was wiped.
-      // Unconfirm their email and update credentials so a fresh confirmation
-      // email is sent and they go through the normal verification flow.
+      // Orphaned confirmed auth user — unconfirm so they go through verification again.
       await service.auth.admin.updateUserById(existing.id, {
         password,
         email_confirm:  false,
         user_metadata:  { full_name: fullName },
       });
 
-      const { error: resendErr } = await service.auth.resend({
-        type:    'signup',
+      const { error: linkErr } = await service.auth.admin.generateLink({
+        type:     'signup',
         email,
-        options: { emailRedirectTo },
+        password,
+        options:  { redirectTo: emailRedirectTo },
       });
 
-      if (resendErr) {
-        console.error('[handleSignupAttempt] resend for orphan failed:', resendErr.message);
-        // Password was updated — let them sign in directly.
+      if (linkErr) {
+        console.error('[handleSignupAttempt] generateLink for orphan failed:', linkErr.message);
+        // Password was updated — let them sign in directly
         return { status: 'already_confirmed' };
       }
 
@@ -156,7 +154,6 @@ export async function handleSignupAttempt(params: {
 /**
  * Idempotently ensures a public.users row exists for the given auth user.
  * The DB schema uses ON CONFLICT (id) DO NOTHING, so duplicate calls are safe.
- * Also ensures the profiles row is present for backwards compatibility.
  */
 async function ensurePublicUserRow(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
