@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MailCheck, Loader as Loader2, CircleAlert as AlertCircle } from 'lucide-react';
 import {
@@ -17,46 +17,62 @@ import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 type Status = 'verifying' | 'success' | 'error';
 
 export default function VerifyEmailPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>('verifying');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    async function verify() {
-      const supabase = getSupabaseBrowserClient();
+    const supabase = getSupabaseBrowserClient();
+    let settled = false;
 
-      // Supabase PKCE flow sends token_hash + type as query params
-      const tokenHash = searchParams.get('token_hash');
-      const type = searchParams.get('type') as 'email' | 'recovery' | 'magiclink' | null;
-
-      if (tokenHash && type) {
-        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-        if (error) {
-          setErrorMsg(error.message);
-          setStatus('error');
-        } else {
-          setStatus('success');
-        }
-        return;
-      }
-
-      // Older implicit flow: token arrives in the URL hash fragment (#access_token=...)
-      // The Supabase client detects this automatically on getSession
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (session) {
-        setStatus('success');
-      } else if (error) {
-        setErrorMsg(error.message);
-        setStatus('error');
-      } else {
-        // No token found at all — likely a direct navigation to this URL
-        setErrorMsg('No verification token found. Please use the link from your email.');
-        setStatus('error');
-      }
+    function succeed() {
+      if (settled) return;
+      settled = true;
+      setStatus('success');
     }
 
-    void verify();
+    function fail(msg: string) {
+      if (settled) return;
+      settled = true;
+      setErrorMsg(msg);
+      setStatus('error');
+    }
+
+    // PKCE flow: token_hash + type arrive as query params
+    const tokenHash = searchParams.get('token_hash');
+    const type = searchParams.get('type') as 'email' | 'recovery' | 'magiclink' | null;
+
+    if (tokenHash && type) {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => {
+        if (error) fail(error.message);
+        else succeed();
+      });
+      return;
+    }
+
+    // Implicit / magic-link flow: access_token arrives in the URL hash fragment.
+    // The Supabase client parses the hash on initialisation and fires SIGNED_IN.
+    // Subscribe before calling getSession so we never miss the event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+        succeed();
+      }
+    });
+
+    // Also check for a session that was already established before the listener fired
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) succeed();
+    });
+
+    // Final fallback — if nothing resolved after 3 s the link is genuinely missing
+    const timeout = setTimeout(() => {
+      fail('No verification token found. Please use the link from your email.');
+    }, 3000);
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, [searchParams]);
 
   if (status === 'verifying') {
