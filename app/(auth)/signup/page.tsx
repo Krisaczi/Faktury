@@ -45,7 +45,7 @@ export default function SignupPage() {
       email:            data.email,
       password:         data.password,
       fullName:         data.full_name,
-      emailRedirectTo:  `${window.location.origin}/verify-email`,
+      emailRedirectTo:  `${window.location.origin}/api/auth/callback`,
     });
 
     if (result.status === 'error') {

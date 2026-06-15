@@ -22,7 +22,6 @@ export default function VerifyEmailPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
     let settled = false;
 
     function succeed() {
@@ -38,41 +37,74 @@ export default function VerifyEmailPage() {
       setStatus('error');
     }
 
-    // PKCE flow: token_hash + type arrive as query params
-    const tokenHash = searchParams.get('token_hash');
-    const type = searchParams.get('type') as 'email' | 'recovery' | 'magiclink' | null;
-
-    if (tokenHash && type) {
-      supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => {
-        if (error) fail(error.message);
-        else succeed();
-      });
+    // ── Fast path: callback route already handled the exchange ───────────────
+    // /api/auth/callback redirects here with ?verified=1 on success.
+    if (searchParams.get('verified') === '1') {
+      succeed();
       return;
     }
 
-    // Implicit / magic-link flow: access_token arrives in the URL hash fragment.
-    // The Supabase client parses the hash on initialisation and fires SIGNED_IN.
-    // Subscribe before calling getSession so we never miss the event.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-        succeed();
+    // ── Error forwarded from callback route ──────────────────────────────────
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      fail(decodeURIComponent(errorParam));
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    async function run() {
+      // ── PKCE auth code (?code=...) ────────────────────────────────────────
+      // Fallback: if user lands here directly with a code (e.g. the callback
+      // route was bypassed), try to exchange it client-side.
+      const code = searchParams.get('code');
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) fail(error.message);
+        else succeed();
+        return;
       }
-    });
 
-    // Also check for a session that was already established before the listener fired
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) succeed();
-    });
+      // ── OTP token hash (?token_hash=...&type=...) ─────────────────────────
+      const tokenHash = searchParams.get('token_hash');
+      const type = searchParams.get('type') as 'email' | 'recovery' | 'magiclink' | null;
+      if (tokenHash && type) {
+        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+        if (error) fail(error.message);
+        else succeed();
+        return;
+      }
 
-    // Final fallback — if nothing resolved after 3 s the link is genuinely missing
-    const timeout = setTimeout(() => {
-      fail('No verification token found. Please use the link from your email.');
-    }, 3000);
+      // ── Implicit flow (#access_token=... in URL hash) ─────────────────────
+      // createBrowserClient detects the hash on init and fires SIGNED_IN.
+      // Subscribe before getSession so the event is never missed.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+          succeed();
+        }
+      });
 
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+      // The client may have already consumed the hash before this effect ran
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        subscription.unsubscribe();
+        succeed();
+        return;
+      }
+
+      // Wait up to 4 s for the SIGNED_IN event before giving up
+      const timeout = setTimeout(() => {
+        subscription.unsubscribe();
+        fail('No verification token found. Please use the link from your email.');
+      }, 4000);
+
+      return () => {
+        clearTimeout(timeout);
+        subscription.unsubscribe();
+      };
+    }
+
+    void run();
   }, [searchParams]);
 
   if (status === 'verifying') {

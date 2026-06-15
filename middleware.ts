@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   '/pricing',
   '/demo',
   '/api/demo',
+  '/api/auth',
   '/account-inactive',
 ];
 
