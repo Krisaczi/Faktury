@@ -7,7 +7,7 @@ import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History } from 'lucide-react';
+import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History, Zap, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -444,6 +444,7 @@ function CompaniesTable({
                 Firma <SortIcon k="company_name" />
               </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Produkt</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Plan</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide cursor-pointer select-none hidden lg:table-cell" onClick={() => toggleSort('invoices_30d')}>
                 Faktury 30d <SortIcon k="invoices_30d" />
@@ -459,7 +460,7 @@ function CompaniesTable({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-16 text-sm text-slate-400">
+                <td colSpan={10} className="text-center py-16 text-sm text-slate-400">
                   {search ? 'Brak wyników wyszukiwania.' : 'Brak firm.'}
                 </td>
               </tr>
@@ -499,6 +500,32 @@ function CompaniesTable({
                     : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
                         <XCircle className="w-3.5 h-3.5" />Nieaktywna
                       </span>}
+                </td>
+                <td className="px-4 py-3 hidden md:table-cell">
+                  {(() => {
+                    const pt = company.product_type;
+                    if (pt === 'professional') return (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                        <Star className="w-3 h-3" />Professional
+                        {company.trial_active && (
+                          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded px-1 py-0.5">
+                            <Clock className="w-2.5 h-2.5" />Trial
+                          </span>
+                        )}
+                      </span>
+                    );
+                    if (pt === 'starter') return (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400">
+                        <Zap className="w-3 h-3" />Starter
+                        {company.trial_active && (
+                          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded px-1 py-0.5">
+                            <Clock className="w-2.5 h-2.5" />Trial
+                          </span>
+                        )}
+                      </span>
+                    );
+                    return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+                  })()}
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   {company.pricing_tier_name

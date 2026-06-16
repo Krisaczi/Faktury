@@ -9,6 +9,15 @@ import type {
 } from './types';
 import { DEFAULT_STARTER_FEATURES } from './types';
 
+const DEFAULT_PROFESSIONAL_FEATURES: PackageFeatures = {
+  vendors_limit:     null,
+  reports_per_month: null,
+  users_limit:       3,
+  file_uploads:      true,
+  invoicing:         true,
+  support:           'priority',
+};
+
 // ─── Core resolver ────────────────────────────────────────────────────────────
 
 export async function getCompanyPackage(companyId: string): Promise<EffectivePackage> {
@@ -17,7 +26,7 @@ export async function getCompanyPackage(companyId: string): Promise<EffectivePac
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (supabase as any)
     .from('companies')
-    .select('package_type, package_id, package_custom, package_price_cents, package_assigned_at, over_limit')
+    .select('product_type, package_type, package_id, package_custom, package_price_cents, package_assigned_at, over_limit')
     .eq('id', companyId)
     .maybeSingle();
 
@@ -32,7 +41,9 @@ export async function getCompanyPackage(companyId: string): Promise<EffectivePac
     };
   }
 
-  const packageType = (company.package_type ?? 'starter') as PackageType;
+  // product_type is the canonical selection from onboarding; fall back to package_type
+  const rawType = (company.product_type ?? company.package_type ?? 'starter') as string;
+  const packageType = rawType as PackageType;
 
   let tier: PackageTier | null = null;
   if (company.package_id) {
@@ -45,13 +56,13 @@ export async function getCompanyPackage(companyId: string): Promise<EffectivePac
     tier = t ?? null;
   }
 
-  // If no tier found but type is known, try to load by key
   if (!tier && packageType !== 'individual') {
+    const tierKey = packageType === 'professional' ? 'pro' : packageType;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: t } = await (supabase as any)
       .from('pricing_tiers')
       .select('*')
-      .eq('key', packageType)
+      .eq('key', tierKey)
       .maybeSingle();
     tier = t ?? null;
   }
@@ -59,13 +70,12 @@ export async function getCompanyPackage(companyId: string): Promise<EffectivePac
   let features: PackageFeatures;
 
   if (packageType === 'individual') {
-    // Merge individual custom overrides on top of starter defaults
     const custom = company.package_custom as Partial<PackageFeatures> | null;
     features = { ...DEFAULT_STARTER_FEATURES, ...(custom ?? {}) };
+  } else if (packageType === 'professional') {
+    features = tier ? (tier.features as PackageFeatures) : DEFAULT_PROFESSIONAL_FEATURES;
   } else {
-    features = tier
-      ? (tier.features as PackageFeatures)
-      : DEFAULT_STARTER_FEATURES;
+    features = tier ? (tier.features as PackageFeatures) : DEFAULT_STARTER_FEATURES;
   }
 
   return {
@@ -150,6 +160,52 @@ export function checkFileUploads(features: PackageFeatures): EnforcementResult {
     reason:     'Przesyłanie plików nie jest dostępne w Twoim pakiecie.',
     upgradeKey: 'file_uploads',
   };
+}
+
+export function checkUserLimit(
+  features: PackageFeatures,
+  currentUserCount: number,
+): EnforcementResult {
+  if (features.users_limit === null) return { allowed: true };
+  if (currentUserCount < features.users_limit) return { allowed: true };
+  const plan = features.users_limit === 1 ? 'Starter' : 'Professional';
+  const upgrade = features.users_limit === 1
+    ? 'Plan Starter pozwala na 1 użytkownika. Przejdź na Professional, aby dodać więcej.'
+    : `Plan Professional pozwala na ${features.users_limit} użytkowników. Skontaktuj się z właścicielem, aby rozszerzyć plan.`;
+  return {
+    allowed:    false,
+    reason:     upgrade,
+    upgradeKey: 'users_limit',
+  };
+}
+
+// ─── Async enforcement helpers (load package from DB) ─────────────────────────
+
+export async function requireInvoicingEnabled(companyId: string): Promise<void> {
+  const pkg = await getCompanyPackage(companyId);
+  if (!pkg.features.invoicing) {
+    throw Object.assign(
+      new Error('Fakturowanie jest dostępne tylko w planie Professional. Zaktualizuj plan, aby wystawiać faktury.'),
+      { code: 'INVOICING_NOT_AVAILABLE', status: 403 },
+    );
+  }
+}
+
+export async function requireUserSlot(companyId: string): Promise<void> {
+  const supabase = await getSupabaseServerClient();
+  const pkg      = await getCompanyPackage(companyId);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (supabase as any)
+    .from('users')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('active', true);
+
+  const check = checkUserLimit(pkg.features, (count as number) ?? 0);
+  if (!check.allowed) {
+    throw Object.assign(new Error(check.reason!), { code: 'USER_LIMIT_REACHED', status: 403 });
+  }
 }
 
 // ─── Increment report usage ────────────────────────────────────────────────────

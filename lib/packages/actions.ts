@@ -16,6 +16,79 @@ import {
   getCompanyUsage,
 } from './get-company-package';
 
+// ─── Company card data ────────────────────────────────────────────────────────
+
+export interface CompanyCardData {
+  company_id:          string;
+  company_name:        string;
+  nip:                 string | null;
+  product_type:        'starter' | 'professional' | null;
+  trial_active:        boolean;
+  trial_expires_at:    string | null;
+  trial_expired:       boolean;
+  current_user_count:  number;
+  allowed_user_limit:  number | null;
+  invoicing_enabled:   boolean;
+  is_active:           boolean;
+}
+
+export async function getCompanyCard(
+  companyId: string,
+): Promise<PackageActionResult<CompanyCardData>> {
+  try {
+    const { supabase } = await requireOwnerOrAdmin(companyId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: company, error: cErr } = await (supabase as any)
+      .from('companies')
+      .select('id, name, nip, product_type, trial_active, trial_expires_at, is_active')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    if (cErr || !company) {
+      return { ok: false, error: 'Firma nie istnieje.' };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count: userCount } = await (supabase as any)
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('active', true);
+
+    const productType = (company.product_type as 'starter' | 'professional' | null) ?? null;
+    const trialExpiresAt = company.trial_expires_at as string | null;
+    const trialActive    = Boolean(company.trial_active);
+    const trialExpired   = trialActive && trialExpiresAt !== null && new Date(trialExpiresAt) < new Date();
+
+    const allowedUserLimit: number | null =
+      productType === 'professional' ? 3 :
+      productType === 'starter'      ? 1 :
+      null;
+
+    const invoicingEnabled = productType === 'professional';
+
+    return {
+      ok: true,
+      data: {
+        company_id:         company.id as string,
+        company_name:       company.name as string,
+        nip:                company.nip as string | null,
+        product_type:       productType,
+        trial_active:       trialActive,
+        trial_expires_at:   trialExpiresAt,
+        trial_expired:      trialExpired,
+        current_user_count: (userCount as number) ?? 0,
+        allowed_user_limit: allowedUserLimit,
+        invoicing_enabled:  invoicingEnabled,
+        is_active:          Boolean(company.is_active ?? true),
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
+}
+
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
 async function requireOwnerOrAdmin(companyId?: string) {
@@ -242,6 +315,91 @@ export async function updateIndividualPackageOptions(
 
     revalidatePath(`/admin/companies/${companyId}`);
     return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
+}
+
+// ─── Select product (post-onboarding) ────────────────────────────────────────
+
+export type SelectProductInput = {
+  companyId:   string;
+  productType: 'starter' | 'professional';
+  startTrial:  boolean;
+};
+
+export type SelectProductResult = PackageActionResult<{
+  companyId:        string;
+  productType:      string;
+  trialActive:      boolean;
+  trialExpiresAt:   string | null;
+  usersLimit:       number | null;
+}>;
+
+export async function selectProduct(input: SelectProductInput): Promise<SelectProductResult> {
+  const { companyId, productType, startTrial } = input;
+
+  try {
+    const { user, supabase } = await requireOwnerOrAdmin(companyId);
+
+    if (productType !== 'starter' && productType !== 'professional') {
+      return { ok: false, error: 'Nieprawidłowy typ produktu.' };
+    }
+
+    const now            = new Date();
+    const trialExpiresAt = startTrial
+      ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: prev } = await (supabase as any)
+      .from('companies')
+      .select('product_type, package_type, trial_active, trial_expires_at')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    const updatePayload: Record<string, unknown> = {
+      product_type:      productType,
+      package_type:      productType,
+      trial_active:      startTrial,
+      trial_expires_at:  trialExpiresAt,
+      subscription_status: startTrial ? 'trial' : 'active',
+      updated_at:        now.toISOString(),
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('companies')
+      .update(updatePayload)
+      .eq('id', companyId);
+
+    if (error) return { ok: false, error: error.message };
+
+    await writePackageAudit(
+      supabase,
+      companyId,
+      user.id,
+      prev ?? null,
+      updatePayload,
+      `product selected: ${productType}`,
+    );
+
+    revalidatePath('/dashboard');
+    revalidatePath('/onboarding');
+    revalidatePath('/admin/owner');
+
+    const usersLimit = productType === 'professional' ? 3 : 1;
+
+    return {
+      ok: true,
+      data: {
+        companyId,
+        productType,
+        trialActive:    startTrial,
+        trialExpiresAt,
+        usersLimit,
+      },
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
   }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 export interface PackageFeatures {
   vendors_limit:      number | null; // null = unlimited
   reports_per_month:  number | null; // null = unlimited
+  users_limit:        number | null; // null = unlimited; Starter = 3, Professional = null
   file_uploads:       boolean;
   invoicing:          boolean;
   support:            'email' | 'priority' | 'none';
@@ -13,12 +14,13 @@ export interface PackageFeatures {
 export const DEFAULT_STARTER_FEATURES: PackageFeatures = {
   vendors_limit:     25,
   reports_per_month: 10,
+  users_limit:       1,
   file_uploads:      true,
   invoicing:         false,
   support:           'email',
 };
 
-export type PackageType = 'starter' | 'pro' | 'individual';
+export type PackageType = 'starter' | 'professional' | 'pro' | 'individual';
 
 // ─── Tier ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ export interface EnforcementResult {
 export const IndividualOptionsSchema = z.object({
   vendors_limit:     z.number().int().min(0).nullable().default(25),
   reports_per_month: z.number().int().min(0).nullable().default(10),
+  users_limit:       z.number().int().min(0).nullable().default(3),
   file_uploads:      z.boolean().default(true),
   invoicing:         z.boolean().default(false),
   support:           z.enum(['email', 'priority', 'none']).default('email'),
@@ -76,7 +79,7 @@ export type IndividualOptions = z.infer<typeof IndividualOptionsSchema>;
 // ─── Assign package input ─────────────────────────────────────────────────────
 
 export const AssignPackageSchema = z.object({
-  package_type:         z.enum(['starter', 'pro', 'individual']),
+  package_type:         z.enum(['starter', 'pro', 'professional', 'individual']),
   package_id:           z.string().uuid().nullable().optional(),
   package_custom:       IndividualOptionsSchema.nullable().optional(),
   package_price_cents:  z.number().int().min(0).nullable().optional(),

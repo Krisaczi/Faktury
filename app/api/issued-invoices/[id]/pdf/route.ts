@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import { VAT_RATES, type VatRate } from '@/types/issued-invoice';
+import { requireInvoicingEnabled } from '@/lib/packages/get-company-package';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -735,6 +736,23 @@ export async function GET(
     const supabase = await getSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new NextResponse('Unauthorized', { status: 401 });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: u } = await (supabase as any)
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!u?.company_id) return new NextResponse('Forbidden', { status: 403 });
+
+    // Package-level enforcement: invoicing requires Professional plan
+    try {
+      await requireInvoicingEnabled(u.company_id as string);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Forbidden';
+      return new NextResponse(msg, { status: 403 });
+    }
 
     // Fetch invoice header
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

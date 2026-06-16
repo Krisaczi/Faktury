@@ -33,6 +33,9 @@ export interface CompanyDashboardRow {
   pricing_tier_id:     string | null;
   custom_pricing:      CustomPricing | null;
   subscription_status: string;
+  product_type:        'starter' | 'professional' | null;
+  trial_active:        boolean;
+  trial_expires_at:    string | null;
   created_at:          string;
   invoices_30d:        number;
   invoices_90d:        number;

@@ -38,9 +38,10 @@ function fmtLimit(val: number | null | undefined, unit: string): string {
 }
 
 const PACKAGE_COLORS: Record<PackageType, string> = {
-  starter:    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300',
-  pro:        'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300',
-  individual: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300',
+  starter:      'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300',
+  professional: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300',
+  pro:          'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300',
+  individual:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300',
 };
 
 // ─── Feature row ─────────────────────────────────────────────────────────────
@@ -452,9 +453,10 @@ export function PackageCard({ companyId, pkg, usage, tiers, audit, isOwner }: Pa
   const [showIndividual, setShowIndividual] = useState(false);
 
   const typeLabel: Record<PackageType, string> = {
-    starter:    'Starter',
-    pro:        'Pro',
-    individual: 'Individual',
+    starter:      'Starter',
+    professional: 'Professional',
+    pro:          'Pro',
+    individual:   'Individual',
   };
 
   return (

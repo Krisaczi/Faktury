@@ -20,6 +20,7 @@ import {
   canSendToKsef as canSendToKsefRole,
   type AppRole,
 } from '@/lib/permissions';
+import { requireInvoicingEnabled } from '@/lib/packages/get-company-package';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,10 @@ async function requireInvoicingUser() {
   if (!u?.company_id) throw new Error('No company');
   const role = (u.role ?? 'accountant') as AppRole;
   if (!canAccessInvoicing(role)) throw new Error('Brak dostępu do modułu fakturowania.');
+
+  // Package-level enforcement: invoicing requires Professional plan
+  await requireInvoicingEnabled(u.company_id as string);
+
   return { user, companyId: u.company_id as string, role };
 }
 

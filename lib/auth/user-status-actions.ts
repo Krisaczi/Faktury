@@ -1,6 +1,7 @@
 'use server';
 
 import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { requireUserSlot } from '@/lib/packages/get-company-package';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -377,6 +378,13 @@ export async function onboardNewUser(params: {
 
     if (existing) {
       return { ok: false, error: 'Użytkownik z tym adresem e-mail już istnieje w firmie.' };
+    }
+
+    // Enforce user limit for the company's product plan
+    try {
+      await requireUserSlot(companyId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Osiągnięto limit użytkowników.' };
     }
 
     // Create auth user (unconfirmed); trigger creates public.users with role=accountant
