@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MailCheck, Loader as Loader2, CircleAlert as AlertCircle } from 'lucide-react';
 import {
@@ -18,6 +18,7 @@ type Status = 'verifying' | 'success' | 'error';
 
 export default function VerifyEmailPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [status, setStatus] = useState<Status>('verifying');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -28,6 +29,9 @@ export default function VerifyEmailPage() {
       if (settled) return;
       settled = true;
       setStatus('success');
+      // Auto-redirect: verified users go to onboarding (resume logic will push
+      // to dashboard if they're already onboarded).
+      router.replace('/onboarding');
     }
 
     function fail(msg: string) {
@@ -76,32 +80,43 @@ export default function VerifyEmailPage() {
       }
 
       // ── Implicit flow (#access_token=... in URL hash) ─────────────────────
-      // createBrowserClient detects the hash on init and fires SIGNED_IN.
-      // Subscribe before getSession so the event is never missed.
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-          succeed();
-        }
-      });
+      // @supabase/ssr does NOT auto-consume the hash. Parse it manually.
+      const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const accessToken  = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const hashType     = params.get('type');
 
-      // The client may have already consumed the hash before this effect ran
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) fail(error.message);
+          else succeed();
+          return;
+        }
+
+        // token_hash style in fragment (some Supabase email templates)
+        const hashTokenHash = params.get('token_hash');
+        const hashOtpType = (hashType) as 'email' | 'recovery' | 'magiclink' | null;
+        if (hashTokenHash && hashOtpType) {
+          const { error } = await supabase.auth.verifyOtp({ token_hash: hashTokenHash, type: hashOtpType });
+          if (error) fail(error.message);
+          else succeed();
+          return;
+        }
+      }
+
+      // Already signed in (e.g. landed here after redirect)
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        subscription.unsubscribe();
         succeed();
         return;
       }
 
-      // Wait up to 4 s for the SIGNED_IN event before giving up
-      const timeout = setTimeout(() => {
-        subscription.unsubscribe();
-        fail('No verification token found. Please use the link from your email.');
-      }, 4000);
-
-      return () => {
-        clearTimeout(timeout);
-        subscription.unsubscribe();
-      };
+      fail('No verification token found. Please use the link from your email.');
     }
 
     void run();

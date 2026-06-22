@@ -217,9 +217,9 @@ function simAddUser(
 function simProcessTrials(store: Store, now: Date) {
   const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-  for (const company of store.users.values()) { void company; } // keep TS happy
+  for (const company of Array.from(store.users.values())) { void company; } // keep TS happy
 
-  for (const company of store.companies.values()) {
+  for (const company of Array.from(store.companies.values())) {
     if (!company.trial_active || !company.trial_expires_at) continue;
 
     const expiresAt = new Date(company.trial_expires_at);
