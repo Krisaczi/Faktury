@@ -123,11 +123,17 @@ export async function createCompany(params: {
   }
 
   const ingestionEmail = `${slugify(params.companyName)}@invoiceguard.app`;
+  // Generate the ID client-side so we don't need .select() after insert.
+  // Chaining .select('id').single() after insert triggers a PostgREST RLS
+  // violation because the SELECT policy can't see the row before the user
+  // is linked to the company (get_user_company_id() is still NULL at that point).
+  const companyId = crypto.randomUUID();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: company, error: companyError } = await (supabase as any)
+  const { error: companyError } = await (supabase as any)
     .from('companies')
     .insert({
+      id:               companyId,
       name:             params.companyName,
       nip:              params.nip,
       street:           params.street,
@@ -136,29 +142,27 @@ export async function createCompany(params: {
       currency:         params.currency,
       ingestion_email:  ingestionEmail,
       onboarding_step:  'company_created',
-    })
-    .select('id')
-    .single();
+    });
 
-  if (companyError || !company) {
-    return { ok: false, error: companyError?.message ?? 'Nie udało się utworzyć firmy.' };
+  if (companyError) {
+    return { ok: false, error: companyError.message };
   }
 
   // Link user as owner
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: linkError } = await (supabase as any).rpc('complete_user_onboarding', {
     p_user_id:    user.id,
-    p_company_id: company.id,
+    p_company_id: companyId,
   });
 
   if (linkError) {
     // Best-effort rollback
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('companies').delete().eq('id', company.id);
+    await (supabase as any).from('companies').delete().eq('id', companyId);
     return { ok: false, error: linkError.message ?? 'Nie udało się powiązać konta z firmą.' };
   }
 
-  return { ok: true, data: { companyId: company.id, step: 'company_created' } };
+  return { ok: true, data: { companyId, step: 'company_created' } };
 }
 
 // ─── finalizeProduct ──────────────────────────────────────────────────────────
