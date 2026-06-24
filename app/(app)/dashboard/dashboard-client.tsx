@@ -207,7 +207,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
         }
       >
         <div className="flex items-center gap-2">
-          <p className="text-xs text-slate-400 dark:text-slate-500">Last 30 days</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Ostatnie 30 dni</p>
           {(metricsValidating && !metricsLoading) && (
             <InlineLoader size="xs" className="text-slate-400" label="Refreshing" />
           )}
@@ -222,7 +222,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
         >
           <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
           <p className="text-sm text-red-700 dark:text-red-300 flex-1">
-            Failed to load metrics — showing last known data.
+            Nie udało się wczytać danych — wyświetlane są ostatnie znane dane.
           </p>
           <Button
             size="sm"
@@ -262,7 +262,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
                     Invoices Over Time
                   </CardTitle>
                   <CardDescription className="mt-0.5">
-                    Daily invoices scanned vs flagged — last 30 days
+                    Skanowane i oznaczone faktury z ostatnich 30 dni
                   </CardDescription>
                 </div>
                 {chartValidating && !timeseriesLoading && (
@@ -357,10 +357,10 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-                    Recent Activity
+                    Ostatnia aktywność
                   </CardTitle>
                   <CardDescription className="mt-0.5">
-                    Latest invoices, flags, and uploads
+                    Najnowsze faktury, flagi i wczytane faktury
                   </CardDescription>
                 </div>
                 <button
@@ -423,7 +423,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
       <Card className="border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-            Quick Actions
+            Szybkie działania
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -277,8 +277,8 @@ export default function RiskReportPage() {
             className="shrink-0 border-slate-200 dark:border-slate-700"
           >
             {exporting
-              ? <><InlineLoader size="sm" className="mr-2 text-slate-500" />Exporting…</>
-              : <><Download className="w-4 h-4 mr-2" />Export CSV</>}
+              ? <><InlineLoader size="sm" className="mr-2 text-slate-500" />Eksport…</>
+              : <><Download className="w-4 h-4 mr-2" />Eksportyj CSV</>}
           </Button>
         </PageHeader>
 
@@ -287,7 +287,7 @@ export default function RiskReportPage() {
           <div role="alert" className="flex items-center gap-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3">
             <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-red-700 dark:text-red-300">Failed to load report</p>
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">Nie udało się pobrać raportu</p>
               <p className="text-xs text-red-500 dark:text-red-400 mt-0.5 truncate">{error.message}</p>
             </div>
             <Button
@@ -295,7 +295,7 @@ export default function RiskReportPage() {
               onClick={() => mutate()}
               className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 h-7 px-2 shrink-0"
             >
-              <RefreshCw className="w-3.5 h-3.5 mr-1" />Retry
+              <RefreshCw className="w-3.5 h-3.5 mr-1" />Spróbuj ponownie
             </Button>
           </div>
         )}
@@ -352,7 +352,7 @@ export default function RiskReportPage() {
           <CardContent className="pt-4 pb-4">
             <div className="flex flex-wrap gap-2 mb-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500 shrink-0">From</span>
+                <span className="text-xs text-slate-500 shrink-0">Od</span>
                 <input
                   type="date"
                   value={fromInput}
@@ -361,7 +361,7 @@ export default function RiskReportPage() {
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500 shrink-0">To</span>
+                <span className="text-xs text-slate-500 shrink-0">Do</span>
                 <input
                   type="date"
                   value={toInput}
@@ -374,7 +374,7 @@ export default function RiskReportPage() {
                   <SelectValue placeholder="All vendors" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All vendors</SelectItem>
+                  <SelectItem value="all">Wszyscy dostawcy</SelectItem>
                   {(filterOpts?.vendors ?? []).map((v) => (
                     <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                   ))}
@@ -385,7 +385,7 @@ export default function RiskReportPage() {
                   <SelectValue placeholder="All risk levels" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All levels</SelectItem>
+                  <SelectItem value="all">Wszystkie poziomy</SelectItem>
                   {['high', 'medium', 'low', 'critical'].map((r) => (
                     <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
                   ))}
@@ -396,7 +396,7 @@ export default function RiskReportPage() {
               </Button>
               {activeFilters.length > 0 && (
                 <Button size="sm" variant="ghost" onClick={clearFilters} className="h-8 text-slate-500">
-                  <X className="w-3.5 h-3.5 mr-1" />Clear
+                  <X className="w-3.5 h-3.5 mr-1" />Wyczyść
                 </Button>
               )}
             </div>
@@ -439,7 +439,7 @@ export default function RiskReportPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">
-                  Invoices
+                  Faktury
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {isValidating && !isLoading && (
@@ -617,7 +617,7 @@ export default function RiskReportPage() {
                 <Separator />
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
                   <HStack gap="2" className="text-sm text-slate-500">
-                    <span className="text-xs">Rows per page</span>
+                    <span className="text-xs">Liczba wierszy na stronę</span>
                     <Select
                       value={String(filters.pageSize ?? 20)}
                       onValueChange={(v) => setFilters((f) => ({ ...f, pageSize: Number(v), page: 1 }))}

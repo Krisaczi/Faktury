@@ -121,7 +121,7 @@ export default function LandingPage() {
             </Link>
             <Link href="/signup">
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
-                Zapisz się
+                Zarejestruj się
               </Button>
             </Link>
           </div>
@@ -150,12 +150,12 @@ export default function LandingPage() {
             </Link>
             <Link href="/signup">
               <Button size="lg" variant="outline" className="h-12 px-8 text-base border-slate-200 dark:border-slate-700 gap-2">
-                Sign up
+                Zarejesrtuj się
               </Button>
             </Link>
           </div>
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
-            Bez karty kredytowej · 14 dniowy okres próbny · Anuluj w dowolnym momencie
+            7 dniowy okres próbny · Anuluj w dowolnym momencie
           </p>
         </div>
       </section>

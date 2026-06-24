@@ -581,7 +581,12 @@ export type Database = {
         };
         Update: {
           invoice_number?: string;
-          status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          status?: "szkic"
+| "wystawiona"
+| "wysłana do KSeF"
+| "zaakceptowana"
+| "odrzucona"
+| "anulowana";
           currency?: string;
           issue_date?: string;
           sale_date?: string | null;
@@ -601,7 +606,10 @@ export type Database = {
           notes?: string | null;
           ksef_reference_no?: string | null;
           ksef_session_token?: string | null;
-          ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
+          ksef_status?: | "oczekujące"
+  | "przetwarzanie"
+  | "zaakceptowane"
+  | "odrzucone" | null;
           ksef_error_message?: string | null;
           ksef_sent_at?: string | null;
           ksef_accepted_at?: string | null;
@@ -800,14 +808,52 @@ export type Database = {
       };
     };
     Enums: {
-      user_role: 'user' | 'admin' | 'owner';
-      vendor_status: 'active' | 'inactive' | 'under_review';
-      risk_level: 'low' | 'medium' | 'high' | 'critical';
-      report_status: 'draft' | 'published' | 'archived';
-      upload_status: 'pending' | 'processing' | 'completed' | 'failed';
-      issued_invoice_status: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
-      issued_invoice_payment_method: 'transfer' | 'cash' | 'card' | 'other';
-      ksef_processing_status: 'pending' | 'processing' | 'accepted' | 'rejected';
+    user_role: 
+  | "użytkownik"
+  | "administrator"
+  | "właściciel";
+
+vendor_status: 
+  | "aktywny"
+  | "nieaktywny"
+  | "w trakcie weryfikacji";
+
+risk_level: 
+  | "niski"
+  | "średni"
+  | "wysoki"
+  | "krytyczny";
+
+report_status: 
+  | "szkic"
+  | "opublikowany"
+  | "zarchiwizowany";
+
+upload_status: 
+  | "oczekujący"
+  | "przetwarzanie"
+  | "zakończony"
+  | "nieudany";
+
+issued_invoice_status: 
+  | "szkic"
+  | "wystawiona"
+  | "wysłana do KSeF"
+  | "zaakceptowana"
+  | "odrzucona"
+  | "anulowana";
+
+issued_invoice_payment_method: 
+  | "przelew"
+  | "gotówka"
+  | "karta"
+  | "inne";
+
+ksef_processing_status: 
+  | "oczekujące"
+  | "przetwarzanie"
+  | "zaakceptowane"
+  | "odrzucone";
     };
     CompositeTypes: {
       [_ in never]: never;

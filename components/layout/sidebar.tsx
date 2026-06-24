@@ -286,7 +286,7 @@ export function Sidebar() {
                 collapsed && 'justify-center'
               )}>
                 <Bell className="w-4 h-4 flex-shrink-0" />
-                {!collapsed && <span className="text-sm">Notifications</span>}
+                {!collapsed && <span className="text-sm">Powiadomienia</span>}
               </button>
             </TooltipTrigger>
             {collapsed && (

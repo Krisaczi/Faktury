@@ -53,7 +53,7 @@ const PRODUCTS: {
   {
     type:     'starter',
     name:     'Starter',
-    price:    'Bezpłatny',
+    price:    '149,00',
     icon:     Zap,
     color:    'blue',
     features: ['1 użytkownik', '25 dostawców', '10 raportów / miesiąc', 'Import faktur XML', 'Analiza ryzyka'],
@@ -61,7 +61,7 @@ const PRODUCTS: {
   {
     type:     'professional',
     name:     'Professional',
-    price:    'Płatny',
+    price:    '499,00',
     icon:     Star,
     color:    'amber',
     features: ['Do 3 użytkowników', 'Nieograniczeni dostawcy', 'Nieograniczone raporty', 'Import faktur XML', 'Analiza ryzyka', 'Wystawianie faktur (KSeF)'],
