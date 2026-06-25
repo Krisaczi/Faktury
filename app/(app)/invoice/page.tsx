@@ -1,24 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
-import {
-  FileText,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  TriangleAlert as AlertTriangle,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Building2,
-  Filter,
-  X,
-} from 'lucide-react';
+import { FileText, Search, ChevronLeft, ChevronRight, RefreshCw, TriangleAlert as AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Building2, Filter, X, CloudDownload, Calendar, ChevronDown, ChevronUp, Loader as Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -36,6 +24,10 @@ import {
 import { StateCard } from '@/components/ui/state-card';
 import { SkeletonList } from '@/components/ui/skeleton-loaders';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
+import { useUpload, useJobStatus } from '@/hooks/use-upload';
+
+const today     = new Date().toISOString().slice(0, 10);
+const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 function fmt(date: string | null) {
   if (!date) return '—';
@@ -67,6 +59,139 @@ function RiskBadge({ level }: { level: string | null }) {
 
 type SortField = 'issue_date' | 'amount';
 type SortDir   = 'asc' | 'desc';
+
+// ─── KSeF fetch bar ───────────────────────────────────────────────────────────
+
+function KsefFetchBar({ onDone }: { onDone: () => void }) {
+  const { fetchFromKSeF, ksefLoading, ksefError, globalJobId } = useUpload();
+  const { data: jobStatus } = useJobStatus(ksefLoading ? null : globalJobId);
+
+  const [open,      setOpen]      = useState(false);
+  const [startDate, setStartDate] = useState(thirtyAgo);
+  const [endDate,   setEndDate]   = useState(today);
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [done,      setDone]      = useState(false);
+
+  const isCompleted = jobStatus?.status === 'completed';
+  const isFailed    = jobStatus?.status === 'failed';
+
+  const handleFetch = useCallback(() => {
+    setDateError(null);
+    setDone(false);
+    if (!startDate || !endDate) { setDateError('Wybierz datę początkową i końcową.'); return; }
+    if (startDate > endDate)    { setDateError('Data początkowa musi być wcześniejsza lub równa końcowej.'); return; }
+    const diff = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
+    if (diff > 89) { setDateError('Zakres dat nie może przekraczać 89 dni (limit KSeF).'); return; }
+    fetchFromKSeF({ startDate, endDate });
+  }, [startDate, endDate, fetchFromKSeF]);
+
+  // Refresh invoice list when job completes
+  if (isCompleted && !done) {
+    setDone(true);
+    onDone();
+    setOpen(false);
+  }
+
+  const summary = isCompleted && jobStatus?.result
+    ? `Pobrano ${jobStatus.result.invoicesCreated ?? 0} faktur`
+    : null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      {/* Trigger row */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+      >
+        <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+          <CloudDownload className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+        </div>
+        <span className="font-medium text-slate-700 dark:text-slate-300 flex-1 text-left">
+          Pobierz faktury z KSeF
+        </span>
+        {ksefLoading && <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+        {summary && !open && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{summary}</span>
+        )}
+        {isFailed && !open && (
+          <span className="text-xs text-red-500">Błąd pobierania</span>
+        )}
+        {open
+          ? <ChevronUp   className="w-4 h-4 text-slate-400 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+      </button>
+
+      {/* Expanded panel */}
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-ksef-start" className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Data od
+              </Label>
+              <Input
+                id="inv-ksef-start"
+                type="date"
+                value={startDate}
+                max={endDate || today}
+                onChange={(e) => { setStartDate(e.target.value); setDateError(null); }}
+                disabled={ksefLoading}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-ksef-end" className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Data do
+              </Label>
+              <Input
+                id="inv-ksef-end"
+                type="date"
+                value={endDate}
+                min={startDate}
+                max={today}
+                onChange={(e) => { setEndDate(e.target.value); setDateError(null); }}
+                disabled={ksefLoading}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          {(dateError || ksefError) && (
+            <div role="alert" className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>{dateError ?? ksefError}</span>
+            </div>
+          )}
+
+          {ksefLoading && jobStatus && (
+            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>Pobieranie… {jobStatus.progress}%</span>
+            </div>
+          )}
+
+          {summary && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{summary}</p>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={ksefLoading}
+            onClick={handleFetch}
+            className="w-full h-8"
+          >
+            {ksefLoading
+              ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pobieranie…</>
+              : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Pobierz faktury</>}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InvoicesPage() {
   const [search,      setSearch]      = useState('');
@@ -143,6 +268,9 @@ export default function InvoicesPage() {
           )}
         </div>
       </PageHeader>
+
+      {/* KSeF fetch bar — always visible above search */}
+      <KsefFetchBar onDone={() => mutate()} />
 
       {/* Search */}
       <div className="space-y-3">
