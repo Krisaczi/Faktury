@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseXmlInvoices } from '@/lib/parsers/xml-invoice-parser';
+import { resolveVendor } from '@/lib/vendors/resolve-vendor';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
       fileUrl,
       uploadSessionId,
       companyId,
+      userId: user.id,
       jobId: job.id,
       fileType,
     }).catch((err) => console.error('[parse-invoice] background error', err));
@@ -82,6 +84,7 @@ async function parseAndIngest({
   fileUrl,
   uploadSessionId,
   companyId,
+  userId,
   jobId,
   fileType,
 }: {
@@ -89,6 +92,7 @@ async function parseAndIngest({
   fileUrl: string;
   uploadSessionId: string;
   companyId: string;
+  userId: string;
   jobId: string;
   fileType: string;
 }) {
@@ -116,10 +120,21 @@ async function parseAndIngest({
       const result = await parseXmlInvoices(fileContent);
 
       for (const inv of result.invoices) {
+        // Resolve (or create) vendor before inserting the invoice
+        const vendorId = await resolveVendor(supabase, companyId, userId, {
+          name:             inv.seller?.name ?? inv.vendorName,
+          nip:              inv.sellerNip    ?? inv.vendorNip,
+          addressStreet:    inv.seller?.street     ?? null,
+          addressZip:       inv.seller?.postalCode ?? null,
+          addressCity:      inv.seller?.city       ?? null,
+          bankAccountNumber: inv.seller?.iban ?? inv.bankAccount ?? null,
+        });
+
         const { data: invoice, error: invError } = await supabase
           .from('invoices')
           .insert({
             company_id: companyId,
+            vendor_id: vendorId,
             invoice_number: inv.invoiceNumber ?? null,
             invoice_date: inv.invoiceDate ?? null,
             issue_date: inv.invoiceDate ?? null,

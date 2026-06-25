@@ -75,7 +75,7 @@ const plans = [
     price: 'PLN 499',
     period: '/miesięcznie',
     desc: 'Dla rozwijających się firm o zaawansowanych potrzebach.',
-    features: ['Nielimitowana liczba dostawców', 'Nielimitowane raporty', 'Priorytetowe wsparcie',],
+    features: ['Nielimitowana liczba dostawców', 'Nielimitowane raporty', 'Priorytetowe wsparcie','Wystawianie faktur'],
     cta: 'Rozpocznij bezpłatny okres próbny',
     highlight: true,
   },

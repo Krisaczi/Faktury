@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 import crypto from 'crypto';
+import { resolveVendor } from '@/lib/vendors/resolve-vendor';
 
 function getAuthedClient(accessToken: string): SupabaseClient<Database> {
   return createClient<Database>(
@@ -212,72 +213,6 @@ async function downloadInvoiceXml(
   return res.text();
 }
 
-// ─── Vendor upsert ────────────────────────────────────────────────────────────
-
-function normalizeVendorName(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.replace(/\s+/g, ' ').trim();
-  if (!trimmed) return null;
-  // Convert all-caps names (common in KSeF XML) to title case
-  if (trimmed === trimmed.toUpperCase() && /[A-ZĄĆĘŁŃÓŚŹŻ]{3,}/.test(trimmed)) {
-    return trimmed
-      .toLowerCase()
-      .replace(/(^|\s|\.)([\wąćęłńóśźż])/g, (_, pre, c) => pre + c.toUpperCase());
-  }
-  return trimmed;
-}
-
-async function upsertVendor(
-  supabase: SupabaseClient<Database>,
-  companyId: string,
-  userId: string,
-  nip: string | null | undefined,
-  name: string | null | undefined
-): Promise<string | null> {
-  const lookupNip  = nip?.trim() || null;
-  const lookupName = normalizeVendorName(name);
-
-  if (!lookupNip && !lookupName) return null;
-
-  // Prefer NIP lookup (unique per company); fall back to name match
-  if (lookupNip) {
-    const { data: byNip } = await supabase
-      .from('vendors').select('id')
-      .eq('company_id', companyId)
-      .eq('nip', lookupNip)
-      .maybeSingle();
-    if (byNip) return byNip.id;
-  } else {
-    const { data: byName } = await supabase
-      .from('vendors').select('id')
-      .eq('company_id', companyId)
-      .ilike('name', lookupName!)
-      .maybeSingle();
-    if (byName) return byName.id;
-  }
-
-  // Create new vendor — use ON CONFLICT to avoid races on the unique (company_id, nip) index
-  const insertName = lookupName ?? lookupNip ?? 'Unknown Vendor';
-  if (lookupNip) {
-    const { data: upserted } = await supabase
-      .from('vendors')
-      .upsert(
-        { company_id: companyId, user_id: userId, name: insertName, nip: lookupNip, status: 'active', new_vendor: true as never },
-        { onConflict: 'company_id,nip', ignoreDuplicates: false }
-      )
-      .select('id')
-      .single();
-    return upserted?.id ?? null;
-  }
-
-  const { data: created } = await supabase
-    .from('vendors')
-    .insert({ company_id: companyId, user_id: userId, name: insertName, nip: null, status: 'active', new_vendor: true as never })
-    .select('id')
-    .single();
-  return created?.id ?? null;
-}
-
 // ─── Route Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -476,19 +411,27 @@ async function runKsefFetch({
           vendorName: meta.seller?.name ?? null,
           vendorNip: meta.seller?.nip ?? null,
           invoiceDate: meta.issueDate,
-          dueDate: null,
+          dueDate: null as null,
           totalAmount: meta.grossAmount,
           taxAmount: meta.vatAmount,
           currency: meta.currency,
           sellerNip: meta.seller?.nip ?? null,
           buyerNip: nip,
-          bankAccount: null,
+          bankAccount: null as null,
+          seller: undefined,
+          buyer: undefined,
         }];
 
         for (const inv of invoiceList) {
           const sellerNip  = inv.sellerNip ?? inv.vendorNip ?? meta.seller?.nip ?? null;
-          const sellerName = normalizeVendorName(inv.vendorName ?? meta.seller?.name ?? null);
-          const vendorId   = await upsertVendor(supabase, companyId, userId, sellerNip, sellerName);
+          const vendorId   = await resolveVendor(supabase, companyId, userId, {
+            name:              inv.vendorName ?? meta.seller?.name ?? null,
+            nip:               sellerNip,
+            addressStreet:     inv.seller?.street     ?? null,
+            addressZip:        inv.seller?.postalCode ?? null,
+            addressCity:       inv.seller?.city       ?? null,
+            bankAccountNumber: inv.seller?.iban ?? inv.bankAccount ?? null,
+          });
 
           const { data: invoice, error: invError } = await supabase
             .from('invoices')

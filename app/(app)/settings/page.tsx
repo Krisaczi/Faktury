@@ -134,7 +134,7 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 text-slate-500 text-sm">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            Failed to load company info. {error.message}
+            Nie udało się załadować informacji o firmie. {error.message}
           </div>
         </CardContent>
       </Card>
@@ -146,9 +146,9 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Building2 className="w-4 h-4 text-slate-500" />
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Company Info</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Dane firmy</CardTitle>
         </div>
-        <CardDescription>Update your organization's details.</CardDescription>
+        <CardDescription>Zaktualizuj dane firmy.</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -156,7 +156,7 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
           <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
             <CheckCircle className="w-4 h-4 text-emerald-500" />
             <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">
-              Company info saved successfully.
+              Dane firmy zostały zapisane pomyślnie.
             </AlertDescription>
           </Alert>
         )}
@@ -175,7 +175,7 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
         ) : (
           <>
             <div className="space-y-1.5">
-              <Label htmlFor="company-name">Company name <span className="text-red-500">*</span></Label>
+              <Label htmlFor="company-name">Nazwa firmy <span className="text-red-500">*</span></Label>
               <Input
                 id="company-name"
                 value={form.name}
@@ -189,7 +189,7 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
             <div className="space-y-1.5">
               <Label htmlFor="company-nip">
                 NIP
-                <span className="ml-1.5 text-xs text-slate-400 font-normal">(Tax ID)</span>
+                <span className="ml-1.5 text-xs text-slate-400 font-normal">(NIP)</span>
               </Label>
               <Input
                 id="company-nip"
@@ -230,7 +230,7 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
             {!isAdmin && (
               <p className="text-xs text-slate-400 flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5" />
-                Admin or owner role required to edit company info.
+                Do edycji informacji o firmie wymagana jest rola administratora.
               </p>
             )}
           </>
@@ -283,7 +283,7 @@ function IngestionEmailCard() {
           <Mail className="w-4 h-4 text-slate-500" />
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Ingestion Email</CardTitle>
         </div>
-        <CardDescription>Send invoices directly to this address for automatic processing.</CardDescription>
+        <CardDescription>Faktury wysłane na ten adres są automatycznie procesowane.</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -310,26 +310,26 @@ function IngestionEmailCard() {
                     {copied ? 'Copied!' : 'Copy'}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Copy ingestion email to clipboard</TooltipContent>
+                <TooltipContent>Skopiuj wiadomość e-mail do schowka</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2.5">
             <Info className="w-4 h-4 flex-shrink-0" />
-            No ingestion email configured. Contact support to set one up.
+            Nie skonfigurowano adresu e-mail do odbioru. Skontaktuj się z pomocą techniczną, aby go skonfigurować.
           </div>
         )}
 
         <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 p-3 space-y-1.5">
           <p className="text-xs font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5" />
-            How it works
+            Jak to działa
           </p>
           <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
-            <li>Forward or CC invoices to this address.</li>
-            <li>Attachments (XML, PDF) are parsed automatically.</li>
-            <li>Processed invoices appear on your Risk Report within minutes.</li>
+            <li>Prześlij faktury na ten adres.</li>
+            <li>Załączniki (XML, PDF) są przetwarzane automatycznie.</li>
+            <li>Przetworzone faktury pojawiają się w Raporcie Ryzyka w ciągu kilku minut.</li>
           </ul>
         </div>
       </CardContent>
@@ -476,12 +476,7 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
               </div>
             )}
 
-            {!lsConfigured && (
-              <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-3 flex gap-2 text-xs text-amber-700 dark:text-amber-400">
-                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>Billing is not configured for this deployment. Contact your administrator to set up a Lemon Squeezy integration.</span>
-              </div>
-            )}
+            {!lsConfigured && null}
 
             {isAdmin && lsConfigured && (
               <div className="flex gap-2">
@@ -584,9 +579,9 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-slate-500" />
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">KSeF Integration</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Integracja z KseF</CardTitle>
         </div>
-        <CardDescription>Connect to Krajowy System e-Faktur to fetch invoices automatically.</CardDescription>
+        <CardDescription>Połącz się z Krajowym Systemem e-Faktur, aby automatycznie pobierać faktury.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Current token status */}
@@ -616,7 +611,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         {error && <Alert variant="destructive" className="py-2"><AlertDescription>{error}</AlertDescription></Alert>}
 
         <div className="space-y-1.5">
-          <Label>Environment</Label>
+          <Label>Środowisko</Label>
           <div className="flex gap-2">
             {(['test', 'prod'] as const).map((e) => (
               <button
@@ -647,7 +642,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
             disabled={!isAdmin}
             className="font-mono text-sm"
           />
-          <p className="text-xs text-slate-400">Token is stored server-side and never returned to the browser.</p>
+          <p className="text-xs text-slate-400">Token jest przechowywany po stronie serwera i nigdy nie jest zwracany do przeglądarki.</p>
         </div>
 
         {isAdmin && (
@@ -657,7 +652,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
             className="bg-blue-600 hover:bg-blue-700 text-white"
             size="sm"
           >
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : (existing ? 'Replace Token' : 'Save Token')}
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Zapisywanie…</> : (existing ? 'Replace Token' : 'Save Token')}
           </Button>
         )}
       </CardContent>
@@ -707,7 +702,7 @@ export default function SettingsPage() {
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h2>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Manage your account, company configuration, and integrations.
+            Zarządzaj swoim kontem, konfiguracją firmy i połączniem z KseF.
           </p>
         </div>
 
@@ -725,9 +720,9 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-slate-500" />
-                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Profile</CardTitle>
+                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Profil</CardTitle>
                 </div>
-                <CardDescription>Update your personal information.</CardDescription>
+                <CardDescription>Zaktualizuj dane firmy.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="flex items-center gap-4">
@@ -753,23 +748,23 @@ export default function SettingsPage() {
                 {profileSaved && (
                   <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
                     <CheckCircle className="w-4 h-4 text-emerald-500" />
-                    <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">Profile updated.</AlertDescription>
+                    <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">Profil uaktualniony.</AlertDescription>
                   </Alert>
                 )}
                 {profileError && (
                   <Alert variant="destructive" className="py-2"><AlertDescription>{profileError}</AlertDescription></Alert>
                 )}
                 <div className="space-y-1.5">
-                  <Label htmlFor="fullName">Full name</Label>
+                  <Label htmlFor="fullName">Pełna nazwa firmy</Label>
                   <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email address</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" value={user?.email ?? ''} disabled className="bg-slate-50 dark:bg-slate-800 text-slate-400" />
-                  <p className="text-xs text-slate-400">Email cannot be changed here.</p>
+                  <p className="text-xs text-slate-400">Tutaj nie można zmienić adresu e-mail.</p>
                 </div>
                 <Button className="bg-blue-600 hover:bg-blue-700 text-white" size="sm" onClick={handleProfileSave} disabled={profileSaving}>
-                  {profileSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : 'Save Profile'}
+                  {profileSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Zapisywanie…</> : 'Save Profile'}
                 </Button>
               </CardContent>
             </Card>
@@ -788,15 +783,15 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Palette className="w-4 h-4 text-slate-500" />
-                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Appearance</CardTitle>
+                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Wygląd</CardTitle>
                 </div>
-                <CardDescription>Customize how RiskGuard looks.</CardDescription>
+                <CardDescription>Dostosuj wygląd aplikacji.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between py-1">
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark mode</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">Switch between light and dark theme</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Tryb ciemny</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Przełączanie między jasnym i ciemnym motywem</p>
                   </div>
                   <Switch checked={theme === 'dark'} onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')} />
                 </div>
@@ -808,26 +803,22 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-slate-500" />
-                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Security</CardTitle>
+                  <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Bezpieczeństwo</CardTitle>
                 </div>
-                <CardDescription>Manage your account security settings.</CardDescription>
+                <CardDescription>Zarządzaj ustawieniami bezpieczeństwa swojego konta.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between py-1">
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Change password</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">Update your account password</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Zmiana hasła</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Zaktualizuj hasło do swojego konta</p>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <a href="/forgot-password">Reset password</a>
+                    <a href="/forgot-password">Zresetuj hasło</a>
                   </Button>
                 </div>
                 <Separator />
-                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800">
-                  <p className="text-sm font-medium text-red-700 dark:text-red-400">Danger zone</p>
-                  <p className="text-xs text-red-500 dark:text-red-500 mt-1">Permanently delete your account and all associated data.</p>
-                  <Button variant="destructive" size="sm" className="mt-3">Delete account</Button>
-                </div>
+              
               </CardContent>
             </Card>
           </div>

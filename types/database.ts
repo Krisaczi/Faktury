@@ -106,6 +106,11 @@ export type Database = {
           nip: string | null;
           bank_accounts: Json;
           notes: string | null;
+          new_vendor: boolean;
+          address_street: string | null;
+          address_zip: string | null;
+          address_city: string | null;
+          bank_account_number: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -121,6 +126,11 @@ export type Database = {
           nip?: string | null;
           bank_accounts?: Json;
           notes?: string | null;
+          new_vendor?: boolean;
+          address_street?: string | null;
+          address_zip?: string | null;
+          address_city?: string | null;
+          bank_account_number?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -133,6 +143,11 @@ export type Database = {
           nip?: string | null;
           bank_accounts?: Json;
           notes?: string | null;
+          new_vendor?: boolean;
+          address_street?: string | null;
+          address_zip?: string | null;
+          address_city?: string | null;
+          bank_account_number?: string | null;
           updated_at?: string;
         };
         Relationships: [];
