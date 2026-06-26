@@ -31,6 +31,7 @@ export interface RiskReportRow {
   overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
   vendor_id: string | null;
   vendor_name: string | null;
+  seller_name: string | null;
   seller_nip: string | null;
   bank_account: string | null;
   raw_file_url: string | null;

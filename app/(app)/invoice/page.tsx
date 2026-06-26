@@ -418,13 +418,9 @@ export default function InvoicesPage() {
                 <div className="flex items-center gap-1.5 min-w-0 md:block">
                   <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 md:hidden" />
                   {(() => {
-                    const isNipPlaceholder = invoice.vendor_name && invoice.seller_nip &&
-                      invoice.vendor_name.replace(/[\s-]/g, '') === invoice.seller_nip.replace(/[\s-]/g, '');
-                    if (isNipPlaceholder) {
-                      return <span className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate block">{invoice.seller_nip}</span>;
-                    }
-                    if (invoice.vendor_name) {
-                      return <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>;
+                    const displayName = invoice.seller_name || invoice.vendor_name;
+                    if (displayName) {
+                      return <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{displayName}</span>;
                     }
                     return <span className="text-sm text-slate-400 italic">Nieznany dostawca</span>;
                   })()}

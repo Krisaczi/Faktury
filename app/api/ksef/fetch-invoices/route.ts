@@ -447,6 +447,7 @@ async function runKsefFetch({
               tax_amount: inv.taxAmount ?? null,
               currency: inv.currency ?? 'PLN',
               seller_nip: sellerNip,
+              seller_name: inv.seller?.name ?? inv.vendorName ?? meta.seller?.name ?? null,
               buyer_nip: inv.buyerNip ?? null,
               bank_account: inv.bankAccount ?? null,
               raw_file_url: urlData?.signedUrl ?? filePath,

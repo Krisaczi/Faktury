@@ -223,6 +223,7 @@ export type Database = {
           total_amount: number | null;
           tax_amount: number | null;
           currency: string;
+          seller_name: string | null;
           seller_nip: string | null;
           buyer_nip: string | null;
           bank_account: string | null;
@@ -245,6 +246,7 @@ export type Database = {
           total_amount?: number | null;
           tax_amount?: number | null;
           currency?: string;
+          seller_name?: string | null;
           seller_nip?: string | null;
           buyer_nip?: string | null;
           bank_account?: string | null;
@@ -265,6 +267,7 @@ export type Database = {
           total_amount?: number | null;
           tax_amount?: number | null;
           currency?: string;
+          seller_name?: string | null;
           seller_nip?: string | null;
           buyer_nip?: string | null;
           bank_account?: string | null;

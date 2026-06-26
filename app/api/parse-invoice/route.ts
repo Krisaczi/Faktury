@@ -143,6 +143,7 @@ async function parseAndIngest({
             total_amount: inv.totalAmount ?? null,
             tax_amount: inv.taxAmount ?? null,
             currency: inv.currency ?? 'PLN',
+            seller_name: inv.seller?.name ?? inv.vendorName ?? null,
             seller_nip: inv.sellerNip ?? null,
             buyer_nip: inv.buyerNip ?? null,
             bank_account: inv.bankAccount ?? null,
