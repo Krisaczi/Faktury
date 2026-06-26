@@ -104,39 +104,33 @@ export async function resolveVendor(
   // ── 3. Create new vendor ──────────────────────────────────────────────────
   const insertName = name ?? nip ?? 'Unknown Vendor';
 
-  if (nip) {
-    // Use upsert to handle race conditions on the unique (company_id, nip) index
-    const { data: upserted } = await supabase
-      .from('vendors')
-      .upsert(
-        {
-          company_id:          companyId,
-          user_id:             userId,
-          name:                insertName,
-          nip,
-          status:              'active',
-          new_vendor:          true as never,
-          ...patch,
-        },
-        { onConflict: 'company_id,nip', ignoreDuplicates: false }
-      )
-      .select('id')
-      .single();
-    return upserted?.id ?? null;
-  }
-
-  const { data: created } = await supabase
+  const { data: created, error: insertErr } = await supabase
     .from('vendors')
     .insert({
       company_id: companyId,
       user_id:    userId,
       name:       insertName,
-      nip:        null,
+      nip:        nip ?? null,
       status:     'active',
       new_vendor: true as never,
       ...patch,
     })
     .select('id')
     .single();
-  return created?.id ?? null;
+
+  if (created) return created.id;
+
+  // Unique-constraint violation (race condition) — another process inserted first
+  if (insertErr?.code === '23505' && nip) {
+    const { data: existing } = await supabase
+      .from('vendors')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('nip', nip)
+      .maybeSingle();
+    return existing?.id ?? null;
+  }
+
+  console.error('[resolveVendor] insert failed:', insertErr?.message, insertErr?.code);
+  return null;
 }
