@@ -421,7 +421,7 @@ export default function InvoicesPage() {
                     const isNipPlaceholder = invoice.vendor_name && invoice.seller_nip &&
                       invoice.vendor_name.replace(/[\s-]/g, '') === invoice.seller_nip.replace(/[\s-]/g, '');
                     if (isNipPlaceholder) {
-                      return <span className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate block">{invoice.seller_name}</span>;
+                      return <span className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate block">{invoice.seller_nip}</span>;
                     }
                     if (invoice.vendor_name) {
                       return <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>;
