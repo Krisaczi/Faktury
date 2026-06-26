@@ -64,7 +64,7 @@ export async function resolveVendor(
   if (nip) {
     const { data: existing } = await supabase
       .from('vendors')
-      .select('id, address_street, address_zip, address_city, bank_account_number')
+      .select('id, name, address_street, address_zip, address_city, bank_account_number')
       .eq('company_id', companyId)
       .eq('nip', nip)
       .maybeSingle();
@@ -72,11 +72,18 @@ export async function resolveVendor(
     if (existing) {
       // Back-fill any fields that are blank on the existing record
       const updates: {
+        name?: string;
         address_street?: string;
         address_zip?: string;
         address_city?: string;
         bank_account_number?: string;
       } = {};
+
+      // Update name if the stored name is just the NIP (placeholder from backfill)
+      // and we now have a real company name
+      const storedNameIsNip = existing.name === nip || existing.name === vendor.nip;
+      if (storedNameIsNip && name && name !== nip) updates.name = name;
+
       if (!existing.address_street      && patch.address_street)      updates.address_street      = patch.address_street;
       if (!existing.address_zip         && patch.address_zip)         updates.address_zip         = patch.address_zip;
       if (!existing.address_city        && patch.address_city)        updates.address_city        = patch.address_city;

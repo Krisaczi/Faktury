@@ -406,7 +406,7 @@ export default function InvoicesPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate transition-colors">
-                      {invoice.invoice_number ?? <span className="italic text-slate-400">Bram numeru</span>}
+                      {invoice.invoice_number ?? <span className="italic text-slate-400">Brak numeru</span>}
                     </p>
                     {invoice.seller_nip && (
                       <p className="text-xs text-slate-400 font-mono truncate">NIP {invoice.seller_nip}</p>
@@ -417,11 +417,17 @@ export default function InvoicesPage() {
                 {/* Vendor */}
                 <div className="flex items-center gap-1.5 min-w-0 md:block">
                   <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 md:hidden" />
-                  {invoice.vendor_name ? (
-                    <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>
-                  ) : (
-                    <span className="text-sm text-slate-400 italic">Nieznany dostawca</span>
-                  )}
+                  {(() => {
+                    const isNipPlaceholder = invoice.vendor_name && invoice.seller_nip &&
+                      invoice.vendor_name.replace(/[\s-]/g, '') === invoice.seller_nip.replace(/[\s-]/g, '');
+                    if (isNipPlaceholder) {
+                      return <span className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate block">{invoice.seller_name}</span>;
+                    }
+                    if (invoice.vendor_name) {
+                      return <span className="text-sm text-slate-600 dark:text-slate-400 truncate block">{invoice.vendor_name}</span>;
+                    }
+                    return <span className="text-sm text-slate-400 italic">Nieznany dostawca</span>;
+                  })()}
                 </div>
 
                 {/* Date */}
