@@ -229,6 +229,7 @@ export type Database = {
           bank_account: string | null;
           file_url: string | null;
           raw_file_url: string | null;
+          ksef_reference_number: string | null;
           upload_session_id: string | null;
           overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
           created_at: string;
@@ -252,6 +253,7 @@ export type Database = {
           bank_account?: string | null;
           file_url?: string | null;
           raw_file_url?: string | null;
+          ksef_reference_number?: string | null;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           created_at?: string;
@@ -272,6 +274,7 @@ export type Database = {
           buyer_nip?: string | null;
           bank_account?: string | null;
           raw_file_url?: string | null;
+          ksef_reference_number?: string | null;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           updated_at?: string;

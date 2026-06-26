@@ -439,6 +439,7 @@ async function runKsefFetch({
               company_id: companyId,
               vendor_id: vendorId,
               invoice_number: inv.invoiceNumber ?? ksefId,
+              ksef_reference_number: ksefId,
               invoice_date: inv.invoiceDate ?? null,
               issue_date: inv.invoiceDate ?? null,
               due_date: inv.dueDate ?? null,

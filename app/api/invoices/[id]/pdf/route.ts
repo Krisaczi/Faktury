@@ -340,7 +340,7 @@ function buildHtml(
 
   <!-- Toolbar (screen only) -->
   <div class="print-bar">
-    <span class="bar-title">Invoice ${esc(invoice.invoice_number as string ?? '')} &nbsp;·&nbsp; ${esc(seller.name ?? '')}</span>
+    <span class="bar-title">Faktura # ${esc(invoice.invoice_number as string ?? '')} &nbsp;·&nbsp; ${esc(seller.name ?? '')}</span>
     <div style="display:flex;gap:8px">
       <button class="btn-print" onclick="window.print()">Save as PDF / Print</button>
       <button class="btn-close" onclick="window.close()">Close</button>
@@ -356,6 +356,7 @@ function buildHtml(
         ? `Issued: ${fmt((invoice.issue_date ?? invoice.invoice_date) as string)}`
         : ''}
       ${invoice.due_date ? `<br/>Due: ${fmt(invoice.due_date as string)}` : ''}
+      ${invoice.ksef_reference_number ? `<br/>KSeF: <span style="font-family:monospace;font-size:11px">${esc(invoice.ksef_reference_number as string)}</span>` : ''}
     </div>
   </div>
 
@@ -464,7 +465,7 @@ export async function GET(
     // Fetch invoice (RLS enforces company scope)
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .select('id, invoice_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url')
+      .select('id, invoice_number, ksef_reference_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url')
       .eq('id', params.id)
       .maybeSingle();
 
