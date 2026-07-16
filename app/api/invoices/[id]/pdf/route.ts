@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseXmlInvoices } from '@/lib/parsers/xml-invoice-parser';
-import type { ParsedParty } from '@/lib/parsers/xml-invoice-parser';
+import type { ParsedParty, ParsedLineItem } from '@/lib/parsers/xml-invoice-parser';
 import { format, parseISO } from 'date-fns';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ function buildHtml(
   vendor: Record<string, unknown> | null,
   xmlSeller: ParsedParty | null,
   xmlBuyer: ParsedParty | null,
+  lineItems: ParsedLineItem[],
   autoPrint: boolean,
 ): string {
   const cur = (invoice.currency as string | null) ?? 'PLN';
@@ -78,6 +79,7 @@ function buildHtml(
   };
 
   const buyer: ParsedParty | null = xmlBuyer ?? (invoice.buyer_nip ? { nip: invoice.buyer_nip as string } : null);
+  const hasLineItems = lineItems.length > 0;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -241,6 +243,56 @@ function buildHtml(
       margin-bottom: 10px;
     }
 
+    /* ── Line items table ── */
+    table.items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 28px;
+      font-size: 12px;
+    }
+    table.items thead th {
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      padding: 10px 12px;
+      text-align: left;
+    }
+    table.items thead th.num { text-align: right; }
+    table.items tbody td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #334155;
+      vertical-align: top;
+    }
+    table.items tbody td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    table.items tbody td.desc-cell {
+      max-width: 320px;
+    }
+    table.items tbody td.desc-name {
+      font-weight: 600;
+      color: #1e293b;
+    }
+    table.items tbody td.desc-detail {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    table.items tbody tr:nth-child(even) td { background: #f8fafc; }
+    table.items tbody tr:last-child td { border-bottom: none; }
+    .items-wrap {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
     /* ── Totals ── */
     .totals-box {
       border: 1px solid #e2e8f0;
@@ -388,6 +440,44 @@ function buildHtml(
     </div>
   </div>
 
+  <!-- Line items / Service descriptions -->
+  ${hasLineItems ? `
+  <p class="section-title">Service Descriptions</p>
+  <div class="items-wrap">
+    <table class="items">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="num">Qty</th>
+          <th class="num">Unit Price</th>
+          <th class="num">Net</th>
+          <th class="num">VAT</th>
+          <th class="num">Gross</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItems.map((li) => {
+          const nameParts: string[] = [];
+          if (li.name) nameParts.push(esc(li.name));
+          if (li.description && li.description !== li.name) nameParts.push(`<div class="desc-detail">${esc(li.description)}</div>`);
+          const descHtml = nameParts.length > 0
+            ? `<div class="desc-cell"><div class="desc-name">${nameParts[0]}</div>${nameParts.slice(1).join('')}</div>`
+            : '<span class="empty">—</span>';
+          const qty = li.quantity != null ? li.quantity.toLocaleString('pl-PL', { maximumFractionDigits: 3 }) : '';
+          const unit = li.unit ? ' ' + esc(li.unit) : '';
+          return `<tr>
+            <td>${descHtml}</td>
+            <td class="num">${qty}${unit}</td>
+            <td class="num">${li.unitPrice != null ? esc(fmtAmount(li.unitPrice, cur)) : '—'}</td>
+            <td class="num">${li.netAmount != null ? esc(fmtAmount(li.netAmount, cur)) : '—'}</td>
+            <td class="num">${li.vatAmount != null ? esc(fmtAmount(li.vatAmount, cur)) : (li.vatRate ? esc(li.vatRate) : '—')}</td>
+            <td class="num">${li.grossAmount != null ? esc(fmtAmount(li.grossAmount, cur)) : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
   <!-- Amounts -->
   <p class="section-title">Amounts</p>
   <div class="totals-box">
@@ -485,6 +575,7 @@ export async function GET(
     // Try to enrich party data from raw XML (best-effort)
     let xmlSeller: ParsedParty | null = null;
     let xmlBuyer: ParsedParty | null = null;
+    let xmlLineItems: ParsedLineItem[] = [];
 
     if (invoice.raw_file_url) {
       try {
@@ -504,6 +595,7 @@ export async function GET(
             if (parsed.invoices.length > 0) {
               xmlSeller = parsed.invoices[0].seller ?? null;
               xmlBuyer  = parsed.invoices[0].buyer  ?? null;
+              xmlLineItems = parsed.invoices[0].lineItems ?? [];
             }
           }
         }
@@ -517,6 +609,7 @@ export async function GET(
       vendor,
       xmlSeller,
       xmlBuyer,
+      xmlLineItems,
       autoPrint,
     );
 

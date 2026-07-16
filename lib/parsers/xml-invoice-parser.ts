@@ -24,6 +24,18 @@ export interface ParsedParty {
   phone?: string;
 }
 
+export interface ParsedLineItem {
+  name?: string;
+  description?: string;
+  quantity?: number;
+  unit?: string;
+  unitPrice?: number;
+  netAmount?: number;
+  vatRate?: string;
+  vatAmount?: number;
+  grossAmount?: number;
+}
+
 export interface ParsedInvoice {
   invoiceNumber?: string;
   vendorName?: string;
@@ -38,6 +50,7 @@ export interface ParsedInvoice {
   bankAccount?: string;
   seller?: ParsedParty;
   buyer?: ParsedParty;
+  lineItems?: ParsedLineItem[];
 }
 
 export interface ParseError {
@@ -267,6 +280,82 @@ function extractParty(block: string, nipHint?: string): ParsedParty {
   return party;
 }
 
+// ─── Line item extraction ────────────────────────────────────────────────────
+// Extracts service/product line items from KSeF (FaWiersz/Wiersz), UBL
+// (InvoiceLine), and generic (LineItem/Line/Item) XML structures.
+function extractLineItems(segment: string, format: 'ksef' | 'ubl' | 'generic'): ParsedLineItem[] {
+  let lineSegments: string[] = [];
+
+  if (format === 'ksef') {
+    // KSeF FA(2) wraps rows in <FaWiersz><Wiersz>…</Wiersz></FaWiersz>
+    const faWierszBlocks = extractSegments(segment, 'FaWiersz');
+    if (faWierszBlocks.length > 0) {
+      for (const block of faWierszBlocks) {
+        lineSegments.push(...extractSegments(block, 'Wiersz'));
+      }
+    } else {
+      lineSegments = extractSegments(segment, 'Wiersz');
+    }
+  } else if (format === 'ubl') {
+    lineSegments = extractSegments(segment, 'InvoiceLine');
+  } else {
+    lineSegments = extractSegments(segment, 'LineItem')
+      .concat(extractSegments(segment, 'Line'))
+      .concat(extractSegments(segment, 'Item'));
+  }
+
+  const items: ParsedLineItem[] = [];
+
+  for (const ls of lineSegments) {
+    const item: ParsedLineItem = {};
+
+    if (format === 'ksef') {
+      // Polish FA VAT schema fields
+      item.name = extractFirst(ls, 'P_7', 'Nazwa', 'NazwaTowaruUslugi', 'Opis');
+      item.quantity = parseAmount(extractFirst(ls, 'P_8B', 'Ilosc', 'PrzeliczonaIlosc'));
+      item.unit = extractFirst(ls, 'P_8A', 'Jm', 'JednostkaMiary');
+      item.unitPrice = parseAmount(extractFirst(ls, 'P_9A', 'CenaJedn', 'CenaNetto'));
+      item.netAmount = parseAmount(extractFirst(ls, 'P_11', 'WartoscNetto', 'Netto'));
+      item.vatRate = extractFirst(ls, 'P_12', 'StawkaVat', 'Stawka');
+      item.vatAmount = parseAmount(extractFirst(ls, 'P_13', 'KwotaVat', 'VAT'));
+      item.grossAmount = parseAmount(extractFirst(ls, 'P_14', 'WartoscBrutto', 'Brutto'));
+    } else if (format === 'ubl') {
+      const itemBlock = ls.match(/<(?:[^:>]*:)?Item[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Item>/i)?.[1] ?? ls;
+      item.name = extractFirst(itemBlock, 'cbc:Name', 'Name');
+      item.description = extractFirst(itemBlock, 'cbc:Description', 'Description');
+      item.quantity = parseAmount(extractFirst(ls, 'cbc:InvoicedQuantity', 'InvoicedQuantity'));
+      // UBL stores unit in the InvoicedQuantity unitCode attribute
+      const qtyMatch = ls.match(/<(?:[^:>]*:)?InvoicedQuantity[^>]*\bunitCode=["']([^"']+)["']/i);
+      item.unit = qtyMatch?.[1];
+      item.netAmount = parseAmount(extractFirst(ls, 'cbc:LineExtensionAmount', 'LineExtensionAmount'));
+      const priceBlock = ls.match(/<(?:[^:>]*:)?Price[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Price>/i)?.[1];
+      item.unitPrice = priceBlock
+        ? parseAmount(extractFirst(priceBlock, 'cbc:PriceAmount', 'PriceAmount'))
+        : undefined;
+      const taxBlock = ls.match(/<(?:[^:>]*:)?TaxTotal[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?TaxTotal>/i)?.[1];
+      item.vatRate = taxBlock ? extractFirst(taxBlock, 'cbc:Percent', 'Percent') : undefined;
+      item.vatAmount = taxBlock ? parseAmount(extractFirst(taxBlock, 'cbc:TaxAmount', 'TaxAmount')) : undefined;
+    } else {
+      item.name = extractFirst(ls, 'name', 'Name', 'Description', 'description', 'ProductName', 'Opis');
+      item.description = extractFirst(ls, 'description', 'Description');
+      item.quantity = parseAmount(extractFirst(ls, 'quantity', 'Quantity', 'Qty'));
+      item.unit = extractFirst(ls, 'unit', 'Unit', 'UnitOfMeasure');
+      item.unitPrice = parseAmount(extractFirst(ls, 'unit_price', 'UnitPrice', 'Price'));
+      item.netAmount = parseAmount(extractFirst(ls, 'net_amount', 'NetAmount', 'Net', 'LineTotal'));
+      item.vatRate = extractFirst(ls, 'vat_rate', 'VatRate', 'VATRate', 'TaxRate');
+      item.vatAmount = parseAmount(extractFirst(ls, 'vat_amount', 'VatAmount', 'TaxAmount'));
+      item.grossAmount = parseAmount(extractFirst(ls, 'gross_amount', 'GrossAmount', 'Gross', 'LineTotalGross'));
+    }
+
+    // Only include if at least a name or net amount was found
+    if (item.name || item.netAmount != null || item.description) {
+      items.push(item);
+    }
+  }
+
+  return items;
+}
+
 // ─── KSeF FA parser ──────────────────────────────────────────────────────────
 function parseKsefSegment(segment: string): ParsedInvoice {
   const sellerBlockRaw = segment.match(/<(?:[^:>]*:)?Podmiot1[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Podmiot1>/i)?.[1]
@@ -302,6 +391,7 @@ function parseKsefSegment(segment: string): ParsedInvoice {
     bankAccount,
     seller,
     buyer,
+    lineItems: extractLineItems(segment, 'ksef'),
   };
 }
 
@@ -330,6 +420,7 @@ function parseUBLSegment(segment: string): ParsedInvoice {
     bankAccount: extractFirst(segment, 'cbc:ID', 'PaymentID'),
     seller,
     buyer,
+    lineItems: extractLineItems(segment, 'ubl'),
   };
 }
 
@@ -368,6 +459,7 @@ function parseGenericSegment(segment: string): ParsedInvoice {
     bankAccount,
     seller,
     buyer,
+    lineItems: extractLineItems(segment, 'generic'),
   };
 }
 
