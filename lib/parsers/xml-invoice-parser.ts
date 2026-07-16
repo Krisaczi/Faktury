@@ -287,13 +287,13 @@ function extractLineItems(segment: string, format: 'ksef' | 'ubl' | 'generic'): 
   let lineSegments: string[] = [];
 
   if (format === 'ksef') {
-    // KSeF FA(2) wraps rows in <FaWiersz><Wiersz>…</Wiersz></FaWiersz>
+    // KSeF FA(2) puts line item fields (P_7, P_8B, …) directly inside <FaWiersz>.
+    // There is no nested <Wiersz> wrapper, so use the FaWiersz segments as-is.
     const faWierszBlocks = extractSegments(segment, 'FaWiersz');
     if (faWierszBlocks.length > 0) {
-      for (const block of faWierszBlocks) {
-        lineSegments.push(...extractSegments(block, 'Wiersz'));
-      }
+      lineSegments = faWierszBlocks;
     } else {
+      // Older variants may use <Wiersz> without a FaWiersz wrapper
       lineSegments = extractSegments(segment, 'Wiersz');
     }
   } else if (format === 'ubl') {
