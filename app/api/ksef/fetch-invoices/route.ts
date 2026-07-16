@@ -459,6 +459,28 @@ async function runKsefFetch({
 
           if (!invError && invoice) {
             invoicesCreated++;
+
+            // Persist parsed line items from KSeF XML
+            const parsedInv = inv as { lineItems?: Array<{ name?: string; description?: string; quantity?: number; unit?: string; unitPrice?: number; netAmount?: number; vatRate?: string; vatAmount?: number; grossAmount?: number }> };
+            if (parsedInv.lineItems && parsedInv.lineItems.length > 0) {
+              const itemRows = parsedInv.lineItems.map((li, idx) => ({
+                invoice_id: invoice.id,
+                position: idx + 1,
+                description: li.name ?? li.description ?? null,
+                quantity: li.quantity ?? null,
+                unit: li.unit ?? null,
+                unit_price: li.unitPrice ?? null,
+                net_amount: li.netAmount ?? null,
+                vat_rate: li.vatRate ?? null,
+                vat_amount: li.vatAmount ?? null,
+                gross_amount: li.grossAmount ?? null,
+                raw_text: li.name ?? li.description ?? null,
+                source: 'ksef_xml',
+                confidence: 1.0,
+              }));
+              await supabase.from('invoice_items' as never).insert(itemRows as never);
+            }
+
             const invoiceFlags: { type: string; severity: 'low' | 'medium' | 'high' | 'critical' | 'info'; message: string }[] = [];
 
             // Duplicate-after-first: only flag this invoice if an earlier one exists (gap > 60 s)

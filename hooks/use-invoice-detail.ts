@@ -79,6 +79,30 @@ export interface InvoiceDetail {
   created_at: string;
 }
 
+export interface InvoiceLineItem {
+  id: string;
+  invoice_id: string;
+  position: number;
+  description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  net_amount: number | null;
+  vat_rate: string | null;
+  vat_amount: number | null;
+  gross_amount: number | null;
+  raw_text: string | null;
+  source: string;
+  confidence: number | null;
+  page_number: number | null;
+  bbox: { x: number; y: number; width: number; height: number } | null;
+  confirmed: boolean;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InvoiceDetailResponse {
   invoice: InvoiceDetail;
   flags: InvoiceFlag[];
@@ -246,6 +270,75 @@ export function useInvoiceDetail(invoiceId: string | null) {
     addReview,
     getDownloadUrl,
     deleteInvoice,
+  };
+}
+
+// ─── Invoice line items hook ──────────────────────────────────────────────────
+
+export interface ParseItemsResponse {
+  items: InvoiceLineItem[];
+  source: string;
+  averageConfidence: number;
+  errors: string[];
+  message?: string;
+}
+
+export function useInvoiceItems(invoiceId: string | null) {
+  const key = invoiceId ? `invoice-items-${invoiceId}` : null;
+
+  const { data, error, isLoading, mutate } = useSWR<{ items: InvoiceLineItem[] }>(
+    key,
+    () => apiFetch<{ items: InvoiceLineItem[] }>(`/api/invoices/${invoiceId}/items`),
+    { revalidateOnFocus: false, dedupingInterval: 10_000 }
+  );
+
+  async function parseItems(): Promise<ParseItemsResponse> {
+    if (!invoiceId) throw new Error('No invoice ID');
+    const result = await apiFetch<ParseItemsResponse>(
+      `/api/invoices/${invoiceId}/items/parse`,
+      { method: 'POST' }
+    );
+    await mutate();
+    return result;
+  }
+
+  async function confirmItems(): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/items/confirm`, { method: 'POST' });
+    await mutate();
+  }
+
+  async function updateItem(
+    itemId: string,
+    patch: {
+      position: number;
+      description: string;
+      quantity: number;
+      unit: string;
+      unit_price: number;
+      net_amount: number;
+      vat_rate: string;
+      vat_amount: number;
+      gross_amount: number;
+    }
+  ): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    await mutate();
+  }
+
+  return {
+    items: data?.items ?? [],
+    error,
+    isLoading,
+    mutate,
+    parseItems,
+    confirmItems,
+    updateItem,
   };
 }
 

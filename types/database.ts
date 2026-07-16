@@ -697,6 +697,82 @@ export type Database = {
           }
         ];
       };
+      invoice_items: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          position: number;
+          description: string | null;
+          quantity: number | null;
+          unit: string | null;
+          unit_price: number | null;
+          net_amount: number | null;
+          vat_rate: string | null;
+          vat_amount: number | null;
+          gross_amount: number | null;
+          raw_text: string | null;
+          source: string;
+          confidence: number | null;
+          page_number: number | null;
+          bbox: { x: number; y: number; width: number; height: number } | null;
+          confirmed: boolean;
+          confirmed_by: string | null;
+          confirmed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          position?: number;
+          description?: string | null;
+          quantity?: number | null;
+          unit?: string | null;
+          unit_price?: number | null;
+          net_amount?: number | null;
+          vat_rate?: string | null;
+          vat_amount?: number | null;
+          gross_amount?: number | null;
+          raw_text?: string | null;
+          source?: string;
+          confidence?: number | null;
+          page_number?: number | null;
+          bbox?: { x: number; y: number; width: number; height: number } | null;
+          confirmed?: boolean;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          position?: number;
+          description?: string | null;
+          quantity?: number | null;
+          unit?: string | null;
+          unit_price?: number | null;
+          net_amount?: number | null;
+          vat_rate?: string | null;
+          vat_amount?: number | null;
+          gross_amount?: number | null;
+          raw_text?: string | null;
+          source?: string;
+          confidence?: number | null;
+          page_number?: number | null;
+          bbox?: { x: number; y: number; width: number; height: number } | null;
+          confirmed?: boolean;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'invoice_items_invoice_id_fkey';
+            columns: ['invoice_id'];
+            referencedRelation: 'invoices';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

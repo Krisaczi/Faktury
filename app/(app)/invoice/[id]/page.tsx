@@ -73,6 +73,9 @@ import {
   type InvoiceFlag,
   type AuditLogEntry,
 } from '@/hooks/use-invoice-detail';
+import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items-section';
+import { useUserRole } from '@/hooks/use-user-role';
+import type { BBox } from '@/types/invoice-item';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -744,6 +747,9 @@ export default function InvoiceDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting]                 = useState(false);
   const [pdfPreviewOpen, setPdfPreviewOpen]     = useState(false);
+  const [hoveredBBox, setHoveredBBox]           = useState<BBox | null>(null);
+  const [hoveredPage, setHoveredPage]           = useState<number | null>(null);
+  const { data: userRoleData }                  = useUserRole();
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -1006,14 +1012,27 @@ export default function InvoiceDetailPage() {
                       Podgląd faktury gotowej do druku
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0 relative">
                     {pdfPreviewOpen && (
-                      <iframe
-                        src={`/api/invoices/${id}/pdf`}
-                        className="w-full h-full border-0 rounded-b-lg"
-                        title={`Invoice ${invoice?.invoice_number ?? id} preview`}
-                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                      />
+                      <>
+                        <iframe
+                          src={`/api/invoices/${id}/pdf`}
+                          className="w-full h-full border-0 rounded-b-lg"
+                          title={`Invoice ${invoice?.invoice_number ?? id} preview`}
+                          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                        />
+                        {hoveredBBox && (
+                          <div
+                            className="absolute pointer-events-none border-2 border-blue-500 bg-blue-500/10 rounded transition-all duration-150 z-10"
+                            style={{
+                              left: `${hoveredBBox.x * 100}%`,
+                              top: `${hoveredBBox.y * 100}%`,
+                              width: `${hoveredBBox.width * 100}%`,
+                              height: `${hoveredBBox.height * 100}%`,
+                            }}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                 </DialogContent>
@@ -1242,6 +1261,16 @@ export default function InvoiceDetailPage() {
                 <RightPanelSkeleton />
               ) : (
                 <>
+                  {/* Line Items */}
+                  <InvoiceLineItemsSection
+                    invoiceId={id}
+                    userRole={userRoleData?.role ?? null}
+                    onHoverItem={(bbox, pageNum) => {
+                      setHoveredBBox(bbox);
+                      setHoveredPage(pageNum);
+                    }}
+                  />
+
                   {/* Risk flags */}
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <CardHeader className="pb-3">

@@ -604,12 +604,32 @@ export async function GET(
       }
     }
 
+    // Fetch persisted line items from DB (takes precedence over XML-parsed)
+    const { data: dbItems } = await supabase
+      .from('invoice_items')
+      .select('description, quantity, unit, unit_price, net_amount, vat_rate, vat_amount, gross_amount')
+      .eq('invoice_id', invoice.id)
+      .order('position', { ascending: true });
+
+    const lineItems: ParsedLineItem[] = dbItems && dbItems.length > 0
+      ? dbItems.map((row) => ({
+          name: row.description ?? undefined,
+          quantity: row.quantity ?? undefined,
+          unit: row.unit ?? undefined,
+          unitPrice: row.unit_price ?? undefined,
+          netAmount: row.net_amount ?? undefined,
+          vatRate: row.vat_rate ?? undefined,
+          vatAmount: row.vat_amount ?? undefined,
+          grossAmount: row.gross_amount ?? undefined,
+        }))
+      : xmlLineItems;
+
     const html = buildHtml(
       invoice as Record<string, unknown>,
       vendor,
       xmlSeller,
       xmlBuyer,
-      xmlLineItems,
+      lineItems,
       autoPrint,
     );
 
