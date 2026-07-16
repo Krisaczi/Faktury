@@ -35,8 +35,14 @@ system parses, persists, and renders these charges.
 | confirmed     | boolean     | Whether an owner/admin confirmed this charge     |
 | confirmed_by  | uuid        | User who confirmed                               |
 | confirmed_at  | timestamptz | When confirmed                                   |
+| page_number   | integer     | PDF page where charge text was matched (nullable) |
+| bbox          | jsonb       | PDF bounding box `{x,y,width,height}` (nullable) |
 | created_at    | timestamptz | Default `now()`                                  |
 | updated_at    | timestamptz | Default `now()`                                  |
+
+**Unique index**: `invoice_charges_invoice_id_reason_amount_uniq` on
+`(invoice_id, md5(reason || '|' || amount::text))` — prevents duplicate
+charges across reparse cycles (idempotent upsert).
 
 ### `invoices` table additions
 
@@ -54,9 +60,23 @@ system parses, persists, and renders these charges.
    `.chargesTotal`, and `.amountDue`.
 
 2. **Parse API** (`app/api/invoices/[id]/charges/parse/route.ts`):
-   Downloads the invoice file, runs `parseXmlInvoices`, replaces existing
-   `invoice_charges` rows, updates `invoices.charges_total` and
-   `invoices.amount_due`, and writes an audit log entry.
+   Downloads the invoice file, runs `parseXmlInvoices`, then:
+   - Attempts PDF text-layer mapping via `mapChargesToPdf()` to populate
+     `page_number` + `bbox` for hover highlighting.
+   - Idempotent upsert: deletes existing `source='ksef'` charges, then
+     upserts via the dedup unique index. Manual charges are preserved.
+   - Updates `invoices.charges_total` and `invoices.amount_due`.
+   - Computes reconciliation (sum of charges vs `SumaObciazen`) and
+     flags mismatch in the response + audit log.
+   - Writes an `invoice_charges_parsed` audit entry with mapping count +
+     reconciliation metadata.
+
+3. **PDF Text Mapping** (`lib/parsers/charge-mapper.ts`):
+   `mapChargesToPdf()` normalizes text (strips diacritics, whitespace,
+   punctuation) and uses Levenshtein similarity matching to find each
+   charge's `Powod` (reason) or `Kwota` (amount) in the PDF text layer.
+   Matched items provide `page_number` + `bbox` for UI highlighting.
+   Unmatched charges are still persisted with null mapping.
 
 ## API Endpoints
 
@@ -72,13 +92,30 @@ system parses, persists, and renders these charges.
 ## UI Components
 
 - **`InvoiceChargesSection`** (`components/invoice/invoice-charges-section.tsx`):
-  Collapsible card showing charges in a table with amount + reason, source
-  badges, and confirm indicators. Owner/admin/accountant can parse, add, edit,
-  and delete charges; owner/admin can confirm all.
+  Collapsible card with full charge management:
+  - Table columns: Amount, Reason, Source, Confidence, Mapping.
+  - Hovering a mapped charge highlights the corresponding PDF region via
+    `onHoverCharge` callback (connected to the same overlay as line items).
+  - Reconciliation warning banner when `SumaObciazen != sum(charges)`.
+  - Suma Obciążeń + Do Zapłaty summary row.
+  - Edit/add/delete dialogs for owner/admin/accountant.
+  - Confirm-all button for owner/admin.
+  - `aria-live` regions for dynamic highlights and parsing state.
+  - Keyboard focusable rows for mapped charges (`tabIndex=0`).
 
 - **PDF Preview** (`app/api/invoices/[id]/pdf/route.ts`):
   Renders a "Rozliczenie — Obciążenia" section after the totals, listing each
   charge, `Suma Obciążeń`, and `Do Zapłaty` in a highlighted row.
+
+## Server Actions
+
+- **`getInvoicePreviewData(invoiceId)`** (`app/(app)/invoice/[id]/actions.ts`):
+  Returns charges[], chargesTotal, amountDue, and reconciliation status for
+  the invoice preview.
+
+- **`reparseInvoice(invoiceId)`**:
+  Re-runs the charge parser. Idempotent — no duplicates on reparse. Returns
+  count and mismatch flag.
 
 ## RLS Policies
 
@@ -103,5 +140,23 @@ node --require ./node_modules/jiti/register.js \
      --test lib/__tests__/parsers/xml-invoice-parser-rozliczenie.test.ts
 ```
 
-Tests cover single and multiple `<Obciazenia>`, missing `<Rozliczenie>`, and
-namespaced (`ns0:`) variants.
+Tests cover single and multiple `<Obciazenia>`, missing `<Rozliczenie>`,
+namespaced (`ns0:`) variants, idempotent re-parsing (same XML produces same
+charges), and reconciliation mismatch detection.
+
+## Reconciliation Rules
+
+- After parsing, the system computes `sum(charges.amount)` and compares to
+  `charges_total` (SumaObciazen).
+- If `|charges_total - sum| > 0.01`, a reconciliation warning is surfaced in
+  the UI and recorded in the audit log.
+- The warning shows both values and the difference, prompting owner/admin to
+  investigate.
+
+## Idempotency
+
+- Re-parsing the same KSeF XML will not create duplicate charges.
+- The parse route deletes existing `source='ksef'` charges before upserting,
+  and the unique index `(invoice_id, md5(reason||'|'||amount::text))` prevents
+  duplicates within a single upsert batch.
+- Manual charges (`source='manual'`) are preserved across reparse cycles.

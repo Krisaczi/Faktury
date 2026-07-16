@@ -160,3 +160,92 @@ describe('KSeF XML with namespaced Rozliczenie (ns0: prefix)', () => {
     assert.equal(result.invoices[0].amountDue, 189.49);
   });
 });
+
+describe('Idempotent parsing — same XML twice', () => {
+  const ksefXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/">
+  <Naglowek><P_1>2024-01-15</P_1><P_2>FV/2024/005</P_2></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Sprzedawca</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>9876543210</NIP><Nazwa>Kupujacy</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_15>1000.00</P_15>
+    <Rozliczenie>
+      <Obciazenia><Kwota>42.00</Kwota><Powod>KAUCJA PET</Powod></Obciazenia>
+      <SumaObciazen>42</SumaObciazen>
+      <DoZaplaty>1057.50</DoZaplaty>
+    </Rozliczenie>
+  </Fa>
+</Faktura>`;
+
+  it('produces identical charges on re-parse (idempotent at parser level)', async () => {
+    const result1 = await parseXmlInvoices(ksefXml);
+    const result2 = await parseXmlInvoices(ksefXml);
+    assert.deepEqual(result1.invoices[0].charges, result2.invoices[0].charges);
+    assert.equal(result1.invoices[0].chargesTotal, result2.invoices[0].chargesTotal);
+    assert.equal(result1.invoices[0].amountDue, result2.invoices[0].amountDue);
+  });
+
+  it('dedup key is stable — same reason+amount produces same charge shape', async () => {
+    const result = await parseXmlInvoices(ksefXml);
+    const charges = result.invoices[0].charges!;
+    assert.equal(charges.length, 1);
+    // Dedup key: md5(reason + '|' + amount) — verify fields are stable
+    assert.equal(charges[0].reason, 'KAUCJA PET');
+    assert.equal(charges[0].amount, 42);
+  });
+});
+
+describe('Reconciliation — SumaObciazen vs sum of charges', () => {
+  it('detects mismatch when SumaObciazen != sum(charges)', async () => {
+    const ksefXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/">
+  <Naglowek><P_1>2024-01-15</P_1><P_2>FV/2024/006</P_2></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Sprzedawca</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>9876543210</NIP><Nazwa>Kupujacy</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_15>1000.00</P_15>
+    <Rozliczenie>
+      <Obciazenia><Kwota>42.00</Kwota><Powod>KAUCJA PET</Powod></Obciazenia>
+      <Obciazenia><Kwota>15.00</Kwota><Powod>OPAKOWANIA</Powod></Obciazenia>
+      <SumaObciazen>99.99</SumaObciazen>
+      <DoZaplaty>1057.50</DoZaplaty>
+    </Rozliczenie>
+  </Fa>
+</Faktura>`;
+    const result = await parseXmlInvoices(ksefXml);
+    const charges = result.invoices[0].charges!;
+    const sumOfCharges = charges.reduce((s, c) => s + c.amount, 0);
+    const chargesTotal = result.invoices[0].chargesTotal!;
+    const mismatch = Math.abs(chargesTotal - sumOfCharges) > 0.01;
+    assert.ok(mismatch, 'Should detect mismatch when SumaObciazen != sum of charges');
+    assert.equal(sumOfCharges, 57);
+    assert.equal(chargesTotal, 99.99);
+  });
+
+  it('no mismatch when SumaObciazen == sum(charges)', async () => {
+    const ksefXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/">
+  <Naglowek><P_1>2024-01-15</P_1><P_2>FV/2024/007</P_2></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Sprzedawca</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>9876543210</NIP><Nazwa>Kupujacy</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_15>1000.00</P_15>
+    <Rozliczenie>
+      <Obciazenia><Kwota>42.00</Kwota><Powod>KAUCJA PET</Powod></Obciazenia>
+      <Obciazenia><Kwota>15.50</Kwota><Powod>OPAKOWANIA</Powod></Obciazenia>
+      <SumaObciazen>57.50</SumaObciazen>
+      <DoZaplaty>1057.50</DoZaplaty>
+    </Rozliczenie>
+  </Fa>
+</Faktura>`;
+    const result = await parseXmlInvoices(ksefXml);
+    const charges = result.invoices[0].charges!;
+    const sumOfCharges = charges.reduce((s, c) => s + c.amount, 0);
+    const chargesTotal = result.invoices[0].chargesTotal!;
+    const mismatch = Math.abs(chargesTotal - sumOfCharges) > 0.01;
+    assert.ok(!mismatch, 'Should NOT detect mismatch when totals match');
+  });
+});

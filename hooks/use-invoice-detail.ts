@@ -354,14 +354,26 @@ export interface InvoiceCharge {
   confirmed: boolean;
   confirmed_by: string | null;
   confirmed_at: string | null;
+  page_number: number | null;
+  bbox: { x: number; y: number; width: number; height: number } | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChargeReconciliation {
+  sumOfCharges: number;
+  chargesTotal: number | null;
+  amountDue: number | null;
+  mismatch: boolean;
+  difference: number;
 }
 
 export interface ParseChargesResponse {
   charges: InvoiceCharge[];
   chargesTotal: number | null;
   amountDue: number | null;
+  reconciliation: ChargeReconciliation | null;
+  mappedCount?: number;
   message?: string;
 }
 

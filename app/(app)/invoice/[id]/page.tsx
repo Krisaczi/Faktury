@@ -1276,6 +1276,10 @@ export default function InvoiceDetailPage() {
                   <InvoiceChargesSection
                     invoiceId={id}
                     userRole={userRoleData?.role ?? null}
+                    onHoverCharge={(bbox, pageNum) => {
+                      setHoveredBBox(bbox);
+                      setHoveredPage(pageNum);
+                    }}
                   />
 
                   {/* Risk flags */}

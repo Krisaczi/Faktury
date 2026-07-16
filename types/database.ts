@@ -790,6 +790,8 @@ export type Database = {
           confirmed: boolean;
           confirmed_by: string | null;
           confirmed_at: string | null;
+          page_number: number | null;
+          bbox: { x: number; y: number; width: number; height: number } | null;
           created_at: string;
           updated_at: string;
         };
@@ -803,6 +805,8 @@ export type Database = {
           confirmed?: boolean;
           confirmed_by?: string | null;
           confirmed_at?: string | null;
+          page_number?: number | null;
+          bbox?: { x: number; y: number; width: number; height: number } | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -814,6 +818,8 @@ export type Database = {
           confirmed?: boolean;
           confirmed_by?: string | null;
           confirmed_at?: string | null;
+          page_number?: number | null;
+          bbox?: { x: number; y: number; width: number; height: number } | null;
           updated_at?: string;
         };
         Relationships: [

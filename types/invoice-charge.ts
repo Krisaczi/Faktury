@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BBox } from '@/types/invoice-item';
 
 export type InvoiceChargeSource = 'ksef' | 'pdf_text' | 'ocr' | 'manual';
 
@@ -12,6 +13,8 @@ export interface InvoiceChargeRow {
   confirmed: boolean;
   confirmed_by: string | null;
   confirmed_at: string | null;
+  page_number: number | null;
+  bbox: BBox | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,3 +32,11 @@ export const CHARGE_SOURCE_LABELS: Record<InvoiceChargeSource, string> = {
   ocr: 'OCR',
   manual: 'Manual',
 };
+
+export interface ChargeReconciliation {
+  sumOfCharges: number;
+  chargesTotal: number | null;
+  amountDue: number | null;
+  mismatch: boolean;
+  difference: number;
+}

@@ -36,25 +36,33 @@ import {
   Sparkles,
   Plus,
   Trash2,
+  MapPin,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   useInvoiceCharges,
   type InvoiceCharge,
+  type ChargeReconciliation,
 } from '@/hooks/use-invoice-detail';
-import { CHARGE_SOURCE_LABELS } from '@/types/invoice-charge';
+import {
+  CHARGE_SOURCE_LABELS,
+} from '@/types/invoice-charge';
+import type { BBox as ItemBBox } from '@/types/invoice-item';
 
 interface InvoiceChargesSectionProps {
   invoiceId: string;
   userRole: string | null | undefined;
+  onHoverCharge?: (bbox: ItemBBox | null, pageNumber: number | null) => void;
 }
 
 export function InvoiceChargesSection({
   invoiceId,
   userRole,
+  onHoverCharge,
 }: InvoiceChargesSectionProps) {
   const {
     charges, isLoading, error,
-    parseCharges, confirmCharges, updateCharge, deleteCharge, addCharge, mutate,
+    parseCharges, confirmCharges, updateCharge, deleteCharge, addCharge,
   } = useInvoiceCharges(invoiceId);
   const [isOpen, setIsOpen] = useState(true);
   const [parsing, setParsing] = useState(false);
@@ -69,6 +77,7 @@ export function InvoiceChargesSection({
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [reconciliation, setReconciliation] = useState<ChargeReconciliation | null>(null);
 
   const canEdit = ['owner', 'admin', 'accountant'].includes(userRole ?? '');
   const canConfirm = ['owner', 'admin'].includes(userRole ?? '');
@@ -80,6 +89,7 @@ export function InvoiceChargesSection({
     setParseError(null);
     try {
       const result = await parseCharges();
+      if (result.reconciliation) setReconciliation(result.reconciliation);
       if (result.charges.length === 0) {
         setParseError(result.message ?? 'No Rozliczenie charges detected.');
       }
@@ -158,10 +168,26 @@ export function InvoiceChargesSection({
     }
   }, [addForm, addCharge]);
 
+  const handleHover = useCallback(
+    (charge: InvoiceCharge | null) => {
+      if (onHoverCharge && charge?.bbox) {
+        onHoverCharge(charge.bbox as ItemBBox, charge.page_number);
+      } else if (onHoverCharge) {
+        onHoverCharge(null, null);
+      }
+    },
+    [onHoverCharge]
+  );
+
   function fmtNum(n: number | null | undefined): string {
     if (n == null) return '—';
     return n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+
+  // Compute reconciliation from current charges if not set from parse
+  const sumOfCharges = charges.reduce((s, c) => s + c.amount, 0);
+  const hasReconciliationWarning = reconciliation?.mismatch === true;
+  const mappedCount = charges.filter(c => c.bbox != null).length;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -172,6 +198,12 @@ export function InvoiceChargesSection({
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <Receipt className="w-4 h-4 text-slate-500" aria-hidden="true" />
                 Rozliczenie — Obciążenia ({charges.length})
+                {mappedCount > 0 && (
+                  <Badge variant="outline" className="text-[10px] py-0 px-1 text-blue-600 border-blue-200">
+                    <MapPin className="w-3 h-3 mr-0.5" />
+                    {mappedCount} mapped
+                  </Badge>
+                )}
                 {allConfirmed && (
                   <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
                     <Check className="w-3 h-3 mr-1" />
@@ -237,6 +269,27 @@ export function InvoiceChargesSection({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="pt-0">
+            {/* Reconciliation warning */}
+            {hasReconciliationWarning && (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="mb-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 text-xs text-amber-800 dark:text-amber-400"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Reconciliation Mismatch</p>
+                    <p className="mt-1">
+                      Sum of charges ({fmtNum(reconciliation!.sumOfCharges)}) does not
+                      match SumaObciazen ({fmtNum(reconciliation!.chargesTotal)}).
+                      Difference: {fmtNum(reconciliation!.difference)}.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {parseError && (
               <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-2 text-xs text-amber-700 dark:text-amber-400">
                 {parseError}
@@ -244,7 +297,7 @@ export function InvoiceChargesSection({
             )}
 
             {parsing && (
-              <div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
+              <div className="mb-3 flex items-center gap-2 text-xs text-slate-500" aria-live="polite">
                 <RefreshCw className="w-3 h-3 animate-spin" />
                 Parsing Rozliczenie charges...
               </div>
@@ -265,12 +318,25 @@ export function InvoiceChargesSection({
                       <TableHead className="text-xs text-right">Amount</TableHead>
                       <TableHead className="text-xs">Reason</TableHead>
                       <TableHead className="text-xs">Source</TableHead>
+                      <TableHead className="text-xs">Confidence</TableHead>
+                      <TableHead className="text-xs">Mapping</TableHead>
                       {canEdit && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {charges.map((charge) => (
-                      <TableRow key={charge.id}>
+                      <TableRow
+                        key={charge.id}
+                        className={cn(
+                          'transition-colors',
+                          charge.bbox && 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        )}
+                        onMouseEnter={() => handleHover(charge)}
+                        onMouseLeave={() => handleHover(null)}
+                        onFocus={() => handleHover(charge)}
+                        onBlur={() => handleHover(null)}
+                        tabIndex={charge.bbox ? 0 : undefined}
+                      >
                         <TableCell className="text-xs text-right tabular-nums font-medium">
                           {fmtNum(charge.amount)}
                         </TableCell>
@@ -278,14 +344,24 @@ export function InvoiceChargesSection({
                           {charge.reason}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline" className="text-[10px] py-0 px-1">
-                              {CHARGE_SOURCE_LABELS[charge.source as keyof typeof CHARGE_SOURCE_LABELS] ?? charge.source}
+                          <Badge variant="outline" className="text-[10px] py-0 px-1">
+                            {CHARGE_SOURCE_LABELS[charge.source as keyof typeof CHARGE_SOURCE_LABELS] ?? charge.source}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {charge.confidence != null
+                            ? `${(charge.confidence * 100).toFixed(0)}%`
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {charge.bbox ? (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1 text-blue-600 border-blue-200">
+                              <MapPin className="w-3 h-3 mr-0.5" />
+                              p.{charge.page_number}
                             </Badge>
-                            {charge.confirmed && (
-                              <Check className="w-3 h-3 text-emerald-500" />
-                            )}
-                          </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">Unmapped</span>
+                          )}
                         </TableCell>
                         {canEdit && (
                           <TableCell>
@@ -318,6 +394,30 @@ export function InvoiceChargesSection({
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+
+            {/* Charges Total + Amount Due summary */}
+            {(charges.length > 0 || reconciliation) && (
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-6" aria-live="polite">
+                <div className="flex items-center justify-between sm:gap-4">
+                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Suma Obciążeń
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {fmtNum(reconciliation?.chargesTotal ?? sumOfCharges)}
+                  </span>
+                </div>
+                {reconciliation?.amountDue != null && (
+                  <div className="flex items-center justify-between sm:gap-4">
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                      Do Zapłaty
+                    </span>
+                    <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {fmtNum(reconciliation.amountDue)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
