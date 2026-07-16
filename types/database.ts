@@ -232,6 +232,8 @@ export type Database = {
           ksef_reference_number: string | null;
           upload_session_id: string | null;
           overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
+          charges_total: number | null;
+          amount_due: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -256,6 +258,8 @@ export type Database = {
           ksef_reference_number?: string | null;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
+          charges_total?: number | null;
+          amount_due?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -277,6 +281,8 @@ export type Database = {
           ksef_reference_number?: string | null;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
+          charges_total?: number | null;
+          amount_due?: number | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -767,6 +773,52 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'invoice_items_invoice_id_fkey';
+            columns: ['invoice_id'];
+            referencedRelation: 'invoices';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      invoice_charges: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          amount: number;
+          reason: string;
+          source: string;
+          confidence: number | null;
+          confirmed: boolean;
+          confirmed_by: string | null;
+          confirmed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          amount: number;
+          reason: string;
+          source?: string;
+          confidence?: number | null;
+          confirmed?: boolean;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount?: number;
+          reason?: string;
+          source?: string;
+          confidence?: number | null;
+          confirmed?: boolean;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'invoice_charges_invoice_id_fkey';
             columns: ['invoice_id'];
             referencedRelation: 'invoices';
             referencedColumns: ['id'];

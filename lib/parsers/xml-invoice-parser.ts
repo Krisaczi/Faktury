@@ -36,6 +36,11 @@ export interface ParsedLineItem {
   grossAmount?: number;
 }
 
+export interface ParsedCharge {
+  amount: number;
+  reason: string;
+}
+
 export interface ParsedInvoice {
   invoiceNumber?: string;
   vendorName?: string;
@@ -51,6 +56,9 @@ export interface ParsedInvoice {
   seller?: ParsedParty;
   buyer?: ParsedParty;
   lineItems?: ParsedLineItem[];
+  charges?: ParsedCharge[];
+  chargesTotal?: number;
+  amountDue?: number;
 }
 
 export interface ParseError {
@@ -392,7 +400,36 @@ function parseKsefSegment(segment: string): ParsedInvoice {
     seller,
     buyer,
     lineItems: extractLineItems(segment, 'ksef'),
+    ...extractCharges(segment),
   };
+}
+
+// ─── Rozliczenie (charges) extraction ────────────────────────────────────────
+// Extracts the KSeF <Rozliczenie> section: <Obciazenia> entries (amount + reason),
+// <SumaObciazen> (total charges), and <DoZaplaty> (amount due).
+function extractCharges(segment: string): {
+  charges: ParsedCharge[];
+  chargesTotal?: number;
+  amountDue?: number;
+} {
+  const rozliczenieBlock = segment.match(/<(?:[^:>]*:)?Rozliczenie[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Rozliczenie>/i)?.[1];
+  if (!rozliczenieBlock) return { charges: [] };
+
+  const obciazeniaBlocks = extractSegments(rozliczenieBlock, 'Obciazenia');
+  const charges: ParsedCharge[] = [];
+
+  for (const block of obciazeniaBlocks) {
+    const amount = parseAmount(extractFirst(block, 'Kwota'));
+    const reason = extractFirst(block, 'Powod') ?? '';
+    if (amount != null && reason) {
+      charges.push({ amount, reason });
+    }
+  }
+
+  const chargesTotal = parseAmount(extractFirst(rozliczenieBlock, 'SumaObciazen'));
+  const amountDue = parseAmount(extractFirst(rozliczenieBlock, 'DoZaplaty'));
+
+  return { charges, chargesTotal, amountDue };
 }
 
 // ─── UBL 2.1 parser ──────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseXmlInvoices } from '@/lib/parsers/xml-invoice-parser';
-import type { ParsedParty, ParsedLineItem } from '@/lib/parsers/xml-invoice-parser';
+import type { ParsedParty, ParsedLineItem, ParsedCharge } from '@/lib/parsers/xml-invoice-parser';
 import { format, parseISO } from 'date-fns';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ function buildHtml(
   xmlSeller: ParsedParty | null,
   xmlBuyer: ParsedParty | null,
   lineItems: ParsedLineItem[],
+  charges: ParsedCharge[],
   autoPrint: boolean,
 ): string {
   const cur = (invoice.currency as string | null) ?? 'PLN';
@@ -80,6 +81,9 @@ function buildHtml(
 
   const buyer: ParsedParty | null = xmlBuyer ?? (invoice.buyer_nip ? { nip: invoice.buyer_nip as string } : null);
   const hasLineItems = lineItems.length > 0;
+  const hasCharges = charges.length > 0;
+  const chargesTotal = (invoice.charges_total as number | null) ?? charges.reduce((s, c) => s + c.amount, 0);
+  const amountDue = (invoice.amount_due as number | null);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -496,6 +500,37 @@ function buildHtml(
     </div>
   </div>
 
+  <!-- Rozliczenie — Charges (Obciążenia) -->
+  ${hasCharges ? `
+  <p class="section-title">Rozliczenie — Obciążenia</p>
+  <div class="items-wrap">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="text-align:right;width:120px">Amount</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${charges.map(c => `
+        <tr>
+          <td style="text-align:right;font-weight:600;white-space:nowrap">${esc(fmtAmount(c.amount, cur))}</td>
+          <td>${esc(c.reason)}</td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid #e2e8f0">
+          <td style="text-align:right;font-weight:700">Suma Obciążeń</td>
+          <td style="text-align:right;font-weight:700;white-space:nowrap">${esc(fmtAmount(chargesTotal, cur))}</td>
+        </tr>
+        ${amountDue != null
+          ? `<tr style="background:#f0fdf4">
+          <td style="text-align:right;font-weight:700;font-size:13px">Do Zapłaty</td>
+          <td style="text-align:right;font-weight:700;font-size:13px;white-space:nowrap">${esc(fmtAmount(amountDue, cur))}</td>
+        </tr>`
+          : ''}
+      </tbody>
+    </table>
+  </div>` : ''}
+
   <!-- Payment -->
   ${(seller.iban || invoice.bank_account || invoice.due_date) ? `
   <p class="section-title">Payment Details</p>
@@ -624,12 +659,24 @@ export async function GET(
         }))
       : xmlLineItems;
 
+    // Fetch persisted charges from DB (Rozliczenie / Obciążenia)
+    const { data: dbCharges } = await supabase
+      .from('invoice_charges')
+      .select('amount, reason')
+      .eq('invoice_id', invoice.id)
+      .order('created_at', { ascending: true });
+
+    const charges: ParsedCharge[] = dbCharges
+      ? dbCharges.map((row) => ({ amount: row.amount, reason: row.reason }))
+      : [];
+
     const html = buildHtml(
       invoice as Record<string, unknown>,
       vendor,
       xmlSeller,
       xmlBuyer,
       lineItems,
+      charges,
       autoPrint,
     );
 

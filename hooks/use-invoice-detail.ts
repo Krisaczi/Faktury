@@ -342,6 +342,96 @@ export function useInvoiceItems(invoiceId: string | null) {
   };
 }
 
+// ─── Invoice charges (Rozliczenie) hook ───────────────────────────────────────
+
+export interface InvoiceCharge {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  reason: string;
+  source: string;
+  confidence: number | null;
+  confirmed: boolean;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParseChargesResponse {
+  charges: InvoiceCharge[];
+  chargesTotal: number | null;
+  amountDue: number | null;
+  message?: string;
+}
+
+export function useInvoiceCharges(invoiceId: string | null) {
+  const key = invoiceId ? `invoice-charges-${invoiceId}` : null;
+
+  const { data, error, isLoading, mutate } = useSWR<{ charges: InvoiceCharge[] }>(
+    key,
+    () => apiFetch<{ charges: InvoiceCharge[] }>(`/api/invoices/${invoiceId}/charges`),
+    { revalidateOnFocus: false, dedupingInterval: 10_000 }
+  );
+
+  async function parseCharges(): Promise<ParseChargesResponse> {
+    if (!invoiceId) throw new Error('No invoice ID');
+    const result = await apiFetch<ParseChargesResponse>(
+      `/api/invoices/${invoiceId}/charges/parse`,
+      { method: 'POST' }
+    );
+    await mutate();
+    return result;
+  }
+
+  async function confirmCharges(): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/charges/confirm`, { method: 'POST' });
+    await mutate();
+  }
+
+  async function updateCharge(
+    chargeId: string,
+    patch: { amount: number; reason: string }
+  ): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/charges/${chargeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    await mutate();
+  }
+
+  async function deleteCharge(chargeId: string): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/charges/${chargeId}`, { method: 'DELETE' });
+    await mutate();
+  }
+
+  async function addCharge(patch: { amount: number; reason: string }): Promise<void> {
+    if (!invoiceId) return;
+    await apiFetch(`/api/invoices/${invoiceId}/charges`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    await mutate();
+  }
+
+  return {
+    charges: data?.charges ?? [],
+    error,
+    isLoading,
+    mutate,
+    parseCharges,
+    confirmCharges,
+    updateCharge,
+    deleteCharge,
+    addCharge,
+  };
+}
+
 // ─── Vendor summary hook ──────────────────────────────────────────────────────
 
 export function useVendorSummary(vendorId: string | null) {

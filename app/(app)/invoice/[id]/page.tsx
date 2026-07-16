@@ -74,6 +74,7 @@ import {
   type AuditLogEntry,
 } from '@/hooks/use-invoice-detail';
 import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items-section';
+import { InvoiceChargesSection } from '@/components/invoice/invoice-charges-section';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { BBox } from '@/types/invoice-item';
 
@@ -1269,6 +1270,12 @@ export default function InvoiceDetailPage() {
                       setHoveredBBox(bbox);
                       setHoveredPage(pageNum);
                     }}
+                  />
+
+                  {/* Rozliczenie — Charges */}
+                  <InvoiceChargesSection
+                    invoiceId={id}
+                    userRole={userRoleData?.role ?? null}
                   />
 
                   {/* Risk flags */}
