@@ -64,7 +64,7 @@ type SortDir   = 'asc' | 'desc';
 
 function KsefFetchBar({ onDone }: { onDone: () => void }) {
   const { fetchFromKSeF, ksefLoading, ksefError, globalJobId } = useUpload();
-  const { data: jobStatus } = useJobStatus(ksefLoading ? null : globalJobId);
+  const { data: jobStatus } = useJobStatus(globalJobId);
 
   const [open,      setOpen]      = useState(false);
   const [startDate, setStartDate] = useState(thirtyAgo);
@@ -75,15 +75,19 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
   const isCompleted = jobStatus?.status === 'completed';
   const isFailed    = jobStatus?.status === 'failed';
 
+  // ksefLoading = initial API call in flight; jobRunning = background job still processing
+  const isJobRunning = ksefLoading || jobStatus?.status === 'pending' || jobStatus?.status === 'processing';
+
   const handleFetch = useCallback(() => {
     setDateError(null);
     setDone(false);
+    if (isJobRunning) return;
     if (!startDate || !endDate) { setDateError('Wybierz datę początkową i końcową.'); return; }
     if (startDate > endDate)    { setDateError('Data początkowa musi być wcześniejsza lub równa końcowej.'); return; }
     const diff = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
     if (diff > 89) { setDateError('Zakres dat nie może przekraczać 89 dni (limit KSeF).'); return; }
     fetchFromKSeF({ startDate, endDate });
-  }, [startDate, endDate, fetchFromKSeF]);
+  }, [startDate, endDate, fetchFromKSeF, isJobRunning]);
 
   // Refresh invoice list when job completes
   if (isCompleted && !done) {
@@ -109,7 +113,7 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
         <span className="font-medium text-slate-700 dark:text-slate-300 flex-1 text-left">
           Pobierz faktury z KSeF
         </span>
-        {ksefLoading && <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+        {isJobRunning && <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
         {summary && !open && (
           <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{summary}</span>
         )}
@@ -135,7 +139,7 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
                 value={startDate}
                 max={endDate || today}
                 onChange={(e) => { setStartDate(e.target.value); setDateError(null); }}
-                disabled={ksefLoading}
+                disabled={isJobRunning}
                 className="h-8 text-xs"
               />
             </div>
@@ -150,7 +154,7 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
                 min={startDate}
                 max={today}
                 onChange={(e) => { setEndDate(e.target.value); setDateError(null); }}
-                disabled={ksefLoading}
+                disabled={isJobRunning}
                 className="h-8 text-xs"
               />
             </div>
@@ -163,10 +167,10 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          {ksefLoading && jobStatus && (
+          {isJobRunning && (
             <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Pobieranie… {jobStatus.progress}%</span>
+              <span>Pobieranie… {jobStatus?.progress ?? 0}%</span>
             </div>
           )}
 
@@ -177,11 +181,11 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
           <Button
             size="sm"
             variant="outline"
-            disabled={ksefLoading}
+            disabled={isJobRunning}
             onClick={handleFetch}
             className="w-full h-8"
           >
-            {ksefLoading
+            {isJobRunning
               ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pobieranie…</>
               : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Pobierz faktury</>}
           </Button>
