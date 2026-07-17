@@ -504,7 +504,7 @@ function buildHtml(
   ${hasCharges ? `
   <p class="section-title">Rozliczenie — Obciążenia</p>
   <div class="items-wrap">
-    <table class="items-table">
+    <table class="items">
       <thead>
         <tr>
           <th style="text-align:right;width:120px">Amount</th>
@@ -590,7 +590,7 @@ export async function GET(
     // Fetch invoice (RLS enforces company scope)
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .select('id, invoice_number, ksef_reference_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url')
+      .select('id, invoice_number, ksef_reference_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url, charges_total, amount_due')
       .eq('id', params.id)
       .maybeSingle();
 
@@ -611,6 +611,9 @@ export async function GET(
     let xmlSeller: ParsedParty | null = null;
     let xmlBuyer: ParsedParty | null = null;
     let xmlLineItems: ParsedLineItem[] = [];
+    let xmlCharges: ParsedCharge[] = [];
+    let xmlChargesTotal: number | null = null;
+    let xmlAmountDue: number | null = null;
 
     if (invoice.raw_file_url) {
       try {
@@ -628,9 +631,12 @@ export async function GET(
             const xmlText = await xmlRes.text();
             const parsed = await parseXmlInvoices(xmlText);
             if (parsed.invoices.length > 0) {
-              xmlSeller = parsed.invoices[0].seller ?? null;
-              xmlBuyer  = parsed.invoices[0].buyer  ?? null;
-              xmlLineItems = parsed.invoices[0].lineItems ?? [];
+              xmlSeller       = parsed.invoices[0].seller       ?? null;
+              xmlBuyer        = parsed.invoices[0].buyer        ?? null;
+              xmlLineItems    = parsed.invoices[0].lineItems    ?? [];
+              xmlCharges      = parsed.invoices[0].charges      ?? [];
+              xmlChargesTotal = parsed.invoices[0].chargesTotal ?? null;
+              xmlAmountDue    = parsed.invoices[0].amountDue    ?? null;
             }
           }
         }
@@ -666,9 +672,19 @@ export async function GET(
       .eq('invoice_id', invoice.id)
       .order('created_at', { ascending: true });
 
-    const charges: ParsedCharge[] = dbCharges
+    // Prefer DB charges; fall back to XML-parsed charges so the PDF
+    // always shows Rozliczenie even before the user has clicked "Parsuj".
+    const charges: ParsedCharge[] = dbCharges && dbCharges.length > 0
       ? dbCharges.map((row) => ({ amount: row.amount, reason: row.reason }))
-      : [];
+      : xmlCharges;
+
+    // Merge XML-parsed totals into the invoice record if DB columns are null
+    if (xmlChargesTotal != null && !(invoice as Record<string, unknown>).charges_total) {
+      (invoice as Record<string, unknown>).charges_total = xmlChargesTotal;
+    }
+    if (xmlAmountDue != null && !(invoice as Record<string, unknown>).amount_due) {
+      (invoice as Record<string, unknown>).amount_due = xmlAmountDue;
+    }
 
     const html = buildHtml(
       invoice as Record<string, unknown>,
