@@ -675,14 +675,33 @@ function buildHtml(invoice: IssuedInvoiceWithItems): string {
     </div>
 
     <!-- Payment details -->
-    ${(invoice.seller_bank_account || invoice.due_date) ? `
+    ${(invoice.seller_bank_account || invoice.company_bank_account || invoice.due_date) ? `
     <div class="payment-box">
       <div class="pb-head">Szczegóły płatności</div>
-      ${invoice.seller_bank_account ? `
+      ${invoice.company_bank_account ? `
+      <div class="payment-row">
+        <span class="pl">Posiadacz</span>
+        <span class="pv">${esc(invoice.company_bank_account.account_holder_name)}</span>
+      </div>
+      <div class="payment-row">
+        <span class="pl">Nr rachunku</span>
+        <span class="pv">${esc(invoice.company_bank_account.iban)}</span>
+      </div>
+      ${invoice.company_bank_account.bic ? `
+      <div class="payment-row">
+        <span class="pl">BIC/SWIFT</span>
+        <span class="pv">${esc(invoice.company_bank_account.bic)}</span>
+      </div>` : ''}
+      ${invoice.company_bank_account.bank_name ? `
+      <div class="payment-row">
+        <span class="pl">Bank</span>
+        <span class="pv">${esc(invoice.company_bank_account.bank_name)}</span>
+      </div>` : ''}
+      ` : (invoice.seller_bank_account ? `
       <div class="payment-row">
         <span class="pl">Nr rachunku</span>
         <span class="pv">${esc(invoice.seller_bank_account)}</span>
-      </div>` : ''}
+      </div>` : '')}
       ${invoice.due_date ? `
       <div class="payment-row">
         <span class="pl">Termin</span>
@@ -772,9 +791,22 @@ export async function GET(
       .eq('invoice_id', params.id)
       .order('position', { ascending: true });
 
+    // Fetch company bank account if linked
+    let bankAccount: IssuedInvoiceWithItems['company_bank_account'] = null;
+    if (invoice.company_bank_account_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ba } = await (supabase as any)
+        .from('company_bank_accounts')
+        .select('id, account_holder_name, iban, bic, bank_name')
+        .eq('id', invoice.company_bank_account_id)
+        .maybeSingle();
+      bankAccount = ba;
+    }
+
     const invoiceWithItems: IssuedInvoiceWithItems = {
       ...invoice,
       items: items ?? [],
+      company_bank_account: bankAccount,
     };
 
     const html = buildHtml(invoiceWithItems);

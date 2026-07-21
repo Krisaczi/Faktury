@@ -47,6 +47,7 @@ import {
 } from '@/hooks/use-settings';
 import { DemoGuard, DemoTooltip } from '@/components/layout/demo-banner';
 import { useDemoMode } from '@/components/providers/demo-provider';
+import { BankAccountsCard } from '@/components/settings/bank-accounts-card';
 
 // ─── Zod schema ────────────────────────────────────────────────────────────────
 const companySchema = z.object({
@@ -772,6 +773,9 @@ export default function SettingsPage() {
 
           {/* Right column */}
           <div className="space-y-6">
+            {/* Bank Accounts */}
+            <BankAccountsCard isAdmin={isAdmin} />
+
             {/* Billing */}
             <BillingCard isAdmin={isAdmin} />
 

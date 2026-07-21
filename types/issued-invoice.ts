@@ -71,6 +71,7 @@ export const IssuedInvoiceSchema = z.object({
   seller_nip:          z.string().regex(/^\d{10}$/, 'NIP musi składać się z 10 cyfr'),
   seller_address:      z.string().min(1, 'Adres sprzedawcy jest wymagany').max(500),
   seller_bank_account: z.string().nullable().optional(),
+  company_bank_account_id: z.string().uuid().nullable().optional(),
 
   // Buyer — Podmiot2
   buyer_name:    z.string().min(1, 'Nazwa nabywcy jest wymagana').max(300),
@@ -105,6 +106,13 @@ export type IssuedInvoiceItemInput = z.infer<typeof IssuedInvoiceItemSchema>;
 /** Full invoice hydrated with its line items — use for display/export. */
 export type IssuedInvoiceWithItems = IssuedInvoiceRow & {
   items: IssuedInvoiceItemRow[];
+  company_bank_account?: {
+    id: string;
+    account_holder_name: string;
+    iban: string;
+    bic: string | null;
+    bank_name: string | null;
+  } | null;
 };
 
 // ─── Calculation helpers ──────────────────────────────────────────────────────

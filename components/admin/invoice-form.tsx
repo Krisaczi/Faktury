@@ -29,6 +29,7 @@ import {
 } from '@/types/issued-invoice';
 import type { InvoiceFormValues } from '@/app/(admin)/admin/invoices/actions';
 import { createInvoice, updateInvoice } from '@/app/(admin)/admin/invoices/actions';
+import { BankAccountSelector } from '@/components/invoice/bank-account-selector';
 
 // ─── Local form schema (mirrors InvoiceFormValues) ────────────────────────────
 
@@ -52,6 +53,7 @@ const FormSchema = z.object({
   seller_nip:          z.string().regex(/^\d{10}$/, 'Musi zawierać 10 cyfr'),
   seller_address:      z.string().min(1, 'Wymagane'),
   seller_bank_account: z.string().optional(),
+  company_bank_account_id: z.string().uuid().nullable().optional(),
   buyer_name:          z.string().min(1, 'Wymagane'),
   buyer_nip:           z.string().regex(/^\d{10}$/, 'Musi zawierać 10 cyfr').optional().or(z.literal('')),
   buyer_address:       z.string().optional(),
@@ -132,6 +134,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
 
   // Live watch for totals computation
   const watchedItems = useWatch({ control, name: 'items' });
+  const watchedBankAccountId = useWatch({ control, name: 'company_bank_account_id' });
 
   const computedItems = (watchedItems ?? []).map((item) => {
     const q   = Number(item?.quantity ?? 0);
@@ -188,6 +191,16 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
             <Input {...register('seller_bank_account')} placeholder="PL00 0000 0000 0000 0000 0000 0000" className="font-mono" />
           </Field>
         </Grid2>
+
+        {/* Bank account selector */}
+        <div className="mt-4">
+          <BankAccountSelector
+            value={watchedBankAccountId ?? null}
+            onChange={(id) => setValue('company_bank_account_id', id)}
+            onAccountSelected={(iban) => setValue('seller_bank_account', iban)}
+          />
+        </div>
+
         <p className="text-xs text-slate-400 mt-3 flex items-center gap-1.5">
           <AlertCircle className="w-3 h-3" />
           Dane sprzedawcy są pobierane z ustawień firmy. Zmień je w Ustawieniach.
