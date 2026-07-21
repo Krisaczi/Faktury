@@ -87,7 +87,7 @@ function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
-function buildHtml(invoice: IssuedInvoiceWithItems): string {
+function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false): string {
   const cur = invoice.currency ?? 'PLN';
   const vatGroups = buildVatGroups(invoice.items);
   const generatedAt = format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl });
@@ -114,7 +114,7 @@ function buildHtml(invoice: IssuedInvoiceWithItems): string {
       <td class="right mono bold">${fmtNum(g.gross_total)}</td>
     </tr>`).join('');
 
-  return `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8"/>
@@ -525,8 +525,8 @@ function buildHtml(invoice: IssuedInvoiceWithItems): string {
   <div class="toolbar">
     <span class="toolbar-title">Faktura &nbsp;${esc(invoice.invoice_number)} &nbsp;·&nbsp; ${esc(invoice.seller_name)}</span>
     <div class="toolbar-actions">
-      <button class="btn-pdf" onclick="window.print()">Drukuj / Zapisz jako PDF</button>
-      <button class="btn-close" onclick="history.back()">Zamknij</button>
+      <button class="btn-pdf" onclick="window.open(window.location.pathname + '?print=1', '_blank')">Drukuj / Zapisz jako PDF</button>
+      <button class="btn-close" onclick="parent.postMessage({ action: 'close-pdf-preview' }, '*')">Zamknij</button>
     </div>
   </div>
 
@@ -743,12 +743,17 @@ function buildHtml(invoice: IssuedInvoiceWithItems): string {
   </div><!-- /.page -->
 </body>
 </html>`;
+
+  if (autoPrint) {
+    return html.replace('</body>', '<script>window.addEventListener("load",()=>{setTimeout(()=>window.print(),500);});</script></body>');
+  }
+  return html;
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -809,7 +814,8 @@ export async function GET(
       company_bank_account: bankAccount,
     };
 
-    const html = buildHtml(invoiceWithItems);
+    const autoPrint = req.nextUrl.searchParams.get('print') === '1';
+    const html = buildHtml(invoiceWithItems, autoPrint);
 
     return new NextResponse(html, {
       status: 200,

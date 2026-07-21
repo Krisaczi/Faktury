@@ -398,8 +398,8 @@ function buildHtml(
   <div class="print-bar">
     <span class="bar-title">Faktura # ${esc(invoice.invoice_number as string ?? '')} &nbsp;·&nbsp; ${esc(seller.name ?? '')}</span>
     <div style="display:flex;gap:8px">
-      <button class="btn-print" onclick="window.print()">Save as PDF / Print</button>
-      <button class="btn-close" onclick="window.close()">Close</button>
+      <button class="btn-print" onclick="window.open(window.location.pathname + '?print=1', '_blank')">Save as PDF / Print</button>
+      <button class="btn-close" onclick="parent.postMessage({ action: 'close-pdf-preview' }, '*')">Close</button>
     </div>
   </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
@@ -752,6 +752,16 @@ export default function InvoiceDetailPage() {
   const [hoveredPage, setHoveredPage]           = useState<number | null>(null);
   const { data: userRoleData }                  = useUserRole();
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.action === 'close-pdf-preview') {
+        setPdfPreviewOpen(false);
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type });
