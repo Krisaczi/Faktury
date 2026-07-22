@@ -122,7 +122,7 @@ export async function POST(
 
     const { data: inserted, error: insertError } = await supabase
       .from('invoice_charges')
-      .upsert(rows, { onConflict: 'invoice_id,md5(reason||\'|\'||amount::text)' })
+      .insert(rows)
       .select('*');
 
     if (insertError) {
