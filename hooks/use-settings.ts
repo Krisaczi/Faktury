@@ -63,6 +63,7 @@ export interface BillingStatus {
 
 export interface BillingStatusResponse {
   billing: BillingStatus;
+  product_type: 'starter' | 'professional';
   lsConfigured: boolean;
 }
 
@@ -104,6 +105,13 @@ export function useCreateCheckout() {
     return result.checkoutUrl;
   }
   return { createCheckout };
+}
+
+export function useUpgradePlan() {
+  async function upgradePlan(): Promise<{ product_type: 'starter' | 'professional'; message: string }> {
+    return apiPost<{ product_type: 'starter' | 'professional'; message: string }>('/api/billing/upgrade');
+  }
+  return { upgradePlan };
 }
 
 export async function logIngestionEmailCopy() {

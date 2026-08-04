@@ -17,6 +17,8 @@ export type Database = {
           currency: string;
           ingestion_email: string | null;
           subscription_status: string;
+          product_type: 'starter' | 'professional';
+          package_type: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -27,6 +29,8 @@ export type Database = {
           currency?: string;
           ingestion_email?: string | null;
           subscription_status?: string;
+          product_type?: 'starter' | 'professional';
+          package_type?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -36,7 +40,35 @@ export type Database = {
           currency?: string;
           ingestion_email?: string | null;
           subscription_status?: string;
+          product_type?: 'starter' | 'professional';
+          package_type?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      company_package_audit: {
+        Row: {
+          id: string;
+          company_id: string;
+          changed_by: string;
+          previous: Json | null;
+          next: Json;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          changed_by: string;
+          previous?: Json | null;
+          next: Json;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          previous?: Json | null;
+          next?: Json;
+          reason?: string | null;
         };
         Relationships: [];
       };

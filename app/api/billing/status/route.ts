@@ -28,6 +28,14 @@ export async function GET() {
       .eq('company_id', userRecord.company_id)
       .maybeSingle();
 
+    const { data: company } = await supabase
+      .from('companies')
+      .select('product_type')
+      .eq('id', userRecord.company_id)
+      .maybeSingle();
+
+    const productType = (company?.product_type as 'starter' | 'professional' | null) ?? 'starter';
+
     return NextResponse.json({
       billing: billing ?? {
         plan_name: '—',
@@ -36,6 +44,7 @@ export async function GET() {
         ends_at: null,
         ls_subscription_id: null,
       },
+      product_type: productType,
       lsConfigured: !!process.env.LEMONSQUEEZY_API_KEY,
     });
   } catch (err) {
