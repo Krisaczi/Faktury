@@ -17,7 +17,6 @@ import { z } from 'zod';
 
 type OnboardingStep = 'start' | 'company_created' | 'product_selected';
 type ProductType    = 'starter' | 'professional';
-type TrialChoice    = 'trial' | 'immediate';
 
 interface CompanyRow {
   id:              string;
@@ -26,8 +25,6 @@ interface CompanyRow {
   currency:        string;
   onboarding_step: OnboardingStep | null;
   product_type:    ProductType | null;
-  trial_active:    boolean;
-  trial_expires_at: string | null;
 }
 
 interface UserRow {
@@ -83,8 +80,6 @@ function simulateCreateCompany(
     currency:        params.currency,
     onboarding_step: 'company_created',
     product_type:    null,
-    trial_active:    false,
-    trial_expires_at: null,
   };
   db.push(row);
   return { ok: true, data: { companyId: id, step: 'company_created' } };
@@ -93,7 +88,7 @@ function simulateCreateCompany(
 function simulateFinalizeProduct(
   user: UserRow | null,
   company: CompanyRow | null,
-  params: { companyId: string; productType: ProductType; trialActive: boolean },
+  params: { companyId: string; productType: ProductType },
 ): { ok: boolean; data?: { companyId: string }; error?: string } {
   if (!user) return { ok: false, error: 'Sesja wygasła. Zaloguj się ponownie.' };
   if (!company || user.company_id !== params.companyId) {
@@ -101,13 +96,7 @@ function simulateFinalizeProduct(
   }
 
   company.product_type    = params.productType;
-  company.trial_active    = params.trialActive;
   company.onboarding_step = 'product_selected';
-  if (params.trialActive) {
-    company.trial_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  } else {
-    company.trial_expires_at = null;
-  }
 
   return { ok: true, data: { companyId: params.companyId } };
 }
@@ -230,13 +219,12 @@ describe('simulateCreateCompany', () => {
     const existing: CompanyRow = {
       id: 'c-existing', name: 'Existing', nip: '0000000000', currency: 'PLN',
       onboarding_step: 'company_created', product_type: null,
-      trial_active: false, trial_expires_at: null,
     };
     const user: UserRow = { id: 'u1', company_id: 'c-existing' };
     const result = simulateCreateCompany(user, existing, params, db);
     assert.equal(result.ok, true);
     assert.equal(result.data?.companyId, 'c-existing');
-    assert.equal(db.length, 0); // no new company created
+    assert.equal(db.length, 0);
   });
 
   it('new company has product_type null until finalized', () => {
@@ -262,13 +250,12 @@ describe('simulateFinalizeProduct', () => {
     return {
       id: 'c1', name: 'Acme', nip: '1234567890', currency: 'PLN',
       onboarding_step: step, product_type: null,
-      trial_active: false, trial_expires_at: null,
     };
   }
 
   it('returns error when user is unauthenticated', () => {
     const c = makeCompany();
-    const result = simulateFinalizeProduct(null, c, { companyId: 'c1', productType: 'starter', trialActive: false });
+    const result = simulateFinalizeProduct(null, c, { companyId: 'c1', productType: 'starter' });
     assert.equal(result.ok, false);
     assert.ok(result.error?.includes('Sesja wygasła'));
   });
@@ -276,7 +263,7 @@ describe('simulateFinalizeProduct', () => {
   it('returns error when user does not own the company', () => {
     const c    = makeCompany();
     const user: UserRow = { id: 'u1', company_id: 'other-company' };
-    const result = simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'starter', trialActive: false });
+    const result = simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'starter' });
     assert.equal(result.ok, false);
     assert.ok(result.error?.includes('Brak uprawnień'));
   });
@@ -284,30 +271,18 @@ describe('simulateFinalizeProduct', () => {
   it('sets product_type and onboarding_step = product_selected on starter plan', () => {
     const c    = makeCompany();
     const user: UserRow = { id: 'u1', company_id: 'c1' };
-    const result = simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'starter', trialActive: false });
+    const result = simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'starter' });
     assert.equal(result.ok, true);
     assert.equal(c.product_type, 'starter');
     assert.equal(c.onboarding_step, 'product_selected');
-    assert.equal(c.trial_active, false);
-    assert.equal(c.trial_expires_at, null);
   });
 
-  it('sets trial_active and trial_expires_at when trial is requested', () => {
+  it('sets product_type to professional', () => {
     const c    = makeCompany();
     const user: UserRow = { id: 'u1', company_id: 'c1' };
-    simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'professional', trialActive: true });
-    assert.equal(c.trial_active, true);
-    assert.ok(c.trial_expires_at !== null);
-    const expiresAt = new Date(c.trial_expires_at!).getTime();
-    const inAbout7Days = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    assert.ok(Math.abs(expiresAt - inAbout7Days) < 5000);
-  });
-
-  it('leaves trial_expires_at null when immediate start chosen', () => {
-    const c    = makeCompany();
-    const user: UserRow = { id: 'u1', company_id: 'c1' };
-    simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'starter', trialActive: false });
-    assert.equal(c.trial_expires_at, null);
+    simulateFinalizeProduct(user, c, { companyId: 'c1', productType: 'professional' });
+    assert.equal(c.product_type, 'professional');
+    assert.equal(c.onboarding_step, 'product_selected');
   });
 });
 
@@ -326,7 +301,6 @@ describe('simulateGetOnboardingState', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'A', nip: '0000000000', currency: 'PLN',
       onboarding_step: 'company_created', product_type: null,
-      trial_active: false, trial_expires_at: null,
     };
     const state = simulateGetOnboardingState(user, company);
     assert.equal(state.step, 'company_created');
@@ -339,7 +313,6 @@ describe('simulateGetOnboardingState', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'A', nip: '0000000000', currency: 'PLN',
       onboarding_step: 'product_selected', product_type: 'professional',
-      trial_active: true, trial_expires_at: '2099-01-01T00:00:00Z',
     };
     const state = simulateGetOnboardingState(user, company);
     assert.equal(state.step, 'product_selected');
@@ -351,7 +324,6 @@ describe('simulateGetOnboardingState', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'Legacy', nip: '0000000000', currency: 'PLN',
       onboarding_step: null, product_type: null,
-      trial_active: false, trial_expires_at: null,
     };
     const state = simulateGetOnboardingState(user, company);
     assert.equal(state.step, 'company_created');
@@ -380,7 +352,6 @@ describe('full onboarding happy path', () => {
     const step2 = simulateFinalizeProduct(user, db[0], {
       companyId:   step1.data!.companyId,
       productType: 'professional',
-      trialActive: true,
     });
     assert.equal(step2.ok, true);
 
@@ -388,7 +359,6 @@ describe('full onboarding happy path', () => {
     const stateAfter2 = simulateGetOnboardingState(user, db[0]);
     assert.equal(stateAfter2.step, 'product_selected');
     assert.equal(stateAfter2.productType, 'professional');
-    assert.equal(db[0].trial_active, true);
   });
 
   it('step 1 idempotency: re-running createCompany does not duplicate company', () => {
@@ -409,7 +379,6 @@ describe('full onboarding happy path', () => {
     const company: CompanyRow = {
       id: 'c-existing', name: 'Old Firma', nip: '0000000002', currency: 'PLN',
       onboarding_step: 'company_created', product_type: null,
-      trial_active: false, trial_expires_at: null,
     };
 
     const state = simulateGetOnboardingState(user, company);
@@ -419,7 +388,6 @@ describe('full onboarding happy path', () => {
     const finalize = simulateFinalizeProduct(user, company, {
       companyId:   'c-existing',
       productType: 'starter',
-      trialActive: false,
     });
     assert.equal(finalize.ok, true);
     assert.equal(company.onboarding_step, 'product_selected');

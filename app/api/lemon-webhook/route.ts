@@ -17,7 +17,6 @@ function getAdminClient() {
 
 interface LsAttributes {
   status:          string;
-  trial_ends_at:   string | null;
   renews_at:       string | null;
   ends_at:         string | null;
   cancelled:       boolean;
@@ -132,7 +131,6 @@ function redactSnapshot(payload: LsWebhookPayload): Record<string, unknown> {
     variant_name:    payload.data.attributes.variant_name,
     renews_at:       payload.data.attributes.renews_at,
     ends_at:         payload.data.attributes.ends_at,
-    trial_ends_at:   payload.data.attributes.trial_ends_at,
     cancelled:       payload.data.attributes.cancelled,
   };
 }
@@ -228,7 +226,6 @@ async function processWebhook(
     status:             billingStatus,
     renews_at:          attrs.renews_at   ?? null,
     ends_at:            attrs.ends_at     ?? null,
-    trial_ends_at:      attrs.trial_ends_at ?? null,
     raw_payload:        payload as unknown as never,
     updated_at:         new Date().toISOString(),
   };

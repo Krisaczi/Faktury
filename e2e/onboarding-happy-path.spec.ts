@@ -80,11 +80,8 @@ test.describe('Onboarding — happy path', () => {
     await expect(page.getByText('Professional')).toBeVisible();
   });
 
-  test('AC-2 Step 2: trial option is shown and selectable', async ({ page }) => {
+  test('AC-2 Step 2: selecting Starter and clicking Next advances to step 3', async ({ page }) => {
     await fillStep1(page);
-    await expect(page.getByText(/7-dniowy okres próbny/i)).toBeVisible();
-    const trialLabel = page.getByText(/7-dniowy okres próbny/i);
-    await trialLabel.click();
     await page.getByRole('button', { name: /dalej/i }).click();
     // Should advance to step 3
     await expect(page.getByText(/podsumowanie/i)).toBeVisible({ timeout: 8_000 });

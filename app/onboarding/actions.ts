@@ -167,16 +167,15 @@ export async function createCompany(params: {
 
 // ─── finalizeProduct ──────────────────────────────────────────────────────────
 /**
- * Step 2: set product_type, trial state, and mark onboarding_step = 'product_selected'.
+ * Step 2: set product_type and mark onboarding_step = 'product_selected'.
  * Wraps the existing selectProduct logic directly here so the onboarding page
  * has a single, cohesive action surface without depending on the admin actions module.
  */
 export async function finalizeProduct(params: {
   companyId:   string;
   productType: 'starter' | 'professional';
-  trialActive: boolean;
 }): Promise<ActionResult<{ companyId: string }>> {
-  const { companyId, productType, trialActive } = params;
+  const { companyId, productType } = params;
 
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -193,10 +192,7 @@ export async function finalizeProduct(params: {
     return { ok: false, error: 'Brak uprawnień do tej firmy.' };
   }
 
-  const now            = new Date();
-  const trialExpiresAt = trialActive
-    ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    : null;
+  const now = new Date();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -204,9 +200,7 @@ export async function finalizeProduct(params: {
     .update({
       product_type:        productType,
       package_type:        productType,
-      trial_active:        trialActive,
-      trial_expires_at:    trialExpiresAt,
-      subscription_status: trialActive ? 'trial' : 'active',
+      subscription_status: 'active',
       onboarding_step:     'product_selected',
       updated_at:          now.toISOString(),
     })
@@ -234,7 +228,6 @@ export async function completeOnboarding(params: {
   city:        string;
   currency:    'PLN' | 'EUR' | 'USD' | 'GBP';
   productType: 'starter' | 'professional';
-  trialActive: boolean;
 }): Promise<CompleteOnboardingResult> {
   const step1 = await createCompany({
     companyName: params.companyName,
@@ -250,7 +243,6 @@ export async function completeOnboarding(params: {
   const step2 = await finalizeProduct({
     companyId:   step1.data.companyId,
     productType: params.productType,
-    trialActive: params.trialActive,
   });
 
   if (!step2.ok) return step2;

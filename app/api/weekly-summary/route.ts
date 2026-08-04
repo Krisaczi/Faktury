@@ -376,7 +376,7 @@ export async function POST(req: NextRequest) {
   let companiesQuery = db
     .from('companies')
     .select('id, name, currency, subscription_status')
-    .in('subscription_status', ['active', 'trial']);
+    .in('subscription_status', ['active']);
 
   if (filterIds) {
     companiesQuery = companiesQuery.in('id', filterIds);

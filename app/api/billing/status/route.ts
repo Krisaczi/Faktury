@@ -30,8 +30,8 @@ export async function GET() {
 
     return NextResponse.json({
       billing: billing ?? {
-        plan_name: 'Trial',
-        status: 'trial',
+        plan_name: '—',
+        status: 'active',
         renews_at: null,
         ends_at: null,
         ls_subscription_id: null,

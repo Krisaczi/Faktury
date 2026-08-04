@@ -3,7 +3,7 @@
  *
  * These tests exercise multi-step flows by wiring together the simulated
  * implementations of createCompany, finalizeProduct, enforceUserSlot,
- * enforceInvoicing, processTrials, and the company card builder —
+ * enforceInvoicing, and the company card builder —
  * all in a shared in-memory state store so state changes from one step
  * are visible to the next.
  *
@@ -26,8 +26,6 @@ interface Company {
   city:             string;
   currency:         string;
   product_type:     'starter' | 'professional' | null;
-  trial_active:     boolean;
-  trial_expires_at: string | null;
   onboarding_step:  'company_created' | 'product_selected' | null;
   subscription_status: string;
 }
@@ -40,16 +38,9 @@ interface User {
   email:      string;
 }
 
-interface Notification {
-  company_id: string;
-  type:       'expiring_soon' | 'expired';
-}
-
 interface Store {
   companies:     Map<string, Company>;
   users:         Map<string, User>;
-  notifications: Notification[];
-  emailsSent:    { to: string; type: string; companyId: string }[];
   nextId:        number;
 }
 
@@ -57,8 +48,6 @@ function makeStore(): Store {
   return {
     companies:     new Map(),
     users:         new Map(),
-    notifications: [],
-    emailsSent:    [],
     nextId:        1,
   };
 }
@@ -97,8 +86,6 @@ function simCreateCompany(
     city:               params.city,
     currency:           params.currency,
     product_type:       null,
-    trial_active:       false,
-    trial_expires_at:   null,
     onboarding_step:    'company_created',
     subscription_status: 'pending',
   });
@@ -109,8 +96,7 @@ function simCreateCompany(
 function simFinalizeProduct(
   store: Store,
   callerId: string,
-  params: { companyId: string; productType: 'starter' | 'professional'; trialActive: boolean },
-  now = new Date(),
+  params: { companyId: string; productType: 'starter' | 'professional' },
 ): { ok: true } | { ok: false; error: string } {
   const caller = store.users.get(callerId);
   if (!caller || caller.company_id !== params.companyId)
@@ -120,16 +106,12 @@ function simFinalizeProduct(
   if (!company) return { ok: false, error: 'Firma nie istnieje.' };
 
   company.product_type        = params.productType;
-  company.trial_active        = params.trialActive;
-  company.trial_expires_at    = params.trialActive
-    ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    : null;
-  company.subscription_status = params.trialActive ? 'trial' : 'active';
+  company.subscription_status = 'active';
   company.onboarding_step     = 'product_selected';
   return { ok: true };
 }
 
-function simGetCompanyCard(store: Store, companyId: string, now = new Date()) {
+function simGetCompanyCard(store: Store, companyId: string) {
   const company = store.companies.get(companyId);
   if (!company) return null;
 
@@ -142,18 +124,10 @@ function simGetCompanyCard(store: Store, companyId: string, now = new Date()) {
     company.product_type === 'starter'      ? 1 :
     null;
 
-  const trialExpired =
-    company.trial_active &&
-    company.trial_expires_at !== null &&
-    new Date(company.trial_expires_at) < now;
-
   return {
     company_id:         companyId,
     company_name:       company.name,
     product_type:       company.product_type,
-    trial_active:       company.trial_active,
-    trial_expired:      trialExpired,
-    trial_expires_at:   company.trial_expires_at,
     current_user_count: activeUsers,
     allowed_user_limit: allowedUserLimit,
     invoicing_enabled:  company.product_type === 'professional',
@@ -212,52 +186,6 @@ function simAddUser(
   const id = `user-${store.nextId++}`;
   store.users.set(id, { id, company_id: companyId, role: 'accountant', active: true, email });
   return { ok: true, userId: id };
-}
-
-function simProcessTrials(store: Store, now: Date) {
-  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-
-  for (const company of Array.from(store.users.values())) { void company; } // keep TS happy
-
-  for (const company of Array.from(store.companies.values())) {
-    if (!company.trial_active || !company.trial_expires_at) continue;
-
-    const expiresAt = new Date(company.trial_expires_at);
-
-    // Already expired
-    if (expiresAt <= now) {
-      const alreadySent = store.notifications.some(
-        (n) => n.company_id === company.id && n.type === 'expired',
-      );
-      if (!alreadySent) {
-        company.trial_active = false;
-        store.notifications.push({ company_id: company.id, type: 'expired' });
-        const ownerUser = Array.from(store.users.values()).find(
-          (u) => u.company_id === company.id && u.role === 'owner',
-        );
-        if (ownerUser) {
-          store.emailsSent.push({ to: ownerUser.email, type: 'expired', companyId: company.id });
-        }
-      }
-      continue;
-    }
-
-    // Expiring soon (within 48h)
-    if (expiresAt <= in48h) {
-      const alreadySent = store.notifications.some(
-        (n) => n.company_id === company.id && n.type === 'expiring_soon',
-      );
-      if (!alreadySent) {
-        store.notifications.push({ company_id: company.id, type: 'expiring_soon' });
-        const ownerUser = Array.from(store.users.values()).find(
-          (u) => u.company_id === company.id && u.role === 'owner',
-        );
-        if (ownerUser) {
-          store.emailsSent.push({ to: ownerUser.email, type: 'expiring_soon', companyId: company.id });
-        }
-      }
-    }
-  }
 }
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
@@ -373,43 +301,25 @@ describe('AC-2 Product selection persists correct fields', () => {
 
   it('sets product_type = starter and onboarding_step = product_selected', () => {
     const { ownerId, companyId } = setup();
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter' });
     const c = store.companies.get(companyId)!;
     assert.equal(c.product_type,    'starter');
     assert.equal(c.onboarding_step, 'product_selected');
+    assert.equal(c.subscription_status, 'active');
   });
 
   it('sets product_type = professional and onboarding_step = product_selected', () => {
     const { ownerId, companyId } = setup();
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional' });
     const c = store.companies.get(companyId)!;
     assert.equal(c.product_type, 'professional');
-  });
-
-  it('sets trial_active = true and trial_expires_at ~7 days out when trial requested', () => {
-    const now = new Date('2026-06-16T10:00:00Z');
-    const { ownerId, companyId } = setup();
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: true }, now);
-    const c = store.companies.get(companyId)!;
-    assert.equal(c.trial_active, true);
-    assert.ok(c.trial_expires_at !== null);
-    const diff = new Date(c.trial_expires_at!).getTime() - now.getTime();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    assert.ok(Math.abs(diff - sevenDaysMs) < 5000);
-  });
-
-  it('leaves trial_expires_at null when trial not requested', () => {
-    const { ownerId, companyId } = setup();
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional', trialActive: false });
-    const c = store.companies.get(companyId)!;
-    assert.equal(c.trial_active,    false);
-    assert.equal(c.trial_expires_at, null);
+    assert.equal(c.subscription_status, 'active');
   });
 
   it('rejects finalization from user who does not own company', () => {
     const { companyId } = setup();
     const otherId = seedOwner(store, 'other@x.pl');
-    const r = simFinalizeProduct(store, otherId, { companyId, productType: 'starter', trialActive: false });
+    const r = simFinalizeProduct(store, otherId, { companyId, productType: 'starter' });
     assert.equal(r.ok, false);
   });
 });
@@ -429,7 +339,6 @@ describe('AC-3 Full onboarding happy path', () => {
     const step2 = simFinalizeProduct(store, ownerId, {
       companyId:   step1.companyId,
       productType: 'professional',
-      trialActive: true,
     });
     assert.equal(step2.ok, true);
 
@@ -437,7 +346,6 @@ describe('AC-3 Full onboarding happy path', () => {
     assert.ok(card);
     assert.equal(card!.onboarding_step,  'product_selected');
     assert.equal(card!.product_type,     'professional');
-    assert.equal(card!.trial_active,     true);
     assert.equal(card!.invoicing_enabled, true);
   });
 
@@ -448,12 +356,12 @@ describe('AC-3 Full onboarding happy path', () => {
       assert.equal(r.ok, true);
       return r.ok ? { companyId: r.companyId } : { companyId: '' };
     })();
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter' });
 
     const card = simGetCompanyCard(store, companyId);
     assert.equal(card!.allowed_user_limit, 1);
     assert.equal(card!.invoicing_enabled,  false);
-    assert.equal(card!.current_user_count, 1); // owner counts
+    assert.equal(card!.current_user_count, 1);
   });
 });
 
@@ -467,14 +375,14 @@ describe('AC-4 Starter plan user limit enforcement', () => {
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter' });
     return { ownerId, companyId };
   }
 
   it('allows the first (owner) user slot to be occupied', () => {
     const { companyId } = setupStarterCompany();
     const check = simEnforceUserSlot(store, companyId);
-    assert.equal(check.allowed, false); // owner already occupies the 1 slot
+    assert.equal(check.allowed, false);
   });
 
   it('blocks adding an accountant when Starter slot is full', () => {
@@ -507,7 +415,7 @@ describe('AC-5 Professional plan user limit enforcement', () => {
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional' });
     return { ownerId, companyId };
   }
 
@@ -558,7 +466,7 @@ describe('AC-6 Invoicing access control', () => {
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType, trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType });
     return companyId;
   }
 
@@ -586,107 +494,18 @@ describe('AC-6 Invoicing access control', () => {
   });
 });
 
-// ─── AC-7: Trial lifecycle ────────────────────────────────────────────────────
+// ─── AC-7: Company card accuracy ─────────────────────────────────────────────
 
-describe('AC-7 Trial lifecycle', () => {
+describe('AC-7 Company card accuracy', () => {
   beforeEach(() => { store = makeStore(); });
-
-  const NOW = new Date('2026-06-16T10:00:00Z');
-
-  function daysFromNow(days: number) {
-    return new Date(NOW.getTime() + days * 24 * 60 * 60 * 1000);
-  }
-
-  function setupTrialCompany(trialDaysRemaining: number) {
-    const ownerId = seedOwner(store);
-    const r = simCreateCompany(store, ownerId, VALID_COMPANY);
-    assert.equal(r.ok, true);
-    const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional', trialActive: true }, NOW);
-    // Override trial_expires_at to the desired time
-    const company = store.companies.get(companyId)!;
-    company.trial_expires_at = daysFromNow(trialDaysRemaining).toISOString();
-    return { ownerId, companyId };
-  }
-
-  it('trial_active = true and trial_expires_at set after product selection with trial', () => {
-    const { companyId } = setupTrialCompany(7);
-    const company = store.companies.get(companyId)!;
-    assert.equal(company.trial_active, true);
-    assert.ok(company.trial_expires_at !== null);
-  });
-
-  it('trial_expired = false for active trial', () => {
-    const { companyId } = setupTrialCompany(7);
-    const card = simGetCompanyCard(store, companyId, NOW)!;
-    assert.equal(card.trial_expired, false);
-  });
-
-  it('trial_expired = true computed by card when trial_expires_at is in the past', () => {
-    const { companyId } = setupTrialCompany(-1);
-    const card = simGetCompanyCard(store, companyId, NOW)!;
-    assert.equal(card.trial_expired, true);
-  });
-
-  it('cron sets trial_active = false for expired trial', () => {
-    const { companyId } = setupTrialCompany(-1);
-    simProcessTrials(store, NOW);
-    const company = store.companies.get(companyId)!;
-    assert.equal(company.trial_active, false);
-  });
-
-  it('cron sends expired email to company owner', () => {
-    setupTrialCompany(-1);
-    simProcessTrials(store, NOW);
-    const expiredEmails = store.emailsSent.filter((e) => e.type === 'expired');
-    assert.equal(expiredEmails.length, 1);
-    assert.equal(expiredEmails[0].to, 'owner@acme.pl');
-  });
-
-  it('cron sends expiring_soon email 48h before expiry', () => {
-    setupTrialCompany(1); // expires in 1 day = within 48h window
-    simProcessTrials(store, NOW);
-    const soonEmails = store.emailsSent.filter((e) => e.type === 'expiring_soon');
-    assert.equal(soonEmails.length, 1);
-  });
-
-  it('cron does NOT send expiring_soon for trial expiring in 5 days', () => {
-    setupTrialCompany(5);
-    simProcessTrials(store, NOW);
-    const soonEmails = store.emailsSent.filter((e) => e.type === 'expiring_soon');
-    assert.equal(soonEmails.length, 0);
-  });
-
-  it('cron is idempotent: running twice does not double-send', () => {
-    setupTrialCompany(-1);
-    simProcessTrials(store, NOW);
-    simProcessTrials(store, NOW);
-    const expiredEmails = store.emailsSent.filter((e) => e.type === 'expired');
-    assert.equal(expiredEmails.length, 1);
-  });
-
-  it('notification row is recorded after cron run', () => {
-    setupTrialCompany(-1);
-    simProcessTrials(store, NOW);
-    const notification = store.notifications.find((n) => n.type === 'expired');
-    assert.ok(notification);
-  });
-});
-
-// ─── AC-8: Company card accuracy ─────────────────────────────────────────────
-
-describe('AC-8 Company card accuracy', () => {
-  beforeEach(() => { store = makeStore(); });
-
-  const NOW = new Date('2026-06-16T10:00:00Z');
 
   it('reports current_user_count = 1 immediately after owner onboards', () => {
     const ownerId = seedOwner(store);
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: false });
-    const card = simGetCompanyCard(store, companyId, NOW)!;
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter' });
+    const card = simGetCompanyCard(store, companyId)!;
     assert.equal(card.current_user_count, 1);
   });
 
@@ -695,23 +514,10 @@ describe('AC-8 Company card accuracy', () => {
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional', trialActive: false });
+    simFinalizeProduct(store, ownerId, { companyId, productType: 'professional' });
     simAddUser(store, companyId, 'acc@x.pl');
-    const card = simGetCompanyCard(store, companyId, NOW)!;
+    const card = simGetCompanyCard(store, companyId)!;
     assert.equal(card.current_user_count, 2);
-  });
-
-  it('trial_expired flag triggers correctly 1 second after expiry', () => {
-    const ownerId = seedOwner(store);
-    const r = simCreateCompany(store, ownerId, VALID_COMPANY);
-    assert.equal(r.ok, true);
-    const companyId = r.ok ? r.companyId : '';
-    simFinalizeProduct(store, ownerId, { companyId, productType: 'starter', trialActive: true }, NOW);
-    const company = store.companies.get(companyId)!;
-    // Set expiry to just before NOW
-    company.trial_expires_at = new Date(NOW.getTime() - 1000).toISOString();
-    const card = simGetCompanyCard(store, companyId, NOW)!;
-    assert.equal(card.trial_expired, true);
   });
 
   it('company card product_type stays null until product selected', () => {
@@ -719,7 +525,7 @@ describe('AC-8 Company card accuracy', () => {
     const r = simCreateCompany(store, ownerId, VALID_COMPANY);
     assert.equal(r.ok, true);
     const companyId = r.ok ? r.companyId : '';
-    const card = simGetCompanyCard(store, companyId, NOW)!;
+    const card = simGetCompanyCard(store, companyId)!;
     assert.equal(card.product_type, null);
     assert.equal(card.allowed_user_limit, null);
   });

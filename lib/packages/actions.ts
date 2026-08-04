@@ -23,9 +23,6 @@ export interface CompanyCardData {
   company_name:        string;
   nip:                 string | null;
   product_type:        'starter' | 'professional' | null;
-  trial_active:        boolean;
-  trial_expires_at:    string | null;
-  trial_expired:       boolean;
   current_user_count:  number;
   allowed_user_limit:  number | null;
   invoicing_enabled:   boolean;
@@ -41,7 +38,7 @@ export async function getCompanyCard(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: company, error: cErr } = await (supabase as any)
       .from('companies')
-      .select('id, name, nip, product_type, trial_active, trial_expires_at, is_active')
+      .select('id, name, nip, product_type, is_active')
       .eq('id', companyId)
       .maybeSingle();
 
@@ -57,9 +54,6 @@ export async function getCompanyCard(
       .eq('active', true);
 
     const productType = (company.product_type as 'starter' | 'professional' | null) ?? null;
-    const trialExpiresAt = company.trial_expires_at as string | null;
-    const trialActive    = Boolean(company.trial_active);
-    const trialExpired   = trialActive && trialExpiresAt !== null && new Date(trialExpiresAt) < new Date();
 
     const allowedUserLimit: number | null =
       productType === 'professional' ? 3 :
@@ -75,9 +69,6 @@ export async function getCompanyCard(
         company_name:       company.name as string,
         nip:                company.nip as string | null,
         product_type:       productType,
-        trial_active:       trialActive,
-        trial_expires_at:   trialExpiresAt,
-        trial_expired:      trialExpired,
         current_user_count: (userCount as number) ?? 0,
         allowed_user_limit: allowedUserLimit,
         invoicing_enabled:  invoicingEnabled,
@@ -325,19 +316,16 @@ export async function updateIndividualPackageOptions(
 export type SelectProductInput = {
   companyId:   string;
   productType: 'starter' | 'professional';
-  startTrial:  boolean;
 };
 
 export type SelectProductResult = PackageActionResult<{
   companyId:        string;
   productType:      string;
-  trialActive:      boolean;
-  trialExpiresAt:   string | null;
   usersLimit:       number | null;
-}>;
+}>
 
 export async function selectProduct(input: SelectProductInput): Promise<SelectProductResult> {
-  const { companyId, productType, startTrial } = input;
+  const { companyId, productType } = input;
 
   try {
     const { user, supabase } = await requireOwnerOrAdmin(companyId);
@@ -346,25 +334,20 @@ export async function selectProduct(input: SelectProductInput): Promise<SelectPr
       return { ok: false, error: 'Nieprawidłowy typ produktu.' };
     }
 
-    const now            = new Date();
-    const trialExpiresAt = startTrial
-      ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    const now = new Date();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: prev } = await (supabase as any)
       .from('companies')
-      .select('product_type, package_type, trial_active, trial_expires_at')
+      .select('product_type, package_type')
       .eq('id', companyId)
       .maybeSingle();
 
     const updatePayload: Record<string, unknown> = {
-      product_type:      productType,
-      package_type:      productType,
-      trial_active:      startTrial,
-      trial_expires_at:  trialExpiresAt,
-      subscription_status: startTrial ? 'trial' : 'active',
-      updated_at:        now.toISOString(),
+      product_type:        productType,
+      package_type:        productType,
+      subscription_status: 'active',
+      updated_at:          now.toISOString(),
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -395,8 +378,6 @@ export async function selectProduct(input: SelectProductInput): Promise<SelectPr
       data: {
         companyId,
         productType,
-        trialActive:    startTrial,
-        trialExpiresAt,
         usersLimit,
       },
     };

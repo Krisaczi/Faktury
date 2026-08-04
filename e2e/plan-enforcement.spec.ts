@@ -1,9 +1,8 @@
 /**
  * E2E: Product plan enforcement — UI perspective
  *
- * Verifies that the owner dashboard card correctly reflects plan, trial
- * status, and user counts after onboarding, and that plan-gated routes
- * behave correctly.
+ * Verifies that the owner dashboard card correctly reflects plan and
+ * user counts after onboarding, and that plan-gated routes behave correctly.
  *
  * These tests assume the user is already onboarded (company_id set).
  * Use E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD for a fully-onboarded owner.
@@ -40,26 +39,6 @@ test.describe('Plan enforcement — owner dashboard', () => {
     const hasUpgradeGate = await page.getByText(/professional|aktualizuj|upgrade/i).isVisible().catch(() => false);
     const wasRedirected  = !page.url().includes('/invoice');
     assert(hasUpgradeGate || wasRedirected, 'Expected invoice page to be gated on Starter plan');
-  });
-});
-
-test.describe('Trial flow — UI', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill(OWNER_EMAIL);
-    await page.getByLabel(/hasło|password/i).fill(OWNER_PASSWORD);
-    await page.getByRole('button', { name: /zaloguj|sign in|log in/i }).click();
-    await page.waitForURL('**/dashboard', { timeout: 10_000 });
-  });
-
-  test('AC-7 Trial badge is shown when trial is active', async ({ page }) => {
-    // If the test user has an active trial, the trial badge should be visible somewhere
-    // in the dashboard or user menu.
-    const hasBadge = await page.getByText(/trial|okres próbny/i).isVisible().catch(() => false);
-    // This is a conditional check — the test user may or may not be in trial
-    // We assert the page loads without crash regardless
-    await expect(page).toHaveURL(/dashboard/);
-    void hasBadge; // informational
   });
 });
 

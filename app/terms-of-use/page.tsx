@@ -387,14 +387,6 @@ export default function TermsOfUsePage() {
                   <li>Faktury/potwierdzenia płatności są przesyłane na adres e-mail Użytkownika przez operatora płatności.</li>
                 </ul>
               </SubSection>
-              <SubSection title="Okresy próbne">
-                <p>
-                  Usługodawca może udostępniać ograniczone bezpłatne okresy próbne (trial). Warunki
-                  okresu próbnego są każdorazowo komunikowane w Serwisie. Po upływie okresu próbnego
-                  dostęp do funkcji premium jest automatycznie blokowany do momentu aktywowania
-                  Subskrypcji płatnej.
-                </p>
-              </SubSection>
               <SubSection title="Polityka zwrotów">
                 <p>
                   Ze względu na cyfrowy charakter usługi, <strong>opłaty za Subskrypcję nie podlegają

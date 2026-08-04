@@ -60,7 +60,6 @@ type CompanyForm = z.infer<typeof companySchema>;
 
 // ─── Billing status colors ──────────────────────────────────────────────────────
 const billingStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  trial:     { label: 'Trial',     color: 'text-blue-700 dark:text-blue-400',    bg: 'bg-blue-100 dark:bg-blue-900/30' },
   active:    { label: 'Active',    color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
   past_due:  { label: 'Past Due',  color: 'text-amber-700 dark:text-amber-400',  bg: 'bg-amber-100 dark:bg-amber-900/30' },
   cancelled: { label: 'Cancelled', color: 'text-red-700 dark:text-red-400',      bg: 'bg-red-100 dark:bg-red-900/30' },
@@ -348,7 +347,7 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
 
   const billing = data?.billing;
   const lsConfigured = data?.lsConfigured ?? false;
-  const statusCfg = billingStatusConfig[billing?.status ?? 'trial'] ?? billingStatusConfig.trial;
+  const statusCfg = billingStatusConfig[billing?.status ?? 'active'] ?? billingStatusConfig.active;
 
   async function handleUpgrade() {
     setLoading(true);
@@ -425,10 +424,9 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {billing?.plan_name ?? 'Trial'}
+                    {billing?.plan_name ?? '—'}
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {billing?.status === 'trial' && 'Free trial — upgrade to unlock all features'}
                     {billing?.status === 'active' && billing.renews_at && `Renews ${fmt(billing.renews_at)}`}
                     {billing?.status === 'past_due' && 'Payment failed — please update your payment method'}
                     {billing?.status === 'cancelled' && billing.ends_at && `Access until ${fmt(billing.ends_at)}`}
@@ -440,70 +438,22 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
                 </Badge>
               </div>
 
-              {billing?.status === 'trial' && (
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {[
-                    { label: 'Invoices', value: '100/mo', cap: true },
-                    { label: 'Vendors',  value: '10',      cap: true },
-                    { label: 'Exports',  value: '5/mo',    cap: true },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="text-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{value}</p>
-                      <p className="text-xs text-slate-400">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-
-            {/* Features list for trial */}
-            {billing?.status === 'trial' && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider">Pro includes</p>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {[
-                    'Unlimited invoice ingestion',
-                    'Unlimited vendor profiles',
-                    'KSeF integration',
-                    'CSV exports & audit logs',
-                    'Priority support',
-                  ].map((feature) => (
-                    <div key={feature} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {!lsConfigured && null}
 
             {isAdmin && lsConfigured && (
               <div className="flex gap-2">
-                {billing?.status === 'trial' && (
-                  <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                    size="sm"
-                    onClick={handleUpgrade}
-                    disabled={loading}
-                  >
-                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                    Upgrade to Pro
-                  </Button>
-                )}
-                {billing?.status !== 'trial' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleUpgrade}
-                    disabled={loading}
-                  >
-                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                    Manage Billing
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleUpgrade}
+                  disabled={loading}
+                >
+                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                  Manage Billing
+                </Button>
               </div>
             )}
 

@@ -21,8 +21,6 @@ interface CompanyRow {
   name:             string;
   nip:              string | null;
   product_type:     ProductType;
-  trial_active:     boolean;
-  trial_expires_at: string | null;
   is_active:        boolean;
 }
 
@@ -31,9 +29,6 @@ interface CompanyCardData {
   company_name:        string;
   nip:                 string | null;
   product_type:        ProductType;
-  trial_active:        boolean;
-  trial_expires_at:    string | null;
-  trial_expired:       boolean;
   current_user_count:  number;
   allowed_user_limit:  number | null;
   invoicing_enabled:   boolean;
@@ -45,12 +40,8 @@ interface CompanyCardData {
 function buildCompanyCard(
   company: CompanyRow,
   activeUserCount: number,
-  now: Date = new Date(),
 ): CompanyCardData {
-  const productType    = company.product_type ?? null;
-  const trialExpiresAt = company.trial_expires_at;
-  const trialActive    = Boolean(company.trial_active);
-  const trialExpired   = trialActive && trialExpiresAt !== null && new Date(trialExpiresAt) < now;
+  const productType = company.product_type ?? null;
 
   const allowedUserLimit: number | null =
     productType === 'professional' ? 3 :
@@ -62,23 +53,11 @@ function buildCompanyCard(
     company_name:       company.name,
     nip:                company.nip,
     product_type:       productType,
-    trial_active:       trialActive,
-    trial_expires_at:   trialExpiresAt,
-    trial_expired:      trialExpired,
     current_user_count: activeUserCount,
     allowed_user_limit: allowedUserLimit,
     invoicing_enabled:  productType === 'professional',
     is_active:          Boolean(company.is_active),
   };
-}
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
-function inFuture(days: number): string {
-  return new Date(Date.now() + days * 86400_000).toISOString();
-}
-function inPast(days: number): string {
-  return new Date(Date.now() - days * 86400_000).toISOString();
 }
 
 // ─── Tests: product type resolution ──────────────────────────────────────────
@@ -87,7 +66,7 @@ describe('getCompanyCard — product type', () => {
   it('starter plan: 1 user limit, invoicing disabled', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'ACME', nip: '1234567890',
-      product_type: 'starter', trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: 'starter', is_active: true,
     };
     const card = buildCompanyCard(company, 1);
     assert.equal(card.allowed_user_limit, 1);
@@ -98,7 +77,7 @@ describe('getCompanyCard — product type', () => {
   it('professional plan: 3 user limit, invoicing enabled', () => {
     const company: CompanyRow = {
       id: 'c2', name: 'ACME Pro', nip: '0987654321',
-      product_type: 'professional', trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: 'professional', is_active: true,
     };
     const card = buildCompanyCard(company, 2);
     assert.equal(card.allowed_user_limit, 3);
@@ -109,67 +88,11 @@ describe('getCompanyCard — product type', () => {
   it('null product type: no user limit, invoicing disabled', () => {
     const company: CompanyRow = {
       id: 'c3', name: 'New Co', nip: null,
-      product_type: null, trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: null, is_active: true,
     };
     const card = buildCompanyCard(company, 0);
     assert.equal(card.allowed_user_limit, null);
     assert.equal(card.invoicing_enabled, false);
-  });
-});
-
-// ─── Tests: trial_expired flag ────────────────────────────────────────────────
-
-describe('getCompanyCard — trial_expired', () => {
-  it('trial_expired = false when trial_active = false', () => {
-    const company: CompanyRow = {
-      id: 'c1', name: 'A', nip: null,
-      product_type: 'starter', trial_active: false, trial_expires_at: inPast(1), is_active: true,
-    };
-    const card = buildCompanyCard(company, 0);
-    assert.equal(card.trial_expired, false);
-  });
-
-  it('trial_expired = false when trial_active = true and expires in future', () => {
-    const company: CompanyRow = {
-      id: 'c2', name: 'B', nip: null,
-      product_type: 'starter', trial_active: true, trial_expires_at: inFuture(5), is_active: true,
-    };
-    const card = buildCompanyCard(company, 0);
-    assert.equal(card.trial_expired, false);
-    assert.equal(card.trial_active, true);
-  });
-
-  it('trial_expired = true when trial_active = true but expiry is in past', () => {
-    const company: CompanyRow = {
-      id: 'c3', name: 'C', nip: null,
-      product_type: 'professional', trial_active: true, trial_expires_at: inPast(2), is_active: true,
-    };
-    const card = buildCompanyCard(company, 0);
-    assert.equal(card.trial_expired, true);
-    assert.equal(card.trial_active, true);
-  });
-
-  it('trial_expired = false when trial_active = true and trial_expires_at = null', () => {
-    const company: CompanyRow = {
-      id: 'c4', name: 'D', nip: null,
-      product_type: 'starter', trial_active: true, trial_expires_at: null, is_active: true,
-    };
-    const card = buildCompanyCard(company, 0);
-    assert.equal(card.trial_expired, false);
-  });
-
-  it('uses the provided "now" for expiry comparison', () => {
-    const expiresAt = '2025-01-10T00:00:00.000Z';
-    const company: CompanyRow = {
-      id: 'c5', name: 'E', nip: null,
-      product_type: 'starter', trial_active: true, trial_expires_at: expiresAt, is_active: true,
-    };
-    // now = before expiry → not expired
-    const cardBefore = buildCompanyCard(company, 0, new Date('2025-01-09T23:59:59Z'));
-    assert.equal(cardBefore.trial_expired, false);
-    // now = after expiry → expired
-    const cardAfter = buildCompanyCard(company, 0, new Date('2025-01-11T00:00:00Z'));
-    assert.equal(cardAfter.trial_expired, true);
   });
 });
 
@@ -179,7 +102,7 @@ describe('getCompanyCard — user counts', () => {
   it('passes through current_user_count', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'X', nip: null,
-      product_type: 'professional', trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: 'professional', is_active: true,
     };
     const card = buildCompanyCard(company, 7);
     assert.equal(card.current_user_count, 7);
@@ -188,7 +111,7 @@ describe('getCompanyCard — user counts', () => {
   it('user count at limit for starter (1)', () => {
     const company: CompanyRow = {
       id: 'c2', name: 'Y', nip: null,
-      product_type: 'starter', trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: 'starter', is_active: true,
     };
     const card = buildCompanyCard(company, 1);
     assert.equal(card.current_user_count, 1);
@@ -202,7 +125,7 @@ describe('getCompanyCard — is_active', () => {
   it('active company passes through', () => {
     const company: CompanyRow = {
       id: 'c1', name: 'A', nip: null,
-      product_type: 'starter', trial_active: false, trial_expires_at: null, is_active: true,
+      product_type: 'starter', is_active: true,
     };
     assert.equal(buildCompanyCard(company, 0).is_active, true);
   });
@@ -210,7 +133,7 @@ describe('getCompanyCard — is_active', () => {
   it('inactive company passes through', () => {
     const company: CompanyRow = {
       id: 'c2', name: 'B', nip: null,
-      product_type: 'starter', trial_active: false, trial_expires_at: null, is_active: false,
+      product_type: 'starter', is_active: false,
     };
     assert.equal(buildCompanyCard(company, 0).is_active, false);
   });

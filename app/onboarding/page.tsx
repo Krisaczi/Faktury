@@ -7,7 +7,7 @@ import { z } from 'zod';
 import Link from 'next/link';
 import {
   Shield, Building2, Package, CircleCheck as CheckCircle2,
-  ArrowRight, ArrowLeft, Loader as Loader2, Zap, Star, Clock,
+  ArrowRight, ArrowLeft, Loader as Loader2, Zap, Star,
 } from 'lucide-react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,6 @@ const companySchema = z.object({
 type CompanyData = z.infer<typeof companySchema>;
 
 type ProductType  = 'starter' | 'professional';
-type TrialChoice  = 'trial' | 'immediate';
 
 const CURRENCIES = [
   { value: 'PLN', label: 'PLN – Złoty polski' },
@@ -251,13 +250,12 @@ function StepProduct({
   isSubmitting,
 }: {
   defaultProduct: ProductType;
-  onNext:         (product: ProductType, trial: TrialChoice) => void;
+  onNext:         (product: ProductType) => void;
   onBack:         () => void;
   serverError:    string | null;
   isSubmitting:   boolean;
 }) {
   const [product, setProduct] = useState<ProductType>(defaultProduct);
-  const [trial,   setTrial]   = useState<TrialChoice>('trial');
 
   return (
     <div className="space-y-5">
@@ -324,41 +322,6 @@ function StepProduct({
         })}
       </div>
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Rozpoczęcie</p>
-        {([
-          { value: 'trial' as const, icon: Clock, title: '7-dniowy okres próbny', desc: 'Przetestuj wszystkie funkcje bez żadnych zobowiązań.' },
-          { value: 'immediate' as const, icon: Zap, title: 'Zacznij od razu', desc: 'Aktywuj plan natychmiast.' },
-        ]).map(({ value, icon: Icon, title, desc }) => (
-          <label
-            key={value}
-            className={cn(
-              'flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all',
-              trial === value
-                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
-                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300',
-            )}
-          >
-            <input
-              type="radio"
-              name="trial"
-              value={value}
-              checked={trial === value}
-              onChange={() => setTrial(value)}
-              className="sr-only"
-            />
-            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
-              <Icon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{title}</p>
-              <p className="text-xs text-slate-400">{desc}</p>
-            </div>
-            {trial === value && <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-          </label>
-        ))}
-      </div>
-
       {serverError && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3">
           <p className="text-sm text-red-600 dark:text-red-400">{serverError}</p>
@@ -373,7 +336,7 @@ function StepProduct({
           type="button"
           disabled={isSubmitting}
           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10"
-          onClick={() => onNext(product, trial)}
+          onClick={() => onNext(product)}
         >
           {isSubmitting
             ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Zapisywanie…</>
@@ -389,16 +352,14 @@ function StepProduct({
 interface ConfirmData {
   company:     CompanyData;
   product:     ProductType;
-  trial:       TrialChoice;
   serverError: string | null;
   isSubmitting: boolean;
   onBack:      () => void;
   onSubmit:    () => void;
 }
 
-function StepConfirm({ company, product, trial, serverError, isSubmitting, onBack, onSubmit }: ConfirmData) {
+function StepConfirm({ company, product, serverError, isSubmitting, onBack, onSubmit }: ConfirmData) {
   const productInfo = PRODUCTS.find((p) => p.type === product)!;
-  const trialLabel  = trial === 'trial' ? '7-dniowy okres próbny' : 'Aktywacja natychmiastowa';
 
   const rows: [string, string][] = [
     ['Firma',       company.companyName],
@@ -406,7 +367,6 @@ function StepConfirm({ company, product, trial, serverError, isSubmitting, onBac
     ['Adres',       `${company.street}, ${company.zip} ${company.city}`],
     ['Waluta',      company.currency],
     ['Plan',        productInfo.name],
-    ['Rozpoczęcie', trialLabel],
   ];
 
   return (
@@ -426,15 +386,6 @@ function StepConfirm({ company, product, trial, serverError, isSubmitting, onBac
           </div>
         ))}
       </div>
-
-      {trial === 'trial' && (
-        <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3 flex items-start gap-3">
-          <Clock className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-blue-700 dark:text-blue-300">
-            Twój 7-dniowy okres próbny rozpocznie się dzisiaj. Po jego zakończeniu możesz wybrać plan lub kontynuować korzystanie z bezpłatnej wersji.
-          </p>
-        </div>
-      )}
 
       <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-4 py-3">
         <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -481,7 +432,6 @@ export default function OnboardingPage() {
   const [company,     setCompany]     = useState<CompanyData | null>(null);
   const [companyId,   setCompanyId]   = useState<string | null>(null);
   const [product,     setProduct]     = useState<ProductType>('starter');
-  const [trial,       setTrial]       = useState<TrialChoice>('trial');
   const [error,       setError]       = useState<string | null>(null);
   const [submitting,  setSubmitting]  = useState(false);
 
@@ -545,9 +495,8 @@ export default function OnboardingPage() {
   }
 
   // Step 2 submit — saves product selection, then show summary
-  function handleProductSubmit(p: ProductType, t: TrialChoice) {
+  function handleProductSubmit(p: ProductType) {
     setProduct(p);
-    setTrial(t);
     setStep(3);
   }
 
@@ -560,7 +509,6 @@ export default function OnboardingPage() {
     const result = await finalizeProduct({
       companyId,
       productType: product,
-      trialActive: trial === 'trial',
     });
 
     if (!result.ok) {
@@ -626,7 +574,6 @@ export default function OnboardingPage() {
             <StepConfirm
               company={company}
               product={product}
-              trial={trial}
               serverError={error}
               isSubmitting={submitting}
               onBack={() => setStep(2)}
@@ -644,8 +591,7 @@ export default function OnboardingPage() {
               </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
                 {([
-                  ['Plan',        PRODUCTS.find((p) => p.type === product)?.name ?? product],
-                  ['Rozpoczęcie', trial === 'trial' ? '7-dniowy okres próbny' : 'Aktywacja natychmiastowa'],
+                  ['Plan', PRODUCTS.find((p) => p.type === product)?.name ?? product],
                 ] as [string, string][]).map(([key, val]) => (
                   <div key={key} className="flex justify-between px-4 py-3 text-sm">
                     <span className="text-slate-500 dark:text-slate-400">{key}</span>

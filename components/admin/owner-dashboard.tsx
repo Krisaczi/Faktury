@@ -507,21 +507,11 @@ function CompaniesTable({
                     if (pt === 'professional') return (
                       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                         <Star className="w-3 h-3" />Professional
-                        {company.trial_active && (
-                          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded px-1 py-0.5">
-                            <Clock className="w-2.5 h-2.5" />Trial
-                          </span>
-                        )}
                       </span>
                     );
                     if (pt === 'starter') return (
                       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                         <Zap className="w-3 h-3" />Starter
-                        {company.trial_active && (
-                          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded px-1 py-0.5">
-                            <Clock className="w-2.5 h-2.5" />Trial
-                          </span>
-                        )}
                       </span>
                     );
                     return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;

@@ -28,8 +28,6 @@ interface PackageFeatures {
 interface CompanyRow {
   id:                  string;
   product_type:        ProductType | null;
-  trial_active:        boolean;
-  trial_expires_at:    string | null;
   subscription_status: string;
 }
 
@@ -70,11 +68,10 @@ function simulateSelectProduct(opts: {
   caller:      UserRow;
   companyId:   string;
   productType: ProductType;
-  startTrial:  boolean;
   store:       Map<string, CompanyRow>;
   auditLog:    Array<{ companyId: string; next: Record<string, unknown> }>;
 }): { ok: boolean; error?: string; usersLimit?: number | null } {
-  const { caller, companyId, productType, startTrial, store, auditLog } = opts;
+  const { caller, companyId, productType, store, auditLog } = opts;
 
   // Auth guard: caller must be owner or admin of the company
   if (!['owner', 'admin'].includes(caller.role)) {
@@ -88,17 +85,10 @@ function simulateSelectProduct(opts: {
     return { ok: false, error: 'Nieprawidłowy typ produktu.' };
   }
 
-  const now            = new Date();
-  const trialExpiresAt = startTrial
-    ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    : null;
-
   const payload = {
     product_type:        productType,
     package_type:        productType,
-    trial_active:        startTrial,
-    trial_expires_at:    trialExpiresAt,
-    subscription_status: startTrial ? 'trial' : 'active',
+    subscription_status: 'active',
   };
 
   store.set(companyId, { ...store.get(companyId)!, ...payload });
@@ -161,52 +151,37 @@ function simulateOnboardNewUser(opts: {
 describe('selectProduct', () => {
   function makeStore(): Map<string, CompanyRow> {
     return new Map([
-      ['company-1', { id: 'company-1', product_type: null, trial_active: false, trial_expires_at: null, subscription_status: 'active' }],
+      ['company-1', { id: 'company-1', product_type: null, subscription_status: 'active' }],
     ]);
   }
 
   const owner: UserRow = { id: 'user-owner', company_id: 'company-1', role: 'owner', active: true };
   const auditLog: Array<{ companyId: string; next: Record<string, unknown> }> = [];
 
-  it('sets starter product without trial', () => {
+  it('sets starter product', () => {
     const store = makeStore();
-    const result = simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'starter', startTrial: false, store, auditLog });
+    const result = simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'starter', store, auditLog });
     assert.ok(result.ok);
     assert.equal(result.usersLimit, 1);
     const row = store.get('company-1')!;
     assert.equal(row.product_type, 'starter');
-    assert.equal(row.trial_active, false);
-    assert.equal(row.trial_expires_at, null);
     assert.equal(row.subscription_status, 'active');
   });
 
-  it('sets professional product with trial', () => {
+  it('sets professional product', () => {
     const store = makeStore();
-    const result = simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'professional', startTrial: true, store, auditLog });
+    const result = simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'professional', store, auditLog });
     assert.ok(result.ok);
     assert.equal(result.usersLimit, 3);
     const row = store.get('company-1')!;
     assert.equal(row.product_type, 'professional');
-    assert.equal(row.trial_active, true);
-    assert.ok(row.trial_expires_at !== null);
-    assert.equal(row.subscription_status, 'trial');
-  });
-
-  it('trial_expires_at is ~7 days in the future', () => {
-    const store = makeStore();
-    const before = Date.now();
-    simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'professional', startTrial: true, store, auditLog });
-    const row = store.get('company-1')!;
-    const expiresMs = new Date(row.trial_expires_at!).getTime();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    assert.ok(expiresMs >= before + sevenDaysMs - 1000);
-    assert.ok(expiresMs <= before + sevenDaysMs + 1000);
+    assert.equal(row.subscription_status, 'active');
   });
 
   it('rejects non-owner/admin callers', () => {
     const store = makeStore();
     const accountant: UserRow = { id: 'user-acc', company_id: 'company-1', role: 'accountant', active: true };
-    const result = simulateSelectProduct({ caller: accountant, companyId: 'company-1', productType: 'starter', startTrial: false, store, auditLog });
+    const result = simulateSelectProduct({ caller: accountant, companyId: 'company-1', productType: 'starter', store, auditLog });
     assert.ok(!result.ok);
     assert.match(result.error!, /uprawnie/);
   });
@@ -214,14 +189,14 @@ describe('selectProduct', () => {
   it('rejects caller from a different company', () => {
     const store = makeStore();
     const outsider: UserRow = { id: 'user-out', company_id: 'company-2', role: 'owner', active: true };
-    const result = simulateSelectProduct({ caller: outsider, companyId: 'company-1', productType: 'starter', startTrial: false, store, auditLog });
+    const result = simulateSelectProduct({ caller: outsider, companyId: 'company-1', productType: 'starter', store, auditLog });
     assert.ok(!result.ok);
   });
 
   it('writes an audit log entry', () => {
     const store = makeStore();
     const log: Array<{ companyId: string; next: Record<string, unknown> }> = [];
-    simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'professional', startTrial: false, store, auditLog: log });
+    simulateSelectProduct({ caller: owner, companyId: 'company-1', productType: 'professional', store, auditLog: log });
     assert.equal(log.length, 1);
     assert.equal(log[0].companyId, 'company-1');
     assert.equal(log[0].next.product_type, 'professional');

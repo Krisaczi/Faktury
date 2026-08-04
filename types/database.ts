@@ -490,7 +490,7 @@ export type Database = {
           ls_subscription_id: string | null;
           ls_customer_id: string | null;
           plan_name: string;
-          status: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused';
+          status: 'active' | 'past_due' | 'cancelled' | 'paused';
           renews_at: string | null;
           ends_at: string | null;
           created_at: string;

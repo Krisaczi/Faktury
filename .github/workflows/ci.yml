@@ -118,37 +118,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
-
-  # ── Trial cron smoke (nightly only, against staging) ─────────────────────────
-  trial-cron-smoke:
-    name: Trial cron smoke (nightly)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    steps:
-      - name: Call /api/trial/check-status dry-run
-        run: |
-          STATUS=$(curl -s -o /tmp/cron-response.json -w "%{http_code}" \
-            -X POST "$STAGING_URL/api/trial/check-status" \
-            -H "Content-Type: application/json" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            -d '{"dryRun":true}')
-
-          echo "HTTP status: $STATUS"
-          cat /tmp/cron-response.json | python3 -m json.tool
-
-          if [ "$STATUS" != "200" ]; then
-            echo "::error::Trial cron returned HTTP $STATUS"
-            exit 1
-          fi
-
-          # Verify dry_run=true in response (no emails sent)
-          python3 -c "
-          import json, sys
-          data = json.load(open('/tmp/cron-response.json'))
-          assert data.get('dry_run') == True, 'dry_run must be true'
-          assert data.get('emails_sent') == 0, 'emails_sent must be 0 in dry_run'
-          print('Smoke test passed:', data)
-          "
-        env:
-          STAGING_URL: ${{ secrets.STAGING_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
