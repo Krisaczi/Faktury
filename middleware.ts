@@ -12,6 +12,8 @@ const PUBLIC_PATHS = [
   '/verify-email',
   '/pricing',
   '/demo',
+  '/privacy-policy',
+  '/terms-of-use',
   '/api/demo',
   '/api/auth',
   '/account-inactive',

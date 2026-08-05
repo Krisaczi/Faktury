@@ -280,7 +280,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                {name === 'Przedsiębiorstwa' ? (
+                {name === '' ? (
                   <div className="block mt-6">
                     <Button
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white"
