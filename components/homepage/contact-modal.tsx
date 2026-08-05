@@ -101,7 +101,7 @@ export function ContactModal({ open, onClose }: Props) {
             </div>
 
             <div className="space-y-4 mt-auto">
-              <ContactDetail icon={Mail} label="E-mail" value="support@riskguard.pl" href="mailto:support@riskguard.pl" />
+              <ContactDetail icon={Mail} label="E-mail" value="kontakt@bezpiecznefaktury.pl" href="mailto:kontakt@bezpiecznefaktury.pl" />
               <ContactDetail icon={Phone} label="Telefon" value="+48 604-632-116" href="tel:+48604632116" />
              
             </div>

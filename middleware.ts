@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   '/terms-of-use',
   '/api/demo',
   '/api/auth',
+  '/api/contact',
   '/account-inactive',
 ];
 
