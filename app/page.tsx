@@ -1,9 +1,13 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { Shield, CircleCheck as CheckCircle, TrendingUp, Building2, ChartBar as FileBarChart2, Upload, ArrowRight, Star, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HomepageStatsSection } from '@/components/homepage/stats-section';
 import { HomepageFooter } from '@/components/homepage/homepage-footer';
+import { ContactModal } from '@/components/homepage/contact-modal';
 
 const features = [
   {
@@ -80,10 +84,10 @@ const plans = [
     highlight: true,
   },
   {
-    name: 'Przedsiębiorstwa',
-    price: 'w zależności od wymagań',
+    name: '',
+    price: 'Pakiet indywidualny',
     period: '',
-    desc: 'Dostosowane do dużych organizacji o złożonych wymaganiach.',
+    desc: 'Dostosowane do wymagań Twojej firmy.',
     features: ['White-labeling', 'SSO / SAML', 'Dedykowany CSM', 'Gwarantowane SLA', 'Wizyty studyjne'],
     cta: 'Skontaktuj się z nami',
     highlight: false,
@@ -91,6 +95,8 @@ const plans = [
 ];
 
 export default function LandingPage() {
+  const [contactOpen, setContactOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
       {/* Nav */}
@@ -135,11 +141,11 @@ export default function LandingPage() {
         </div>
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight">
-           Zarządzanie danymi dostawców,{' '}
-            <span className="text-blue-600 dark:text-blue-400">które naprawdę działa</span>
+           Automatycznie identyfikuj, analizuj i monitoruj faktury{' '}
+            <span className="text-blue-600 dark:text-blue-400"> w czasie rzeczywistym</span>
           </h1>
           <p className="mt-6 text-xl text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
-            Identyfikuj, oceniaj i monitoruj dane dostawców w czasie rzeczywistym. Przestań polegać na arkuszach kalkulacyjnych i zacznij podejmować decyzje w oparciu o dane.
+            Przyspiesz procesy, eliminuj błędy i odzyskaj pełną przejrzystość finansową. Nasze narzędzie automatycznie zbiera, analizuje i porządkuje faktury, dzięki czemu podejmujesz lepsze decyzje i oszczędzasz czas każdego dnia.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/signup">
@@ -274,18 +280,30 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/signup" className="block mt-6">
-                  <Button
-                    className={`w-full ${
-                      highlight
-                        ? 'bg-white text-blue-600 hover:bg-blue-50'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                    size="sm"
-                  >
-                    {cta}
-                  </Button>
-                </Link>
+                {name === 'Przedsiębiorstwa' ? (
+                  <div className="block mt-6">
+                    <Button
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      size="sm"
+                      onClick={() => setContactOpen(true)}
+                    >
+                      {cta}
+                    </Button>
+                  </div>
+                ) : (
+                  <Link href="/signup" className="block mt-6">
+                    <Button
+                      className={`w-full ${
+                        highlight
+                          ? 'bg-white text-blue-600 hover:bg-blue-50'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                      size="sm"
+                    >
+                      {cta}
+                    </Button>
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -320,6 +338,8 @@ export default function LandingPage() {
       </section>
 
       <HomepageFooter />
+
+      <ContactModal open={contactOpen} onClose={() => setContactOpen(false)} />
     </div>
   );
 }

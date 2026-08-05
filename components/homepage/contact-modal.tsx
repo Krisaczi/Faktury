@@ -88,7 +88,7 @@ export function ContactModal({ open, onClose }: Props) {
               <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                 <Shield className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-lg">RiskGuard</span>
+              <span className="font-bold text-lg">BezpieczneFaktury</span>
             </div>
 
             <div>
@@ -102,8 +102,8 @@ export function ContactModal({ open, onClose }: Props) {
 
             <div className="space-y-4 mt-auto">
               <ContactDetail icon={Mail} label="E-mail" value="support@riskguard.pl" href="mailto:support@riskguard.pl" />
-              <ContactDetail icon={Phone} label="Telefon" value="+48 22 123 45 67" href="tel:+48221234567" />
-              <ContactDetail icon={MapPin} label="Adres" value={<>ul. Prosta 12<br />00-850 Warszawa, Polska</>} />
+              <ContactDetail icon={Phone} label="Telefon" value="+48 604-632-116" href="tel:+48604632116" />
+             
             </div>
 
             <p className="text-blue-200 text-xs mt-2">
