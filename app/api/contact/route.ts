@@ -274,10 +274,12 @@ export async function POST(req: NextRequest) {
     attachmentMeta = { filename: file.name, size: file.size, mime_type: file.type };
   }
 
-  // Persist to database using anon client (RLS INSERT policy allows it)
+  // Persist to database using anon client (RLS INSERT policy allows it).
+  // We do NOT chain .select() — that would require a SELECT policy for anon,
+  // which we intentionally don't grant (only admins can read messages).
   const anonClient = getAnonClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: insertedRow, error: dbError } = await (anonClient as any)
+  const { error: dbError } = await (anonClient as any)
     .from('contact_messages')
     .insert({
       sender_name:     d.name,
@@ -290,12 +292,10 @@ export async function POST(req: NextRequest) {
       ip_address:      ip,
       user_agent:      userAgent,
       status:          'new',
-    })
-    .select('id')
-    .single();
+    });
 
-  if (dbError || !insertedRow) {
-    console.error('[contact] db insert error:', dbError?.message);
+  if (dbError) {
+    console.error('[contact] db insert error:', dbError.message);
     return NextResponse.json(
       { error: 'Błąd zapisu. Spróbuj ponownie później.' },
       { status: 500 }
@@ -313,28 +313,7 @@ export async function POST(req: NextRequest) {
     attachmentFilename: attachmentMeta?.filename,
   });
 
-  // Update delivery status (best-effort — requires service key)
-  const serviceClient = getServiceClient();
-  if (serviceClient) {
-    try {
-      if (emailResult.id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (serviceClient as any)
-          .from('contact_messages')
-          .update({ delivered: true, delivered_at: new Date().toISOString() })
-          .eq('id', insertedRow.id);
-      } else if (emailResult.error) {
-        console.error('[contact] email send error:', emailResult.error);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (serviceClient as any)
-          .from('contact_messages')
-          .update({ delivery_error: emailResult.error })
-          .eq('id', insertedRow.id);
-      }
-    } catch {
-      // Delivery status tracking is non-critical
-    }
-  } else if (emailResult.error) {
+  if (emailResult.error) {
     console.error('[contact] email send error:', emailResult.error);
   }
 
