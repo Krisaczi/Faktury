@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseServiceClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 
 const CONTACT_INBOX = process.env.CONTACT_INBOX_EMAIL ?? 'kontakt@bezpiecznefaktury.pl';
@@ -27,6 +26,30 @@ const schema = z.object({
   message: z.string().min(10).max(5000),
   _hp:     z.string().max(0), // honeypot — must be empty
 });
+
+// ─── Clients ──────────────────────────────────────────────────────────────────
+// Anon client: works on Netlify because it uses public env vars. The RLS
+// INSERT policy on contact_messages allows anon inserts.
+function getAnonClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
+
+// Service client: only available when SUPABASE_SERVICE_ROLE_KEY is configured
+// in the runtime environment. Used for rate-limit checks and delivery-status
+// updates. If the key is missing, returns null and those features are skipped.
+function getServiceClient() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    key,
+    { auth: { persistSession: false } }
+  );
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -136,25 +159,31 @@ async function sendNotificationEmail(opts: {
   return { id: json.id };
 }
 
-// ─── Rate limiting (database-backed) ──────────────────────────────────────────
+// ─── Rate limiting (best-effort, requires service key) ────────────────────────
 
 async function checkRateLimit(ip: string): Promise<boolean> {
-  const serviceClient = getSupabaseServiceClient();
-  const windowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const serviceClient = getServiceClient();
+  if (!serviceClient) return true; // no service key — skip rate limiting
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count, error } = await (serviceClient as any)
-    .from('contact_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('ip_address', ip)
-    .gte('created_at', windowStart);
+  try {
+    const windowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count, error } = await (serviceClient as any)
+      .from('contact_messages')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', windowStart);
 
-  if (error) {
-    console.error('[contact] rate-limit check error:', error.message);
-    return true; // fail open — don't block on infra issues
+    if (error) {
+      console.error('[contact] rate-limit check error:', error.message);
+      return true;
+    }
+
+    // Count all messages in the window (not IP-filtered, since inet cast
+    // can be finicky through the API client). 10 per 10 min is generous.
+    return (count ?? 0) < 10;
+  } catch {
+    return true; // fail open
   }
-
-  return (count ?? 0) < 3;
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -166,7 +195,7 @@ export async function POST(req: NextRequest) {
     '0.0.0.0';
   const userAgent = req.headers.get('user-agent') ?? null;
 
-  // Rate limit
+  // Rate limit (best-effort)
   const allowed = await checkRateLimit(ip);
   if (!allowed) {
     return NextResponse.json(
@@ -224,12 +253,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upload to Supabase Storage
-    const serviceClient = getSupabaseServiceClient();
+    // Upload to Supabase Storage using anon client (RLS allows anon uploads)
+    const anonClient = getAnonClient();
     const ext = file.name.split('.').pop() ?? 'bin';
     const filePath = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
 
-    const { data: uploadData, error: uploadError } = await serviceClient.storage
+    const { data: uploadData, error: uploadError } = await anonClient.storage
       .from('contact-attachments')
       .upload(filePath, file, { contentType: file.type, upsert: false });
 
@@ -245,10 +274,10 @@ export async function POST(req: NextRequest) {
     attachmentMeta = { filename: file.name, size: file.size, mime_type: file.type };
   }
 
-  // Persist to database
-  const serviceClient = getSupabaseServiceClient();
+  // Persist to database using anon client (RLS INSERT policy allows it)
+  const anonClient = getAnonClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: insertedRow, error: dbError } = await (serviceClient as any)
+  const { data: insertedRow, error: dbError } = await (anonClient as any)
     .from('contact_messages')
     .insert({
       sender_name:     d.name,
@@ -284,20 +313,29 @@ export async function POST(req: NextRequest) {
     attachmentFilename: attachmentMeta?.filename,
   });
 
-  // Update delivery status
-  if (emailResult.id) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceClient as any)
-      .from('contact_messages')
-      .update({ delivered: true, delivered_at: new Date().toISOString() })
-      .eq('id', insertedRow.id);
+  // Update delivery status (best-effort — requires service key)
+  const serviceClient = getServiceClient();
+  if (serviceClient) {
+    try {
+      if (emailResult.id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (serviceClient as any)
+          .from('contact_messages')
+          .update({ delivered: true, delivered_at: new Date().toISOString() })
+          .eq('id', insertedRow.id);
+      } else if (emailResult.error) {
+        console.error('[contact] email send error:', emailResult.error);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (serviceClient as any)
+          .from('contact_messages')
+          .update({ delivery_error: emailResult.error })
+          .eq('id', insertedRow.id);
+      }
+    } catch {
+      // Delivery status tracking is non-critical
+    }
   } else if (emailResult.error) {
     console.error('[contact] email send error:', emailResult.error);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceClient as any)
-      .from('contact_messages')
-      .update({ delivery_error: emailResult.error })
-      .eq('id', insertedRow.id);
   }
 
   return NextResponse.json({ ok: true });
