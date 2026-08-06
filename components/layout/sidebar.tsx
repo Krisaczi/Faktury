@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid, UserCog } from 'lucide-react';
+import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid, UserCog, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -229,6 +229,46 @@ export function Sidebar() {
                   {collapsed && (
                     <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
                       Kontrahenci
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
+
+              {/* Wiadomości kontaktowe — owner and admin only */}
+              {(effectiveRole === 'owner' || effectiveRole === 'admin') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {(() => {
+                      const active = pathname.startsWith('/admin/contact-messages');
+                      return (
+                        <Link
+                          href="/admin/contact-messages"
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                            active
+                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                            collapsed && 'justify-center px-2'
+                          )}
+                        >
+                          <Mail
+                            className={cn(
+                              'flex-shrink-0 transition-colors',
+                              collapsed ? 'w-5 h-5' : 'w-4 h-4',
+                              active ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                            )}
+                          />
+                          {!collapsed && <span>Wiadomości</span>}
+                          {!collapsed && active && (
+                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
+                          )}
+                        </Link>
+                      );
+                    })()}
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
+                      Wiadomości
                     </TooltipContent>
                   )}
                 </Tooltip>
