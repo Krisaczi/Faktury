@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getSupabaseServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/database';
 
 const schema = z.object({
   name:    z.string().min(2).max(200),
@@ -63,7 +64,11 @@ export async function POST(req: NextRequest) {
   const { name, email, subject, message } = parsed.data;
 
   // Persist to Supabase for logging / follow-up
-  const supabase = getSupabaseServiceClient();
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: dbError } = await (supabase as any).from('contact_submissions').insert({
     name,
