@@ -61,6 +61,27 @@ export async function grantOwnerRole(params: {
       return { ok: false, error: 'User is already an owner.' };
     }
 
+    // Check if there is an existing owner — granting will demote them to admin
+    // (handled atomically by the grant_owner_role DB function).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingOwner } = await (sessionClient as any)
+      .from('users')
+      .select('id, email')
+      .eq('company_id', callerRow.company_id)
+      .eq('role', 'owner')
+      .neq('id', targetUserId)
+      .maybeSingle();
+
+    if (existingOwner) {
+      // Ownership transfer — the current owner will be demoted to admin.
+      // The caller (current owner) is granting to someone else, which means
+      // they will lose their own owner role. Confirm this is intentional.
+      if (existingOwner.id === caller.id) {
+        // Caller is the current owner transferring to someone else — proceed,
+        // the DB function will demote the caller to admin.
+      }
+    }
+
     // Capture IP for audit log
     const headersList = await headers();
     const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim()

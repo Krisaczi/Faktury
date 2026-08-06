@@ -141,7 +141,7 @@ export function ContactModal({ open, onClose }: Props) {
           <X className="w-4 h-4" />
         </button>
 
-        <div className="grid sm:grid-cols-[240px_1fr]">
+        <div className="grid sm:grid-cols-[280px_1fr]">
           {/* Left panel — contact details */}
           <div className="bg-blue-600 text-white px-6 py-8 flex flex-col gap-6">
             <div className="flex items-center gap-2.5">
