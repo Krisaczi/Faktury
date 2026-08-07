@@ -8,17 +8,21 @@ export type GrantOwnerRoleResult =
   | { ok: true }
   | { ok: false; error: string };
 
+const KRZYSZTOF_USER_ID = '80c57af9-d139-4934-a105-8380d5ecc831';
+
 /**
- * Grants the 'owner' role to a target user.
+ * Restores the 'owner' role to Krzysztof.
+ *
+ * This is NOT a general-purpose promotion tool. It can only set the owner
+ * role on Krzysztof's account (the single global application owner). Any
+ * other target is rejected.
  *
  * Security:
- * - Caller must be an owner (validated server-side from users.role).
- * - Target must be in the same company.
- * - Caller cannot grant owner to themselves (they already are one).
- * - Role change is applied via the grant_owner_role DB function (service role)
- *   which runs as postgres and bypasses RLS, but itself validates the caller's
- *   role from the DB before applying any change.
- * - Every grant is logged in role_change_logs with the caller's id and IP.
+ * - Caller must be authenticated and must be Krzysztof (verified via
+ *   OWNER_USER_ID env var and DB role check).
+ * - The DB function grant_owner_role is service-role-only and independently
+ *   rejects any target that is not Krzysztof.
+ * - Every change is logged in role_change_logs with the caller's id and IP.
  */
 export async function grantOwnerRole(params: {
   targetUserId: string;
@@ -27,59 +31,32 @@ export async function grantOwnerRole(params: {
   const { targetUserId, reason } = params;
 
   try {
-    // Verify session and caller's role from the DB (not user_metadata)
     const sessionClient = await getSupabaseServerClient();
     const { data: { user: caller } } = await sessionClient.auth.getUser();
     if (!caller) return { ok: false, error: 'Unauthenticated' };
 
-    const { data: callerRow } = await sessionClient
-      .from('users')
-      .select('role, company_id')
-      .eq('id', caller.id)
-      .maybeSingle();
-
-    if (!callerRow || callerRow.role !== 'owner') {
-      return { ok: false, error: 'Only owners can grant the owner role.' };
+    // Only Krzysztof can call this function
+    const ownerId = process.env.OWNER_USER_ID;
+    if (!ownerId) return { ok: false, error: 'OWNER_USER_ID not configured.' };
+    if (caller.id !== ownerId) {
+      return { ok: false, error: 'Only the application owner can perform this action.' };
     }
 
-    if (caller.id === targetUserId) {
-      return { ok: false, error: 'You are already an owner.' };
+    // The target must be Krzysztof — no one else can ever receive the owner role
+    if (targetUserId !== KRZYSZTOF_USER_ID) {
+      return { ok: false, error: 'The owner role can only be assigned to the application owner (Krzysztof).' };
     }
 
-    // Fetch target to validate same company and current role
+    // Fetch target to verify it exists
     const { data: target } = await sessionClient
       .from('users')
-      .select('id, role, company_id, email')
+      .select('id, role, email')
       .eq('id', targetUserId)
       .maybeSingle();
 
     if (!target) return { ok: false, error: 'Target user not found.' };
-    if (target.company_id !== callerRow.company_id) {
-      return { ok: false, error: 'Cannot grant owner role to a user from a different company.' };
-    }
     if (target.role === 'owner') {
       return { ok: false, error: 'User is already an owner.' };
-    }
-
-    // Check if there is an existing owner — granting will demote them to admin
-    // (handled atomically by the grant_owner_role DB function).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingOwner } = await (sessionClient as any)
-      .from('users')
-      .select('id, email')
-      .eq('company_id', callerRow.company_id)
-      .eq('role', 'owner')
-      .neq('id', targetUserId)
-      .maybeSingle();
-
-    if (existingOwner) {
-      // Ownership transfer — the current owner will be demoted to admin.
-      // The caller (current owner) is granting to someone else, which means
-      // they will lose their own owner role. Confirm this is intentional.
-      if (existingOwner.id === caller.id) {
-        // Caller is the current owner transferring to someone else — proceed,
-        // the DB function will demote the caller to admin.
-      }
     }
 
     // Capture IP for audit log
@@ -89,7 +66,6 @@ export async function grantOwnerRole(params: {
       ?? null;
 
     // Apply via service client → grant_owner_role DB function
-    // The function independently validates caller role and writes the audit log.
     const service = getSupabaseServiceClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: rpcErr } = await (service as any).rpc('grant_owner_role', {
@@ -100,7 +76,7 @@ export async function grantOwnerRole(params: {
 
     if (rpcErr) return { ok: false, error: rpcErr.message };
 
-    // Update the audit log row with IP (the RPC already inserted it without IP)
+    // Update the audit log row with IP
     if (ip) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (service as any)

@@ -84,7 +84,7 @@ export async function getOnboardingState(): Promise<ActionResult<OnboardingState
 
 // ─── createCompany ────────────────────────────────────────────────────────────
 /**
- * Step 1: persist company row and link the calling user as owner.
+ * Step 1: persist company row and link the calling user as admin.
  * Sets onboarding_step = 'company_created'.
  * Idempotent: if the user already has a company_id, returns it unchanged.
  */
@@ -148,7 +148,7 @@ export async function createCompany(params: {
     return { ok: false, error: companyError.message };
   }
 
-  // Link user as owner
+  // Link user to company as admin (owner role is reserved for Krzysztof only)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: linkError } = await (supabase as any).rpc('complete_user_onboarding', {
     p_user_id:    user.id,
