@@ -133,13 +133,7 @@ export function ContactModal({ open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="p-0 gap-0 max-w-2xl overflow-hidden border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl">
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 rounded-full w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          aria-label="Zamknij"
-        >
-          <X className="w-4 h-4" />
-        </button>
+      
 
         <div className="grid sm:grid-cols-[280px_1fr]">
           {/* Left panel — contact details */}
