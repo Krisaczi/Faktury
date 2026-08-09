@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 function getAdminClient() {
   return createClient<Database>(
@@ -13,17 +14,6 @@ function getAdminClient() {
 export async function POST() {
   try {
     const admin = getAdminClient();
-
-    // Verify the caller's session using the service client so we can trust
-    // the user id, then perform the upgrade with the same privileged client.
-    const authHeader =
-      typeof Request !== 'undefined'
-        ? undefined
-        : undefined;
-
-    // We need the user's auth token — read it from the incoming request via
-    // the server Supabase client instead.
-    const { getSupabaseServerClient } = await import('@/lib/supabase/server');
     const supabase = await getSupabaseServerClient();
     const {
       data: { user },
