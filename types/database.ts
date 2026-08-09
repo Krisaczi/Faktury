@@ -266,6 +266,8 @@ export type Database = {
           overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total: number | null;
           amount_due: number | null;
+          is_ksef: boolean;
+          read_only: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -292,6 +294,8 @@ export type Database = {
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
+          is_ksef?: boolean;
+          read_only?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -315,6 +319,8 @@ export type Database = {
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
+          is_ksef?: boolean;
+          read_only?: boolean;
           updated_at?: string;
         };
         Relationships: [];
