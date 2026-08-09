@@ -25,6 +25,7 @@ import { StateCard } from '@/components/ui/state-card';
 import { SkeletonList } from '@/components/ui/skeleton-loaders';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { useUpload, useJobStatus } from '@/hooks/use-upload';
+import { useInvoicingPackage } from '@/hooks/use-invoicing-package';
 
 const today     = new Date().toISOString().slice(0, 10);
 const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -198,6 +199,8 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InvoicesPage() {
+  const { data: pkgInfo } = useInvoicingPackage();
+  const isInvoicingEnabled = pkgInfo?.invoicing_enabled ?? false;
   const [search,      setSearch]      = useState('');
   const [vendorId,    setVendorId]    = useState('');
   const [riskLevel,   setRisk]        = useState('');
@@ -272,6 +275,24 @@ export default function InvoicesPage() {
           )}
         </div>
       </PageHeader>
+
+      {/* Starter plan: read-only banner */}
+      {!isInvoicingEnabled && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              Pakiet Starter — podgl\u0105d faktur tylko do odczytu
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              Mo\u017cesz pobiera\u0107 i przegl\u0105da\u0107 faktury z KSeF, ale tworzenie, edycja i wysy\u0142ka faktur wymagaj\u0105 pakietu Pro.
+            </p>
+          </div>
+          <Link href="/pricing" className="text-xs font-semibold text-amber-800 dark:text-amber-300 hover:underline shrink-0">
+            Przejd\u017a na Pro &rarr;
+          </Link>
+        </div>
+      )}
 
       {/* KSeF fetch bar — always visible above search */}
       <KsefFetchBar onDone={() => mutate()} />
@@ -365,12 +386,16 @@ export default function InvoicesPage() {
           description={
             hasFilters
               ? 'Try adjusting your filters or search term.'
-              : 'Upload your first invoice to get started.'
+              : isInvoicingEnabled
+                ? 'Upload your first invoice to get started.'
+                : 'Pobierz faktury z KSeF, aby rozpocząć.'
           }
           primaryAction={
             hasFilters
               ? { label: 'Clear filters', onClick: clearFilters, variant: 'outline' }
-              : { label: 'Upload invoices', onClick: () => { window.location.href = '/upload'; }, icon: FileText, variant: 'default' }
+              : isInvoicingEnabled
+                ? { label: 'Upload invoices', onClick: () => { window.location.href = '/upload'; }, icon: FileText, variant: 'default' }
+                : undefined
           }
         />
       ) : (

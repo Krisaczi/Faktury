@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { requireInvoicingPackage } from '@/lib/packages/invoicing-guard';
 
 export async function GET(
   _req: NextRequest,
@@ -80,6 +81,10 @@ export async function DELETE(
     if (!['owner', 'admin'].includes(userRecord.role ?? '')) {
       return NextResponse.json({ error: 'Forbidden: only admins and owners can delete invoices' }, { status: 403 });
     }
+
+    // Block Starter packages from invoice mutations
+    const invoicingForbidden = await requireInvoicingPackage(userRecord.company_id);
+    if (invoicingForbidden) return invoicingForbidden;
 
     // Verify the invoice belongs to this company before deleting
     const { data: invoice } = await supabase

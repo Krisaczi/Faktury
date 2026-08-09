@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseInvoiceItems } from '@/lib/parsers/invoice-item-parser';
+import { requireInvoicingPackage } from '@/lib/packages/invoicing-guard';
 
 function resolveStoragePath(rawFileUrl: string): string {
   if (rawFileUrl.includes('/object/sign/')) {
@@ -33,6 +34,10 @@ export async function POST(
     if (!['owner', 'admin', 'accountant'].includes(userRecord.role ?? '')) {
       return NextResponse.json({ error: 'Forbidden: insufficient role' }, { status: 403 });
     }
+
+    // Block Starter packages from invoice mutations
+    const invoicingForbidden = await requireInvoicingPackage(userRecord.company_id);
+    if (invoicingForbidden) return invoicingForbidden;
 
     const { data: invoice } = await supabase
       .from('invoices')

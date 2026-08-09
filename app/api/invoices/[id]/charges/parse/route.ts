@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseXmlInvoices, type ParsedCharge } from '@/lib/parsers/xml-invoice-parser';
 import { mapChargesToPdf, type ChargeMapping } from '@/lib/parsers/charge-mapper';
 import { extractPdfText } from '@/lib/parsers/pdf-text-parser';
+import { requireInvoicingPackage } from '@/lib/packages/invoicing-guard';
 
 function resolveStoragePath(rawFileUrl: string): string {
   if (rawFileUrl.includes('/object/sign/')) {
@@ -35,6 +36,10 @@ export async function POST(
     if (!['owner', 'admin', 'accountant'].includes(userRecord.role ?? '')) {
       return NextResponse.json({ error: 'Forbidden: insufficient role' }, { status: 403 });
     }
+
+    // Block Starter packages from invoice mutations
+    const invoicingForbidden = await requireInvoicingPackage(userRecord.company_id);
+    if (invoicingForbidden) return invoicingForbidden;
 
     const { data: invoice } = await supabase
       .from('invoices')

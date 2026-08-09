@@ -6,6 +6,7 @@ import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { canWriteInvoice, type AppRole } from '@/lib/permissions';
 import { getBuyerCompanyById } from '@/app/(admin)/admin/companies/actions';
+import { isInvoicingEnabled } from '@/lib/packages/invoicing-guard';
 
 export const metadata = { title: 'Admin — Nowa faktura' };
 
@@ -69,6 +70,14 @@ export default async function NewInvoicePage({
   const defaults = await getSellerDefaults(searchParams.buyer_company_id);
 
   if (!canWriteInvoice(defaults?.role)) redirect('/admin/invoices');
+
+  // Block Starter packages from creating invoices
+  if (defaults?.companyId) {
+    const invoicingEnabled = await isInvoicingEnabled(defaults.companyId);
+    if (!invoicingEnabled) {
+      redirect('/admin/invoices?error=starter_no_invoicing');
+    }
+  }
 
   const sellerDefaults = defaults
     ? { name: defaults.name, nip: defaults.nip, address: defaults.address }

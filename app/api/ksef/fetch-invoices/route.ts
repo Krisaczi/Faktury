@@ -453,6 +453,8 @@ async function runKsefFetch({
               bank_account: inv.bankAccount ?? null,
               raw_file_url: urlData?.signedUrl ?? filePath,
               upload_session_id: sessionId,
+              is_ksef: true,
+              read_only: true,
             })
             .select('id, created_at')
             .single();
