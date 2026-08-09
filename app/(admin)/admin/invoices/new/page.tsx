@@ -10,7 +10,19 @@ import { isInvoicingEnabled } from '@/lib/packages/invoicing-guard';
 
 export const metadata = { title: 'Admin — Nowa faktura' };
 
-async function getSellerDefaults(buyerCompanyId?: string) {
+async function getSellerDefaults(buyerCompanyId?: string): Promise<{
+  companyId: string | null;
+  name: string;
+  nip: string;
+  address: string;
+  role: AppRole;
+  buyerDefaults?: {
+    buyer_name?:    string;
+    buyer_nip?:     string;
+    buyer_address?: string;
+    buyer_email?:   string;
+  };
+} | undefined> {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return undefined;
@@ -54,6 +66,7 @@ async function getSellerDefaults(buyerCompanyId?: string) {
   }
 
   return {
+    companyId:     userRecord.company_id,
     name:          company.name,
     nip:           company.nip ?? '',
     address:       '',
