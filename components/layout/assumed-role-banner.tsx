@@ -19,7 +19,6 @@ function formatCountdown(expiresAt: Date): string {
 }
 
 const ROLE_ACCENT: Record<AppRole, string> = {
-  admin:      'bg-blue-600   border-blue-500',
   accountant: 'bg-emerald-600 border-emerald-500',
   owner:      'bg-amber-600  border-amber-500',
 };

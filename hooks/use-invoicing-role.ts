@@ -11,7 +11,7 @@ export function useInvoicingRole() {
   const { data, loading } = useUserRole();
   return {
     role:         data?.role ?? null,
-    hasInvoicing: data ? canAccessInvoicing(data.role) : false,
+    hasInvoicing: data ? canAccessInvoicing(data.role, data.packageType) : false,
     loading,
   };
 }

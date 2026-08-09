@@ -73,8 +73,8 @@ function simulateSelectProduct(opts: {
 }): { ok: boolean; error?: string; usersLimit?: number | null } {
   const { caller, companyId, productType, store, auditLog } = opts;
 
-  // Auth guard: caller must be owner or admin of the company
-  if (!['owner', 'admin'].includes(caller.role)) {
+  // Auth guard: caller must be owner or accountant of the company
+  if (!['owner', 'accountant'].includes(caller.role)) {
     return { ok: false, error: 'Brak uprawnień do zarządzania pakietami.' };
   }
   if (caller.company_id !== companyId) {
@@ -123,7 +123,7 @@ function simulateOnboardNewUser(opts: {
 }): { ok: boolean; error?: string } {
   const { caller, companyId, emailToAdd, existingUsers, companyFeatures } = opts;
 
-  if (!['owner', 'admin'].includes(caller.role)) {
+  if (!['owner', 'accountant'].includes(caller.role)) {
     return { ok: false, error: 'Brak uprawnień.' };
   }
 
@@ -178,12 +178,19 @@ describe('selectProduct', () => {
     assert.equal(row.subscription_status, 'active');
   });
 
-  it('rejects non-owner/admin callers', () => {
+  it('rejects caller with an invalid role', () => {
+    const store = makeStore();
+    const stranger: UserRow = { id: 'user-x', company_id: 'company-1', role: 'somerole', active: true };
+    const result = simulateSelectProduct({ caller: stranger, companyId: 'company-1', productType: 'starter', store, auditLog });
+    assert.ok(!result.ok);
+    assert.match(result.error!, /uprawnie/);
+  });
+
+  it('allows accountant callers', () => {
     const store = makeStore();
     const accountant: UserRow = { id: 'user-acc', company_id: 'company-1', role: 'accountant', active: true };
     const result = simulateSelectProduct({ caller: accountant, companyId: 'company-1', productType: 'starter', store, auditLog });
-    assert.ok(!result.ok);
-    assert.match(result.error!, /uprawnie/);
+    assert.ok(result.ok);
   });
 
   it('rejects caller from a different company', () => {

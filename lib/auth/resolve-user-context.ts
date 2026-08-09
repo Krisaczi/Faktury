@@ -47,7 +47,7 @@ export async function resolveUserContext(): Promise<UserContext | null> {
     const service = getSupabaseServiceClient();
     const fullName = (user.user_metadata?.full_name as string | undefined) ?? null;
     await Promise.allSettled([
-      service.from('users').insert({ id: user.id, email: user.email ?? '', role: 'member' }),
+      service.from('users').insert({ id: user.id, email: user.email ?? '', role: 'accountant' }),
       service.from('profiles').insert({ id: user.id, email: user.email ?? '', full_name: fullName, role: 'user' }),
     ]);
 
@@ -62,7 +62,7 @@ export async function resolveUserContext(): Promise<UserContext | null> {
     };
   }
 
-  const role = (userRow.role as AppRole) ?? 'member';
+  const role = (userRow.role as AppRole) ?? 'accountant';
   const companyId = userRow.company_id ?? null;
 
   return {

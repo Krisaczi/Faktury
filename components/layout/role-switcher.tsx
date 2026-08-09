@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-const ASSUMABLE_ROLES: AppRole[] = ['admin', 'accountant'];
+const ASSUMABLE_ROLES: AppRole[] = ['accountant'];
 
 const DURATION_OPTIONS = [
   { label: '15 min', value: 15 },
@@ -21,7 +21,6 @@ const DURATION_OPTIONS = [
 ];
 
 const ROLE_COLORS: Record<AppRole, string> = {
-  admin:      'text-blue-600 bg-blue-50   border-blue-200  dark:bg-blue-900/20  dark:text-blue-400  dark:border-blue-800',
   accountant: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
   owner:      'text-amber-600 bg-amber-50  border-amber-200  dark:bg-amber-900/20  dark:text-amber-400  dark:border-amber-800',
 };
@@ -30,7 +29,7 @@ export function RoleSwitcher() {
   const { data: roleData } = useUserRole();
   const { state, isPending, error, start } = useRoleSwitch();
 
-  const [selectedRole, setSelectedRole] = useState<AppRole>('admin');
+  const [selectedRole, setSelectedRole] = useState<AppRole>('accountant');
   const [duration, setDuration]         = useState(30);
   const [reason, setReason]             = useState('');
   const [open, setOpen]                 = useState(false);

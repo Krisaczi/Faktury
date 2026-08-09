@@ -21,7 +21,6 @@ import {
 
 const ROLE_COLORS: Record<AppRole, string> = {
   owner:      'bg-amber-500/15 text-amber-400 ring-amber-500/20',
-  admin:      'bg-blue-500/15 text-blue-400 ring-blue-500/20',
   accountant: 'bg-emerald-500/15 text-emerald-400 ring-emerald-500/20',
 };
 
@@ -37,7 +36,7 @@ export function Sidebar() {
     ? switchState.assumedRole
     : (roleData?.role as AppRole | undefined);
 
-  const hasInvoicing = canAccessInvoicing(effectiveRole);
+  const hasInvoicing = canAccessInvoicing(effectiveRole, roleData?.packageType);
   const visibleNavItems = getVisibleNavItems(effectiveRole);
 
   const initials = profile?.full_name
@@ -234,8 +233,8 @@ export function Sidebar() {
                 </Tooltip>
               )}
 
-              {/* Wiadomości kontaktowe — owner and admin only */}
-              {(effectiveRole === 'owner' || effectiveRole === 'admin') && (
+              {/* Wiadomości kontaktowe — owner only */}
+              {(effectiveRole === 'owner') && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {(() => {
@@ -274,8 +273,8 @@ export function Sidebar() {
                 </Tooltip>
               )}
 
-              {/* Użytkownicy — owner and admin only */}
-              {(effectiveRole === 'owner' || effectiveRole === 'admin') && (
+              {/* Użytkownicy — owner only */}
+              {(effectiveRole === 'owner') && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {(() => {

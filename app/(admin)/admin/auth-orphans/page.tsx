@@ -17,7 +17,7 @@ export default async function AuthOrphansPage() {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!u || !['owner', 'admin'].includes(u.role ?? '')) {
+  if (!u || !['owner'].includes(u.role ?? '')) {
     redirect('/dashboard');
   }
 

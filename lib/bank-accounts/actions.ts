@@ -32,9 +32,9 @@ async function requireCompanyAdmin(): Promise<AuthContext> {
     .maybeSingle();
 
   if (!u?.company_id) throw new Error('No company');
-  const role = (u.role ?? 'member') as AppRole;
-  if (role !== 'owner' && role !== 'admin') {
-    throw new Error('Brak uprawnień. Wymagana rola owner lub admin.');
+  const role = (u.role ?? 'accountant') as AppRole;
+  if (role !== 'owner') {
+    throw new Error('Brak uprawnień. Wymagana rola owner.');
   }
 
   return { userId: user.id, companyId: u.company_id as string, role };
@@ -53,7 +53,7 @@ async function requireCompanyMember(): Promise<AuthContext> {
     .maybeSingle();
 
   if (!u?.company_id) throw new Error('No company');
-  const role = (u.role ?? 'member') as AppRole;
+  const role = (u.role ?? 'accountant') as AppRole;
 
   return { userId: user.id, companyId: u.company_id as string, role };
 }

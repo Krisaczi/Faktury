@@ -5,15 +5,16 @@ import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { AppRole } from '@/lib/permissions';
 
 export interface UserRoleData {
-  id:    string;
-  email: string | null;
-  role:  AppRole;
+  id:          string;
+  email:       string | null;
+  role:        AppRole;
+  packageType: string | null;
 }
 
 /**
  * Fetches the current user's row from `users` (which holds the canonical role)
  * and subscribes to realtime changes so the role badge updates immediately
- * if an admin changes the user's role.
+ * if the owner changes the user's role.
  */
 export function useUserRole() {
   const [data,    setData]    = useState<UserRoleData | null>(null);
@@ -30,22 +31,32 @@ export function useUserRole() {
 
       const { data: row } = await supabase
         .from('users')
-        .select('id, email, role')
+        .select('id, email, role, company_id')
         .eq('id', user.id)
         .maybeSingle();
 
+      // Fetch the company's package type so role-based invoicing checks are package-aware
+      let packageType: string | null = null;
+      if (row?.company_id) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('product_type')
+          .eq('id', row.company_id)
+          .maybeSingle();
+        packageType = company?.product_type ?? null;
+      }
+
       setData({
-        id:    user.id,
-        email: row?.email ?? user.email ?? null,
-        role:  (row?.role ?? user.user_metadata?.role ?? 'member') as AppRole,
+        id:          user.id,
+        email:       row?.email ?? user.email ?? null,
+        role:        (row?.role ?? 'accountant') as AppRole,
+        packageType,
       });
       setLoading(false);
     }
 
     init();
 
-    // Unique channel name per mount avoids "cannot add callbacks after subscribe()"
-    // when React StrictMode unmounts/remounts or the component re-renders.
     const channelName = `user-role-watch-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
       .channel(channelName)
@@ -55,7 +66,7 @@ export function useUserRole() {
         (payload) => {
           if (!userId || payload.new?.id !== userId) return;
           setData(prev => prev
-            ? { ...prev, role: (payload.new.role ?? 'member') as AppRole }
+            ? { ...prev, role: (payload.new.role ?? 'accountant') as AppRole }
             : prev
           );
         }

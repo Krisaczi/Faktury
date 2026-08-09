@@ -43,12 +43,21 @@ async function requireInvoicingUser() {
 
   if (!u?.company_id) throw new Error('No company');
   const role = (u.role ?? 'accountant') as AppRole;
-  if (!canAccessInvoicing(role)) throw new Error('Brak dostępu do modułu fakturowania.');
+
+  // Fetch the company's package so role-based invoicing checks are package-aware
+  const { data: company } = await supabase
+    .from('companies')
+    .select('product_type')
+    .eq('id', u.company_id)
+    .maybeSingle();
+  const packageType = company?.product_type ?? null;
+
+  if (!canAccessInvoicing(role, packageType)) throw new Error('Brak dostępu do modułu fakturowania.');
 
   // Package-level enforcement: invoicing requires Professional plan
   await requireInvoicingEnabled(u.company_id as string);
 
-  return { user, companyId: u.company_id as string, role };
+  return { user, companyId: u.company_id as string, role, packageType };
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -101,9 +110,9 @@ export async function createInvoice(
   intent: 'draft' | 'issue',
 ): Promise<ActionResult> {
   try {
-    const { user, companyId, role } = await requireInvoicingUser();
-    if (!canWriteInvoice(role)) return { ok: false, error: 'Brak uprawnień do tworzenia faktur.' };
-    if (intent === 'issue' && !canIssueInvoice(role)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
+    const { user, companyId, role, packageType } = await requireInvoicingUser();
+    if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do tworzenia faktur.' };
+    if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
     const parsed = FormSchema.safeParse(values);
     if (!parsed.success) {
@@ -183,9 +192,9 @@ export async function updateInvoice(
   intent: 'draft' | 'issue',
 ): Promise<ActionResult> {
   try {
-    const { companyId, role } = await requireInvoicingUser();
-    if (!canWriteInvoice(role)) return { ok: false, error: 'Brak uprawnień do edycji faktur.' };
-    if (intent === 'issue' && !canIssueInvoice(role)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
+    const { companyId, role, packageType } = await requireInvoicingUser();
+    if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do edycji faktur.' };
+    if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
     const parsed = FormSchema.safeParse(values);
     if (!parsed.success) {
@@ -315,8 +324,8 @@ async function getKsefCreds(companyId: string) {
  */
 export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
   try {
-    const { companyId, role } = await requireInvoicingUser();
-    if (!canSendToKsefRole(role)) return { ok: false, error: 'Brak uprawnień do wysyłania faktur do KSeF.' };
+    const { companyId, role, packageType } = await requireInvoicingUser();
+    if (!canSendToKsefRole(role, packageType)) return { ok: false, error: 'Brak uprawnień do wysyłania faktur do KSeF.' };
 
     const supabase = await getSupabaseServerClient();
 

@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    if (!['owner', 'admin'].includes(userRecord.role ?? '')) {
-      return NextResponse.json({ error: 'Admin role required' }, { status: 403 });
+    if (!['owner'].includes(userRecord.role ?? '')) {
+      return NextResponse.json({ error: 'Owner role required' }, { status: 403 });
     }
 
     if (!LS_API_KEY || !LS_STORE_ID || !LS_VARIANT_ID) {

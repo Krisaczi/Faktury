@@ -138,13 +138,23 @@ export default async function AdminInvoiceDetailPage({
   const invoice = await fetchInvoice(params.id);
   if (!invoice) notFound();
 
-  // Resolve current user's role for permission-gated UI
+  // Resolve current user's role + package for permission-gated UI
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: userRecord } = user
-    ? await supabase.from('users').select('role').eq('id', user!.id).maybeSingle()
+    ? await supabase.from('users').select('role, company_id').eq('id', user!.id).maybeSingle()
     : { data: null };
-  const role = (userRecord?.role ?? 'member') as AppRole;
+  const role = (userRecord?.role ?? 'accountant') as AppRole;
+
+  let packageType: string | null = null;
+  if (userRecord?.company_id) {
+    const { data: company } = await supabase
+      .from('companies')
+      .select('product_type')
+      .eq('id', userRecord.company_id)
+      .maybeSingle();
+    packageType = company?.product_type ?? null;
+  }
 
   const status = invoice.status as IssuedInvoiceStatus;
   const ksefStatus = invoice.ksef_status as KsefStatus | null;
@@ -161,7 +171,7 @@ export default async function AdminInvoiceDetailPage({
           <ArrowLeft className="w-4 h-4" />
           Wróć do listy
         </Link>
-        {invoice.status === 'draft' && canWriteInvoice(role) && (
+        {invoice.status === 'draft' && canWriteInvoice(role, packageType) && (
           <Link
             href={`/admin/invoices/${invoice.id}/edit`}
             className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -331,7 +341,7 @@ export default async function AdminInvoiceDetailPage({
           ksefSentAt={invoice.ksef_sent_at ?? null}
           ksefAcceptedAt={invoice.ksef_accepted_at ?? null}
           ksefErrorMessage={invoice.ksef_error_message ?? null}
-          canSendToKsef={canSendToKsef(role)}
+          canSendToKsef={canSendToKsef(role, packageType)}
         />
       </Card>
 

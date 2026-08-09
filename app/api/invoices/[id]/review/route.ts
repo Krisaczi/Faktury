@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { requireInvoicingPackage } from '@/lib/packages/invoicing-guard';
 
 export async function POST(
   req: NextRequest,
@@ -25,10 +24,6 @@ export async function POST(
     if (!userRecord?.company_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
-    // Block Starter packages from invoice mutations
-    const invoicingForbidden = await requireInvoicingPackage(userRecord.company_id);
-    if (invoicingForbidden) return invoicingForbidden;
 
     const { data: invoice } = await supabase
       .from('invoices')

@@ -17,7 +17,6 @@ export function isSafeRedirect(url: string): boolean {
 
 const ROLE_DEFAULT_PATHS: Record<AppRole, string> = {
   owner:      '/dashboard',
-  admin:      '/dashboard',
   accountant: '/dashboard',
 };
 

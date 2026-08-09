@@ -124,7 +124,7 @@ describe('syncAuthAndProfiles reconciliation logic', () => {
 
   it('detects role mismatches without changing them', () => {
     const authUsers: AuthUser[] = [
-      { id: 'u1', email: 'u1@test.com', user_metadata: { role: 'admin' }, app_metadata: {} },
+      { id: 'u1', email: 'u1@test.com', user_metadata: { role: 'accountant' }, app_metadata: {} },
     ];
     const profileRows: ProfileRow[] = [
       { id: 'u1', email: 'u1@test.com', role: 'member' },
@@ -133,7 +133,7 @@ describe('syncAuthAndProfiles reconciliation logic', () => {
 
     assert.equal(result.roleMismatches.length, 1);
     assert.equal(result.roleMismatches[0].tableRole, 'member');
-    assert.equal(result.roleMismatches[0].metaRole, 'admin');
+    assert.equal(result.roleMismatches[0].metaRole, 'accountant');
     assert.equal(result.created.length, 0);
   });
 

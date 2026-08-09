@@ -124,102 +124,12 @@ export async function getUser(
   }
 }
 
-// ─── promoteToAdmin ─────────────────────────────────────────────────────────────
-
-export async function promoteToAdmin(params: {
-  targetUserId: string;
-  reason?:      string;
-}): Promise<RoleActionResult> {
-  const { targetUserId, reason } = params;
-
-  try {
-    const { user, companyId } = await requireOwner();
-    const service = getSupabaseServiceClient();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: target } = await (service as any)
-      .from('users')
-      .select('id, role, company_id, email, active')
-      .eq('id', targetUserId)
-      .maybeSingle();
-
-    if (!target) return { ok: false, error: 'Użytkownik nie istnieje.' };
-    if (target.company_id !== companyId) return { ok: false, error: 'Brak uprawnień.' };
-    if (target.id === user.id) return { ok: false, error: 'Nie możesz zmienić własnej roli.' };
-    if (target.role === 'owner') return { ok: false, error: 'Nie można zmienić roli właściciela.' };
-    if (target.role === 'admin') return { ok: false, error: 'Użytkownik jest już administratorem.' };
-    if (!target.active) return { ok: false, error: 'Nie można zmienić roli nieaktywnego użytkownika.' };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (service as any)
-      .from('users')
-      .update({ role: 'admin', updated_at: new Date().toISOString() })
-      .eq('id', targetUserId);
-
-    if (updateErr) return { ok: false, error: updateErr.message };
-
-    await writeRoleAuditLog({
-      targetUserId,
-      changedBy:    user.id,
-      previousRole: target.role,
-      newRole:      'admin',
-      reason:       reason ?? null,
-    });
-
-    revalidatePath('/admin/users');
-    return { ok: true, data: undefined };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
-  }
-}
-
-// ─── demoteAdmin ────────────────────────────────────────────────────────────────
-
-export async function demoteAdmin(params: {
-  targetUserId: string;
-  reason?:      string;
-}): Promise<RoleActionResult> {
-  const { targetUserId, reason } = params;
-
-  try {
-    const { user, companyId } = await requireOwner();
-    const service = getSupabaseServiceClient();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: target } = await (service as any)
-      .from('users')
-      .select('id, role, company_id, email, active')
-      .eq('id', targetUserId)
-      .maybeSingle();
-
-    if (!target) return { ok: false, error: 'Użytkownik nie istnieje.' };
-    if (target.company_id !== companyId) return { ok: false, error: 'Brak uprawnień.' };
-    if (target.id === user.id) return { ok: false, error: 'Nie możesz zmienić własnej roli.' };
-    if (target.role === 'owner') return { ok: false, error: 'Nie można zmienić roli właściciela.' };
-    if (target.role !== 'admin') return { ok: false, error: 'Użytkownik nie jest administratorem.' };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (service as any)
-      .from('users')
-      .update({ role: 'accountant', updated_at: new Date().toISOString() })
-      .eq('id', targetUserId);
-
-    if (updateErr) return { ok: false, error: updateErr.message };
-
-    await writeRoleAuditLog({
-      targetUserId,
-      changedBy:    user.id,
-      previousRole: target.role,
-      newRole:      'accountant',
-      reason:       reason ?? null,
-    });
-
-    revalidatePath('/admin/users');
-    return { ok: true, data: undefined };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
-  }
-}
+// ─── Role change actions ────────────────────────────────────────────────────────
+// The "admin" role no longer exists. The only roles are owner (singleton) and
+// accountant (default). Role changes are limited to:
+//   - deactivateUser / reactivateUser (owner can toggle active status)
+//   - syncRolesToCanonical (owner can repair invalid role values → accountant)
+// There is no promoteToAdmin or demoteAdmin anymore.
 
 // ─── getUsersWithRoles ──────────────────────────────────────────────────────────
 
@@ -352,7 +262,7 @@ export async function syncRolesToCanonical(): Promise<RoleActionResult<{
       .from('users')
       .select('id, email, role, company_id');
 
-    const VALID = new Set(['owner', 'admin', 'accountant']);
+    const VALID = new Set(['owner', 'accountant']);
     let updated = 0;
     let skipped = 0;
     const errors: string[] = [];

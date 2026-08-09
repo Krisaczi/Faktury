@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { InvoiceItemSchema } from '@/types/invoice-item';
-import { requireInvoicingPackage } from '@/lib/packages/invoicing-guard';
 
 export async function PATCH(
   req: NextRequest,
@@ -22,13 +21,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['owner', 'admin', 'accountant'].includes(userRecord.role ?? '')) {
+    if (!['owner', 'accountant'].includes(userRecord.role ?? '')) {
       return NextResponse.json({ error: 'Forbidden: insufficient role' }, { status: 403 });
     }
-
-    // Block Starter packages from invoice mutations
-    const invoicingForbidden = await requireInvoicingPackage(userRecord.company_id);
-    if (invoicingForbidden) return invoicingForbidden;
 
     const body = await req.json();
     const parsed = InvoiceItemSchema.safeParse(body);

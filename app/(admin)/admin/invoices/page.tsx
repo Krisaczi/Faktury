@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Plus, BarChart2 } from 'lucide-react';
+import { Plus, ChartBar as BarChart2 } from 'lucide-react';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { AdminInvoiceTable } from '@/components/admin/admin-invoice-table';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
@@ -89,9 +89,19 @@ export default async function AdminInvoicesPage({
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: userRecord } = user
-    ? await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
+    ? await supabase.from('users').select('role, company_id').eq('id', user.id).maybeSingle()
     : { data: null };
-  const role = (userRecord?.role ?? 'member') as AppRole;
+  const role = (userRecord?.role ?? 'accountant') as AppRole;
+
+  let packageType: string | null = null;
+  if (userRecord?.company_id) {
+    const { data: company } = await supabase
+      .from('companies')
+      .select('product_type')
+      .eq('id', userRecord.company_id)
+      .maybeSingle();
+    packageType = company?.product_type ?? null;
+  }
 
   const { rows, totalCount } = await fetchInvoices(searchParams);
 
@@ -108,7 +118,7 @@ export default async function AdminInvoicesPage({
           <BarChart2 className="w-4 h-4" />
           Analityka
         </Link>
-        {canWriteInvoice(role) && (
+        {canWriteInvoice(role, packageType) && (
           <Link
             href="/admin/invoices/new"
             className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-600/20 transition-colors"

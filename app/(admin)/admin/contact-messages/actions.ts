@@ -43,7 +43,7 @@ async function requireAdmin() {
     .maybeSingle();
 
   if (!u?.company_id) throw new Error('Brak przypisanej firmy.');
-  if (!['owner', 'admin'].includes(u.role ?? '')) {
+  if (!['owner'].includes(u.role ?? '')) {
     throw new Error('Tylko administrator może zarządzać wiadomościami.');
   }
 

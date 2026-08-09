@@ -38,7 +38,7 @@ export default async function CompanyDetailPage({
     .eq('id', user.id)
     .maybeSingle();
 
-  const role = (u?.role ?? 'member') as AppRole;
+  const role = (u?.role ?? 'accountant') as AppRole;
   const isOwner = role === 'owner';
   const tenantCompanyId = u?.company_id as string | undefined;
 

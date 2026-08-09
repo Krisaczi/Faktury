@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CircleArrowUp as ArrowUpCircle, CircleArrowDown as ArrowDownCircle } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { promoteToAdmin, demoteAdmin, syncRolesToCanonical } from '@/lib/auth/role-actions';
+import { syncRolesToCanonical } from '@/lib/auth/role-actions';
 import { repairMisassignedOwners } from '@/lib/auth/repair-misassigned-owners';
 import { deactivateUser, reactivateUser } from '@/lib/auth/user-status-actions';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type AppRole } from '@/lib/permissions';
@@ -22,7 +22,6 @@ import type { CompanyUser, RoleChangeLog } from '@/lib/auth/role-actions';
 
 const ROLE_COLORS: Record<AppRole, string> = {
   owner:      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400',
-  admin:      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400',
   accountant: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400',
 };
 
@@ -301,8 +300,6 @@ export interface UsersClientProps {
 }
 
 type ModalAction =
-  | { kind: 'promote'; user: CompanyUser }
-  | { kind: 'demote';  user: CompanyUser }
   | { kind: 'deactivate'; user: CompanyUser }
   | { kind: 'reactivate'; user: CompanyUser }
   | { kind: 'repair' };
@@ -334,7 +331,7 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
     (u.full_name?.toLowerCase() ?? '').includes(search.toLowerCase())
   );
 
-  const roleOrder: AppRole[] = ['owner', 'admin', 'accountant'];
+  const roleOrder: AppRole[] = ['owner', 'accountant'];
   const sorted = [...filtered].sort((a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role));
 
   return (
@@ -465,32 +462,6 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
                   {/* Actions — owner only, not self, not owner row */}
                   {isOwner && !isSelf && !isOwnerRow && (
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Promote to admin — only for active accountants */}
-                      {u.role === 'accountant' && !isInactive && (
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => setModal({ kind: 'promote', user: u })}
-                          className="h-8 px-2 gap-1 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          title="Awansuj na Administratora"
-                        >
-                          <ArrowUpCircle className="w-3.5 h-3.5" />
-                          <span className="hidden md:inline">Admin</span>
-                        </Button>
-                      )}
-
-                      {/* Demote admin → accountant */}
-                      {u.role === 'admin' && !isInactive && (
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => setModal({ kind: 'demote', user: u })}
-                          className="h-8 px-2 gap-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          title="Cofnij do Księgowego"
-                        >
-                          <ArrowDownCircle className="w-3.5 h-3.5" />
-                          <span className="hidden md:inline">Cofnij</span>
-                        </Button>
-                      )}
-
                       {/* Deactivate — active users */}
                       {!isInactive && (
                         <Button
@@ -532,7 +503,7 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Uprawnienia ról</h2>
         </div>
         <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(['admin', 'accountant'] as AppRole[]).map((role) => (
+          {(['owner', 'accountant'] as AppRole[]).map((role) => (
             <div key={role} className="flex items-start gap-3">
               <Badge className={cn('text-xs border flex-shrink-0 mt-0.5', ROLE_COLORS[role])}>
                 {ROLE_LABELS[role]}
@@ -542,7 +513,7 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
           ))}
         </div>
         <p className="px-5 pb-4 text-xs text-slate-400">
-          Tylko właściciel może nadawać i cofać rolę Administratora oraz dezaktywować konta.
+          Tylko właściciel może dezaktywować i reaktywować konta użytkowników.
         </p>
       </div>
 
@@ -550,37 +521,6 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
       <AuditTrail logs={initialLogs} />
 
       {/* Modals */}
-      {modal?.kind === 'promote' && (
-        <ConfirmModal
-          title="Awansuj na Administratora"
-          description="Administrator ma pełny dostęp do fakturowania i może przeglądać dane firmowe."
-          target={modal.user}
-          actionLabel="Awansuj"
-          actionClass="bg-blue-600 hover:bg-blue-700 text-white"
-          icon={<ArrowUpCircle className="w-4 h-4 text-blue-500" />}
-          warning="Administrator uzyskuje pełny dostęp do fakturowania i widoku analitycznego."
-          onClose={closeModal}
-          onConfirm={(reason) => runAction(() => promoteToAdmin({ targetUserId: modal.user.id, reason: reason || undefined }))}
-          isPending={isPending}
-          error={modalError}
-        />
-      )}
-
-      {modal?.kind === 'demote' && (
-        <ConfirmModal
-          title="Cofnij do Księgowego"
-          description="Użytkownik utraci uprawnienia Administratora i zostanie Księgowym."
-          target={modal.user}
-          actionLabel="Cofnij uprawnienia"
-          actionClass="bg-slate-700 hover:bg-slate-800 text-white"
-          icon={<ArrowDownCircle className="w-4 h-4 text-slate-500" />}
-          onClose={closeModal}
-          onConfirm={(reason) => runAction(() => demoteAdmin({ targetUserId: modal.user.id, reason: reason || undefined }))}
-          isPending={isPending}
-          error={modalError}
-        />
-      )}
-
       {modal?.kind === 'deactivate' && (
         <ConfirmModal
           title="Dezaktywuj konto"

@@ -344,7 +344,15 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (!userRecord?.company_id) return NextResponse.json({ error: 'No company' }, { status: 403 });
-    if (!canAccessInvoicing(userRecord.role as AppRole)) {
+
+    const { data: company } = await supabase
+      .from('companies')
+      .select('product_type')
+      .eq('id', userRecord.company_id)
+      .maybeSingle();
+    const packageType = company?.product_type ?? null;
+
+    if (!canAccessInvoicing(userRecord.role as AppRole, packageType)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -27,7 +27,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/onboarding');
   }
 
-  if (!canAccessInvoicing(userRecord.role)) {
+  const { data: company } = await supabase
+    .from('companies')
+    .select('product_type')
+    .eq('id', userRecord.company_id)
+    .maybeSingle();
+  const packageType = company?.product_type ?? null;
+
+  if (!canAccessInvoicing(userRecord.role, packageType)) {
     redirect('/dashboard');
   }
 

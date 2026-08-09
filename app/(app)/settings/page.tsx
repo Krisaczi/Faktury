@@ -709,8 +709,8 @@ export default function SettingsPage() {
     if (profile?.full_name) setFullName(profile.full_name);
   }, [profile?.full_name]);
 
-  const role = settingsData?.role ?? 'member';
-  const isAdmin = ['owner', 'admin'].includes(role);
+  const role = settingsData?.role ?? 'accountant';
+  const isAdmin = ['owner'].includes(role);
 
   const initials = (profile?.full_name ?? user?.email ?? 'U')
     .split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -769,7 +769,7 @@ export default function SettingsPage() {
                       <Badge className="text-xs capitalize bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                         {profile?.role ?? 'user'}
                       </Badge>
-                      {role !== 'member' && (
+                      {role !== 'accountant' && (
                         <Badge className="text-xs capitalize bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                           {role}
                         </Badge>

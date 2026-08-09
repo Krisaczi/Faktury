@@ -33,7 +33,7 @@ export async function getCompanyCard(
   companyId: string,
 ): Promise<PackageActionResult<CompanyCardData>> {
   try {
-    const { supabase } = await requireOwnerOrAdmin(companyId);
+    const { supabase } = await requireOwner(companyId);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: company, error: cErr } = await (supabase as any)
@@ -82,7 +82,7 @@ export async function getCompanyCard(
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
-async function requireOwnerOrAdmin(companyId?: string) {
+async function requireOwner(companyId?: string) {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthenticated');
@@ -94,7 +94,7 @@ async function requireOwnerOrAdmin(companyId?: string) {
     .maybeSingle();
 
   if (!u) throw new Error('Użytkownik nie istnieje.');
-  if (!['owner', 'admin'].includes(u.role ?? '')) {
+  if (u.role !== 'owner') {
     throw new Error('Brak uprawnień do zarządzania pakietami.');
   }
   if (companyId && u.company_id !== companyId && u.role !== 'owner') {
@@ -175,7 +175,7 @@ export async function assignPackageToCompany(
   input: AssignPackageInput,
 ): Promise<PackageActionResult> {
   try {
-    const { user, supabase } = await requireOwnerOrAdmin(companyId);
+    const { user, supabase } = await requireOwner(companyId);
 
     const parsed = AssignPackageSchema.safeParse(input);
     if (!parsed.success) {
@@ -261,7 +261,7 @@ export async function updateIndividualPackageOptions(
   reason?: string,
 ): Promise<PackageActionResult> {
   try {
-    const { user, supabase } = await requireOwnerOrAdmin(companyId);
+    const { user, supabase } = await requireOwner(companyId);
 
     const parsed = IndividualOptionsSchema.safeParse(options);
     if (!parsed.success) {
@@ -328,7 +328,7 @@ export async function selectProduct(input: SelectProductInput): Promise<SelectPr
   const { companyId, productType } = input;
 
   try {
-    const { user, supabase } = await requireOwnerOrAdmin(companyId);
+    const { user, supabase } = await requireOwner(companyId);
 
     if (productType !== 'starter' && productType !== 'professional') {
       return { ok: false, error: 'Nieprawidłowy typ produktu.' };
@@ -397,7 +397,7 @@ export async function upsertPricingTier(input: {
   features: Record<string, unknown>;
 }): Promise<PackageActionResult> {
   try {
-    const { supabase } = await requireOwnerOrAdmin();
+    const { supabase } = await requireOwner();
 
     if (input.id) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

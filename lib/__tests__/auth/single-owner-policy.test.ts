@@ -24,7 +24,7 @@ const KRZYSZTOF_USER_ID = '80c57af9-d139-4934-a105-8380d5ecc831';
 interface SimUser {
   id:         string;
   email:      string;
-  role:       'owner' | 'admin' | 'accountant';
+  role:       'owner' | 'accountant';
   company_id: string | null;
   active:     boolean;
 }
@@ -47,14 +47,14 @@ class SimUserStore {
     return user;
   }
 
-  /** Simulates complete_user_onboarding — must assign 'admin', NOT 'owner' */
+  /** Simulates complete_user_onboarding — must assign 'accountant', NOT 'owner' */
   onboard(userId: string, companyId: string): { ok: boolean; error?: string } {
     const user = this.users.get(userId);
     if (!user) return { ok: false, error: 'User not found' };
     if (user.company_id) return { ok: false, error: 'Already onboarded' };
 
     user.company_id = companyId;
-    user.role = 'admin'; // Onboarding assigns admin, never owner
+    user.role = 'accountant'; // Onboarding assigns accountant, never owner
     return { ok: true };
   }
 
@@ -123,12 +123,12 @@ describe('Single global owner policy', () => {
   });
 
   describe('Onboarding', () => {
-    it('assigns admin role (not owner) after onboarding', () => {
+    it('assigns accountant role (not owner) after onboarding', () => {
       const store = new SimUserStore();
       const user = store.signup('newuser@example.com');
       const result = store.onboard(user.id, 'company-1');
       assert.equal(result.ok, true);
-      assert.equal(store.users.get(user.id)!.role, 'admin');
+      assert.equal(store.users.get(user.id)!.role, 'accountant');
     });
 
     it('onboarding multiple users produces zero owners', () => {
@@ -138,23 +138,23 @@ describe('Single global owner policy', () => {
         store.onboard(user.id, `company-${i}`);
       }
       assert.equal(store.countByRole('owner'), 0);
-      assert.equal(store.countByRole('admin'), 5);
+      assert.equal(store.countByRole('accountant'), 5);
     });
 
     it('package selection (Starter) does not assign owner', () => {
       const store = new SimUserStore();
       const user = store.signup('starter@example.com');
       store.onboard(user.id, 'company-1');
-      // Simulate selecting Starter package — role should stay admin
-      assert.equal(store.users.get(user.id)!.role, 'admin');
+      // Simulate selecting Starter package — role should stay accountant
+      assert.equal(store.users.get(user.id)!.role, 'accountant');
     });
 
     it('package selection (Professional) does not assign owner', () => {
       const store = new SimUserStore();
       const user = store.signup('pro@example.com');
       store.onboard(user.id, 'company-1');
-      // Simulate selecting Professional package — role should stay admin
-      assert.equal(store.users.get(user.id)!.role, 'admin');
+      // Simulate selecting Professional package — role should stay accountant
+      assert.equal(store.users.get(user.id)!.role, 'accountant');
     });
   });
 
@@ -173,7 +173,7 @@ describe('Single global owner policy', () => {
       store.users.set(KRZYSZTOF_USER_ID, {
         id:         KRZYSZTOF_USER_ID,
         email:      'krisaczi@yahoo.com',
-        role:       'admin', // temporarily demoted
+        role:       'accountant', // temporarily demoted
         company_id: 'company-x',
         active:     true,
       });
@@ -188,7 +188,7 @@ describe('Single global owner policy', () => {
       store.users.set(KRZYSZTOF_USER_ID, {
         id:         KRZYSZTOF_USER_ID,
         email:      'krisaczi@yahoo.com',
-        role:       'admin', // temporarily demoted
+        role:       'accountant', // temporarily demoted
         company_id: 'company-x',
         active:     true,
       });
@@ -220,7 +220,7 @@ describe('Single global owner policy', () => {
         store.onboard(user.id, `company-${i}`);
       }
       assert.equal(store.countByRole('owner'), 0);
-      assert.equal(store.countByRole('admin'), 20);
+      assert.equal(store.countByRole('accountant'), 20);
     });
 
     it('exactly one owner after Krzysztof restores his role', () => {
@@ -232,7 +232,7 @@ describe('Single global owner policy', () => {
       store.users.set(KRZYSZTOF_USER_ID, {
         id:         KRZYSZTOF_USER_ID,
         email:      'krisaczi@yahoo.com',
-        role:       'admin',
+        role:       'accountant',
         company_id: 'company-x',
         active:     true,
       });

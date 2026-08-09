@@ -17,8 +17,8 @@ export default async function AdminUsersPage() {
     .eq('id', user.id)
     .maybeSingle();
 
-  // Only owner and admin can access this page
-  if (!u || !['owner', 'admin'].includes(u.role ?? '')) {
+  // Only owner can access this page
+  if (!u || !['owner'].includes(u.role ?? '')) {
     redirect('/dashboard');
   }
 

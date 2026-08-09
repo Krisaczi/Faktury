@@ -114,7 +114,15 @@ export default async function InvoiceAnalyticsPage({
     .maybeSingle();
 
   if (!userRecord?.company_id) redirect('/onboarding');
-  if (!canAccessInvoicing(userRecord.role as AppRole)) redirect('/dashboard');
+
+  const { data: company } = await supabase
+    .from('companies')
+    .select('product_type')
+    .eq('id', userRecord.company_id)
+    .maybeSingle();
+  const packageType = company?.product_type ?? null;
+
+  if (!canAccessInvoicing(userRecord.role as AppRole, packageType)) redirect('/dashboard');
 
   const from = parseDate(searchParams.from);
   const to   = parseDate(searchParams.to);

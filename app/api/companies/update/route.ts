@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    // Only owner or admin can update company info
-    if (!['owner', 'admin'].includes(userRecord.role ?? '')) {
-      return NextResponse.json({ error: 'Admin role required' }, { status: 403 });
+    // Only owner can update company info
+    if (!['owner'].includes(userRecord.role ?? '')) {
+      return NextResponse.json({ error: 'Owner role required' }, { status: 403 });
     }
 
     const body = await req.json();

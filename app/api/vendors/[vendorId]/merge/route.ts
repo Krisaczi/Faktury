@@ -25,9 +25,9 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Merge is admin/owner only
-    if (!['owner', 'admin'].includes(userRecord.role ?? '')) {
-      return NextResponse.json({ error: 'Admin role required' }, { status: 403 });
+    // Merge is owner only
+    if (!['owner'].includes(userRecord.role ?? '')) {
+      return NextResponse.json({ error: 'Owner role required' }, { status: 403 });
     }
 
     const body = await req.json();

@@ -76,7 +76,6 @@ import {
 import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items-section';
 import { InvoiceChargesSection } from '@/components/invoice/invoice-charges-section';
 import { useUserRole } from '@/hooks/use-user-role';
-import { useInvoicingPackage } from '@/hooks/use-invoicing-package';
 import type { BBox } from '@/types/invoice-item';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -752,8 +751,6 @@ export default function InvoiceDetailPage() {
   const [hoveredBBox, setHoveredBBox]           = useState<BBox | null>(null);
   const [hoveredPage, setHoveredPage]           = useState<number | null>(null);
   const { data: userRoleData }                  = useUserRole();
-  const { data: pkgInfo }                       = useInvoicingPackage();
-  const isInvoicingEnabled                      = pkgInfo?.invoicing_enabled ?? false;
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -954,7 +951,7 @@ export default function InvoiceDetailPage() {
 
               {!isLoading && (
                 <div className="flex items-center gap-2 flex-wrap" role="toolbar" aria-label="Invoice actions">
-                  {isInvoicingEnabled && <ReviewDialog onSubmit={handleReview} />}
+                  <ReviewDialog onSubmit={handleReview} />
                   {invoice?.raw_file_url && (
                     <Button
                       size="sm"
@@ -989,18 +986,16 @@ export default function InvoiceDetailPage() {
                     <FileDown className="w-4 h-4" aria-hidden="true" />
                     Pobierz PDF
                   </Button>
-                  {isInvoicingEnabled && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-2 h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                      onClick={() => setDeleteDialogOpen(true)}
-                      aria-label="Delete this invoice"
-                    >
-                      <Trash2 className="w-4 h-4" aria-hidden="true" />
-                      Usuń
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    aria-label="Delete this invoice"
+                  >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    Usuń
+                  </Button>
                 </div>
               )}
 
@@ -1097,24 +1092,6 @@ export default function InvoiceDetailPage() {
 
         {/* ── Body ─────────────────────────────────────────────────────────── */}
         <div className="max-w-6xl mx-auto px-6 py-6">
-
-          {/* Starter plan: read-only banner */}
-          {!isLoading && !isInvoicingEnabled && (
-            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 flex items-center gap-3 mb-6">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                  Tryb tylko do odczytu — pakiet Starter
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                  Możesz przeglądać tę fakturę, ale edycja, flagowanie i usuwanie wymagają pakietu Pro.
-                </p>
-              </div>
-              <Link href="/pricing" className="text-xs font-semibold text-amber-800 dark:text-amber-300 hover:underline shrink-0">
-                Przejdź na Pro &rarr;
-              </Link>
-            </div>
-          )}
 
           {/* Summary stats */}
           {!isLoading && flags.length > 0 && (
@@ -1221,7 +1198,7 @@ export default function InvoiceDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 pt-2">
-                      {isInvoicingEnabled && <ReviewDialog onSubmit={handleReview} />}
+                      <ReviewDialog onSubmit={handleReview} />
                       {invoice?.raw_file_url && (
                         <Button
                           variant="outline" size="sm"
@@ -1334,7 +1311,7 @@ export default function InvoiceDetailPage() {
                             </Badge>
                           )}
                         </CardTitle>
-                        {isInvoicingEnabled && <AddFlagDialog onAdd={handleAddFlag} />}
+                        <AddFlagDialog onAdd={handleAddFlag} />
                       </div>
                     </CardHeader>
                     <CardContent>

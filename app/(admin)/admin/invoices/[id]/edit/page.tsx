@@ -37,14 +37,25 @@ export default async function EditInvoicePage({
 }: {
   params: { id: string };
 }) {
-  // Role guard — viewers cannot reach edit page
+  // Role + package guard — viewers cannot reach edit page
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: userRecord } = user
-    ? await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
+    ? await supabase.from('users').select('role, company_id').eq('id', user.id).maybeSingle()
     : { data: null };
-  const role = (userRecord?.role ?? 'member') as AppRole;
-  if (!canWriteInvoice(role)) redirect(`/admin/invoices/${params.id}`);
+  const role = (userRecord?.role ?? 'accountant') as AppRole;
+
+  let packageType: string | null = null;
+  if (userRecord?.company_id) {
+    const { data: company } = await supabase
+      .from('companies')
+      .select('product_type')
+      .eq('id', userRecord.company_id)
+      .maybeSingle();
+    packageType = company?.product_type ?? null;
+  }
+
+  if (!canWriteInvoice(role, packageType)) redirect(`/admin/invoices/${params.id}`);
 
   const invoice = await fetchInvoice(params.id);
   if (!invoice) notFound();

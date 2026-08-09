@@ -1,11 +1,4 @@
-import {
-  LayoutDashboard,
-  Upload,
-  FileText,
-  ChartBar,
-  Building2,
-  Settings,
-} from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, ChartBar, Building2, Settings } from 'lucide-react';
 import type { AppRole } from '@/lib/permissions';
 
 export interface NavItem {
@@ -20,39 +13,12 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  {
-    href:  '/dashboard',
-    label: 'Dashboard',
-    icon:  LayoutDashboard,
-  },
-  {
-    href:      '/upload',
-    label:     'Upload',
-    icon:      Upload,
-    visibleTo: ['admin', 'accountant'],
-  },
-  {
-    href:  '/invoice',
-    label: 'Invoices',
-    icon:  FileText,
-  },
-  {
-    href:      '/risk-report',
-    label:     'Risk Report',
-    icon:      ChartBar,
-    visibleTo: ['admin', 'accountant'],
-  },
-  {
-    href:      '/vendors',
-    label:     'Vendors',
-    icon:      Building2,
-    visibleTo: ['admin', 'accountant'],
-  },
-  {
-    href:  '/settings',
-    label: 'Settings',
-    icon:  Settings,
-  },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/upload',    label: 'Upload',    icon: Upload,    visibleTo: ['accountant'] },
+  { href: '/invoice',   label: 'Invoices',  icon: FileText },
+  { href: '/risk-report', label: 'Risk Report', icon: ChartBar, visibleTo: ['accountant'] },
+  { href: '/vendors',   label: 'Vendors',   icon: Building2,   visibleTo: ['accountant'] },
+  { href: '/settings',  label: 'Settings',  icon: Settings },
 ];
 
 /** Returns only the items visible for the given role. */

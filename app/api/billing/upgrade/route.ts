@@ -22,8 +22,8 @@ export async function POST() {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    if (!['owner', 'admin'].includes(userRecord.role ?? '')) {
-      return NextResponse.json({ error: 'Admin or owner role required' }, { status: 403 });
+    if (!['owner'].includes(userRecord.role ?? '')) {
+      return NextResponse.json({ error: 'Owner role required' }, { status: 403 });
     }
 
     const { data: company } = await supabase

@@ -55,7 +55,7 @@ async function requireOwnerOrAdmin() {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!row || !['owner', 'admin'].includes(row.role ?? '')) {
+  if (!row || !['owner'].includes(row.role ?? '')) {
     throw new Error('Insufficient permissions.');
   }
 

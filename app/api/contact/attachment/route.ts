@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!u || !['owner', 'admin'].includes(u.role ?? '')) {
+  if (!u || !['owner'].includes(u.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

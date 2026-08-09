@@ -77,7 +77,7 @@ export type Database = {
           id: string;
           email: string;
           company_id: string | null;
-          role: 'owner' | 'admin' | 'member';
+          role: 'owner' | 'accountant';
           created_at: string;
           updated_at: string;
         };
@@ -85,13 +85,13 @@ export type Database = {
           id: string;
           email: string;
           company_id?: string | null;
-          role?: 'owner' | 'admin' | 'member';
+          role?: 'owner' | 'accountant';
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           company_id?: string | null;
-          role?: 'owner' | 'admin' | 'member';
+          role?: 'owner' | 'accountant';
           updated_at?: string;
         };
         Relationships: [];
@@ -102,7 +102,7 @@ export type Database = {
           email: string;
           full_name: string | null;
           avatar_url: string | null;
-          role: 'user' | 'admin' | 'owner';
+          role: 'user' | 'owner';
           created_at: string;
           updated_at: string;
         };
@@ -111,7 +111,7 @@ export type Database = {
           email: string;
           full_name?: string | null;
           avatar_url?: string | null;
-          role?: 'user' | 'admin' | 'owner';
+          role?: 'user' | 'owner';
           created_at?: string;
           updated_at?: string;
         };
@@ -120,7 +120,7 @@ export type Database = {
           email?: string;
           full_name?: string | null;
           avatar_url?: string | null;
-          role?: 'user' | 'admin' | 'owner';
+          role?: 'user' | 'owner';
           updated_at?: string;
         };
         Relationships: [];
@@ -262,12 +262,12 @@ export type Database = {
           file_url: string | null;
           raw_file_url: string | null;
           ksef_reference_number: string | null;
+          is_ksef: boolean;
+          read_only: boolean;
           upload_session_id: string | null;
           overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total: number | null;
           amount_due: number | null;
-          is_ksef: boolean;
-          read_only: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -290,12 +290,12 @@ export type Database = {
           file_url?: string | null;
           raw_file_url?: string | null;
           ksef_reference_number?: string | null;
+          is_ksef?: boolean;
+          read_only?: boolean;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
-          is_ksef?: boolean;
-          read_only?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -315,12 +315,12 @@ export type Database = {
           bank_account?: string | null;
           raw_file_url?: string | null;
           ksef_reference_number?: string | null;
+          is_ksef?: boolean;
+          read_only?: boolean;
           upload_session_id?: string | null;
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
-          is_ksef?: boolean;
-          read_only?: boolean;
           updated_at?: string;
         };
         Relationships: [];

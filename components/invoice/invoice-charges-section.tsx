@@ -27,18 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import {
-  RefreshCw,
-  Check,
-  Pencil,
-  ChevronDown,
-  Receipt,
-  Sparkles,
-  Plus,
-  Trash2,
-  MapPin,
-  AlertTriangle,
-} from 'lucide-react';
+import { RefreshCw, Check, Pencil, ChevronDown, Receipt, Sparkles, Plus, Trash2, MapPin, TriangleAlert as AlertTriangle } from 'lucide-react';
 import {
   useInvoiceCharges,
   type InvoiceCharge,
@@ -79,9 +68,9 @@ export function InvoiceChargesSection({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reconciliation, setReconciliation] = useState<ChargeReconciliation | null>(null);
 
-  const canEdit = ['owner', 'admin', 'accountant'].includes(userRole ?? '');
-  const canConfirm = ['owner', 'admin'].includes(userRole ?? '');
-  const canDelete = ['owner', 'admin'].includes(userRole ?? '');
+  const canEdit = ['owner', 'accountant'].includes(userRole ?? '');
+  const canConfirm = ['owner'].includes(userRole ?? '');
+  const canDelete = ['owner'].includes(userRole ?? '');
   const allConfirmed = charges.length > 0 && charges.every(c => c.confirmed);
 
   const handleParse = useCallback(async () => {

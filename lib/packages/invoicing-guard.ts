@@ -1,63 +1,63 @@
-import { NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { getCompanyPackage } from '@/lib/packages/get-company-package';
-
 /**
- * Resolves the authenticated user + their company_id from the request.
- * Returns a 401 NextResponse if unauthenticated, or the user record on success.
- */
-export async function getRequestUser() {
-  const supabase = await getSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: userRecord } = await supabase
-    .from('users')
-    .select('company_id, role, email')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (!userRecord?.company_id) return null;
-
-  return { user, userRecord, supabase, companyId: userRecord.company_id as string };
-}
-
-export type RequestUser = Awaited<ReturnType<typeof getRequestUser>> extends infer T
-  ? Exclude<T, null>
-  : never;
-
-/**
- * Checks whether the company has invoicing enabled (Pro or Owner).
- * Returns null if allowed, or a 403 NextResponse if the company is on Starter.
+ * Centralized package-based invoicing guard.
+ * Used by all invoice mutation routes (create, update, delete, send).
  *
- * Usage in API routes:
- *   const forbidden = await requireInvoicingPackage(companyId);
- *   if (forbidden) return forbidden;
+ * Rules:
+ *   - Owner: full invoicing regardless of package
+ *   - Accountant on Professional/Pro package: full invoicing
+ *   - Accountant on Starter package: read-only KSeF preview only — NO mutations
  */
-export async function requireInvoicingPackage(
-  companyId: string,
-): Promise<NextResponse | null> {
-  const pkg = await getCompanyPackage(companyId);
-  if (pkg.features.invoicing) return null;
 
-  return NextResponse.json(
-    {
-      error:
-        'Fakturowanie nie jest dostępne w pakiecie Starter. ' +
-        'Możesz przeglądać faktury z KSeF, ale tworzenie, edycja i wysyłka ' +
-        'wymagają pakietu Pro. Przejdź na Pro, aby odblokować pełne fakturowanie.',
-      code: 'INVOICING_NOT_AVAILABLE',
-      upgradeRequired: true,
-    },
-    { status: 403 },
-  );
+export interface ReqUser {
+  role:       string;
+  companyId:  string | null;
+  packageType: string | null;
+}
+
+export interface InvoicingCheckResult {
+  allowed:  boolean;
+  reason?:  string;
+  code?:    string;
+  status?:  number;
 }
 
 /**
- * Returns true if the company has invoicing enabled (Pro or Owner).
- * For use in server components / server actions where you need a boolean.
+ * Returns true if the user is allowed to perform invoice mutations.
+ * Role alone does NOT grant invoicing — package determines it (except owner).
  */
-export async function isInvoicingEnabled(companyId: string): Promise<boolean> {
-  const pkg = await getCompanyPackage(companyId);
-  return pkg.features.invoicing;
+export function requireProForInvoicing(user: ReqUser): InvoicingCheckResult {
+  // Owner bypasses package check
+  if (user.role === 'owner') {
+    return { allowed: true };
+  }
+
+  // Non-accountant roles are not recognized
+  if (user.role !== 'accountant') {
+    return {
+      allowed: false,
+      reason:  'Nieznana rola. Skontaktuj się z obsługą.',
+      code:    'UNKNOWN_ROLE',
+      status:  403,
+    };
+  }
+
+  // Accountant: must be on Professional/Pro package
+  if (user.packageType !== 'professional') {
+    return {
+      allowed: false,
+      reason:  'Fakturowanie jest dostępne tylko w planie Professional. Twój plan Starter pozwala tylko na podgląd faktur z KSeF.',
+      code:    'INVOICING_NOT_AVAILABLE',
+      status:  403,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Returns true if the user can read/preview KSeF invoices (read-only).
+ * All authenticated users with a company can preview KSeF invoices.
+ */
+export function canPreviewKsefInvoices(user: Pick<ReqUser, 'role' | 'companyId'>): boolean {
+  return (user.role === 'owner' || user.role === 'accountant') && !!user.companyId;
 }

@@ -6,23 +6,10 @@ import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { canWriteInvoice, type AppRole } from '@/lib/permissions';
 import { getBuyerCompanyById } from '@/app/(admin)/admin/companies/actions';
-import { isInvoicingEnabled } from '@/lib/packages/invoicing-guard';
 
 export const metadata = { title: 'Admin — Nowa faktura' };
 
-async function getSellerDefaults(buyerCompanyId?: string): Promise<{
-  companyId: string | null;
-  name: string;
-  nip: string;
-  address: string;
-  role: AppRole;
-  buyerDefaults?: {
-    buyer_name?:    string;
-    buyer_nip?:     string;
-    buyer_address?: string;
-    buyer_email?:   string;
-  };
-} | undefined> {
+async function getSellerDefaults(buyerCompanyId?: string) {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return undefined;
@@ -37,7 +24,7 @@ async function getSellerDefaults(buyerCompanyId?: string): Promise<{
 
   const { data: company } = await supabase
     .from('companies')
-    .select('name, nip')
+    .select('name, nip, product_type')
     .eq('id', userRecord.company_id)
     .maybeSingle();
 
@@ -66,11 +53,11 @@ async function getSellerDefaults(buyerCompanyId?: string): Promise<{
   }
 
   return {
-    companyId:     userRecord.company_id,
     name:          company.name,
     nip:           company.nip ?? '',
     address:       '',
-    role:          (userRecord.role ?? 'member') as AppRole,
+    role:          (userRecord.role ?? 'accountant') as AppRole,
+    productType:   company.product_type ?? null,
     buyerDefaults,
   };
 }
@@ -82,15 +69,7 @@ export default async function NewInvoicePage({
 }) {
   const defaults = await getSellerDefaults(searchParams.buyer_company_id);
 
-  if (!canWriteInvoice(defaults?.role)) redirect('/admin/invoices');
-
-  // Block Starter packages from creating invoices
-  if (defaults?.companyId) {
-    const invoicingEnabled = await isInvoicingEnabled(defaults.companyId);
-    if (!invoicingEnabled) {
-      redirect('/admin/invoices?error=starter_no_invoicing');
-    }
-  }
+  if (!canWriteInvoice(defaults?.role, defaults?.productType)) redirect('/admin/invoices');
 
   const sellerDefaults = defaults
     ? { name: defaults.name, nip: defaults.nip, address: defaults.address }

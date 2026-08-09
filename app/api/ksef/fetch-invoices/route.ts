@@ -440,6 +440,8 @@ async function runKsefFetch({
               vendor_id: vendorId,
               invoice_number: inv.invoiceNumber ?? ksefId,
               ksef_reference_number: ksefId,
+              is_ksef: true,
+              read_only: true,
               invoice_date: inv.invoiceDate ?? null,
               issue_date: inv.invoiceDate ?? null,
               due_date: inv.dueDate ?? null,
@@ -453,8 +455,6 @@ async function runKsefFetch({
               bank_account: inv.bankAccount ?? null,
               raw_file_url: urlData?.signedUrl ?? filePath,
               upload_session_id: sessionId,
-              is_ksef: true,
-              read_only: true,
             })
             .select('id, created_at')
             .single();

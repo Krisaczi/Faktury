@@ -50,7 +50,7 @@ export interface CompanySettings {
 
 export interface CompanySettingsResponse {
   company: CompanySettings;
-  role: 'owner' | 'admin' | 'member';
+  role: 'owner' | 'accountant';
 }
 
 export interface BillingStatus {

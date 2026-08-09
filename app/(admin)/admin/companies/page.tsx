@@ -29,7 +29,7 @@ export default async function AdminCompaniesPage({
 
   if (!u?.company_id) redirect('/onboarding');
 
-  const role = (u.role ?? 'member') as AppRole;
+  const role = (u.role ?? 'accountant') as AppRole;
   const isOwner = role === 'owner';
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));

@@ -28,7 +28,7 @@ export default async function ContactMessagesPage({
     .maybeSingle();
 
   if (!u?.company_id) redirect('/onboarding');
-  if (!['owner', 'admin'].includes(u.role ?? '')) {
+  if (!['owner'].includes(u.role ?? '')) {
     redirect('/dashboard');
   }
 

@@ -83,8 +83,8 @@ export function InvoiceLineItemsSection({
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const canEdit = ['owner', 'admin', 'accountant'].includes(userRole ?? '');
-  const canConfirm = ['owner', 'admin'].includes(userRole ?? '');
+  const canEdit = ['owner', 'accountant'].includes(userRole ?? '');
+  const canConfirm = ['owner'].includes(userRole ?? '');
   const allConfirmed = items.length > 0 && items.every(i => i.confirmed);
 
   const handleParse = useCallback(async () => {

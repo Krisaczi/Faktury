@@ -104,7 +104,8 @@ export async function reparseInvoice(
       return { ok: false, error: 'Unauthorized' };
     }
 
-    if (!['owner', 'admin', 'accountant'].includes(userRecord.role ?? '')) {
+    // All authenticated company members (owner + accountant) can trigger reparse
+    if (!['owner', 'accountant'].includes(userRecord.role ?? '')) {
       return { ok: false, error: 'Forbidden: insufficient role' };
     }
 
