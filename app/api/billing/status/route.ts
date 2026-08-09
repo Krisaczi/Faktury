@@ -22,30 +22,27 @@ export async function GET() {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    const { data: billing } = await supabase
-      .from('billing_metadata')
-      .select('plan_name, status, renews_at, ends_at, ls_subscription_id')
-      .eq('company_id', userRecord.company_id)
-      .maybeSingle();
-
     const { data: company } = await supabase
       .from('companies')
-      .select('product_type')
+      .select('product_type, subscription_status')
       .eq('id', userRecord.company_id)
       .maybeSingle();
 
+    const { data: auditHistory } = await supabase
+      .from('billing_audit')
+      .select('*')
+      .eq('company_id', userRecord.company_id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
     const productType = (company?.product_type as 'starter' | 'professional' | null) ?? 'starter';
+    const subscriptionStatus = company?.subscription_status ?? 'active';
 
     return NextResponse.json({
-      billing: billing ?? {
-        plan_name: '—',
-        status: 'active',
-        renews_at: null,
-        ends_at: null,
-        ls_subscription_id: null,
-      },
       product_type: productType,
-      lsConfigured: !!process.env.LEMONSQUEEZY_API_KEY,
+      subscription_status: subscriptionStatus,
+      auditHistory: auditHistory ?? [],
+      canUpgrade: productType === 'starter',
     });
   } catch (err) {
     console.error('[api/billing/status]', err);

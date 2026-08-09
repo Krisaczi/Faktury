@@ -19,6 +19,7 @@ export type Database = {
           subscription_status: string;
           product_type: 'starter' | 'professional';
           package_type: string | null;
+          package_changed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -31,6 +32,7 @@ export type Database = {
           subscription_status?: string;
           product_type?: 'starter' | 'professional';
           package_type?: string | null;
+          package_changed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -42,6 +44,7 @@ export type Database = {
           subscription_status?: string;
           product_type?: 'starter' | 'professional';
           package_type?: string | null;
+          package_changed_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -521,42 +524,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      billing_metadata: {
-        Row: {
-          id: string;
-          company_id: string;
-          ls_subscription_id: string | null;
-          ls_customer_id: string | null;
-          plan_name: string;
-          status: 'active' | 'past_due' | 'cancelled' | 'paused';
-          renews_at: string | null;
-          ends_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          company_id: string;
-          ls_subscription_id?: string | null;
-          ls_customer_id?: string | null;
-          plan_name?: string;
-          status?: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused';
-          renews_at?: string | null;
-          ends_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          ls_subscription_id?: string | null;
-          ls_customer_id?: string | null;
-          plan_name?: string;
-          status?: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused';
-          renews_at?: string | null;
-          ends_at?: string | null;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       settings_audit: {
         Row: {
           id: string;
@@ -868,6 +835,41 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      billing_audit: {
+        Row: {
+          id: string;
+          company_id: string;
+          actor_id: string;
+          old_package: string;
+          new_package: string;
+          provider: string;
+          provider_tx_id: string | null;
+          amount_cents: number | null;
+          currency: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          actor_id: string;
+          old_package?: string;
+          new_package: string;
+          provider?: string;
+          provider_tx_id?: string | null;
+          amount_cents?: number | null;
+          currency?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          old_package?: string;
+          new_package?: string;
+          provider?: string;
+          provider_tx_id?: string | null;
+          amount_cents?: number | null;
+          currency?: string | null;
+        };
+        Relationships: [];
       };
     };
     Views: {

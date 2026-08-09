@@ -35,13 +35,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star } from 'lucide-react';
+import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import {
   useCompanySettings,
   useBillingStatus,
-  useCreateCheckout,
   useUpgradePlan,
   logIngestionEmailCopy,
   type CompanyUpdateInput,
@@ -344,38 +343,22 @@ const planConfig: Record<string, { label: string; badgeClass: string }> = {
   professional: { label: 'Professional', badgeClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
 };
 
-function BillingCard({ isAdmin }: { isAdmin: boolean }) {
+function BillingCard({ role }: { role: string }) {
   const { data, isLoading, error, mutate } = useBillingStatus();
-  const { createCheckout } = useCreateCheckout();
   const { upgradePlan } = useUpgradePlan();
   const { status: demoStatus } = useDemoMode();
-  const [loading, setLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
-  const [billingError, setBillingError] = useState('');
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+  const [billingError, setBillingError] = useState('');
 
-  const billing = data?.billing;
   const productType = data?.product_type ?? 'starter';
-  const lsConfigured = data?.lsConfigured ?? false;
-  const statusCfg = billingStatusConfig[billing?.status ?? 'active'] ?? billingStatusConfig.active;
+  const subscriptionStatus = data?.subscription_status ?? 'active';
+  const canUpgrade = data?.canUpgrade ?? false;
+  const auditHistory = data?.auditHistory;
+  const statusCfg = billingStatusConfig[subscriptionStatus] ?? billingStatusConfig.active;
   const planCfg = planConfig[productType] ?? planConfig.starter;
 
   async function handleUpgrade() {
-    setLoading(true);
-    setBillingError('');
-    try {
-      const url = await createCheckout();
-      if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    } catch (e: unknown) {
-      setBillingError(e instanceof Error ? e.message : 'Failed to open billing portal');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handlePlanUpgrade() {
     setUpgrading(true);
     setBillingError('');
     setUpgradeSuccess(false);
@@ -464,11 +447,7 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
                       : '1 user, 25 vendors, 10 reports/month, invoicing disabled.'}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {billing?.status === 'active' && billing.renews_at && `Renews ${fmt(billing.renews_at)}`}
-                    {billing?.status === 'past_due' && 'Payment failed — please update your payment method'}
-                    {billing?.status === 'cancelled' && billing.ends_at && `Access until ${fmt(billing.ends_at)}`}
-                    {billing?.status === 'paused' && 'Subscription paused'}
-                    {billing?.status === 'active' && !billing.renews_at && statusCfg.label}
+                    {statusCfg.label}
                   </p>
                 </div>
                 <Badge className={cn('text-xs', statusCfg.bg, statusCfg.color)}>
@@ -477,18 +456,42 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
               </div>
             </div>
 
+            {/* Billing history */}
+            {auditHistory && auditHistory.length > 0 && (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Billing History
+                </p>
+                <ul className="space-y-2">
+                  {auditHistory.map((entry) => (
+                    <li key={entry.id} className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                      <span>{fmt(entry.created_at)}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="capitalize">{entry.old_package}</span>
+                        <ArrowUpCircle className="w-3 h-3 text-slate-400" />
+                        <span className="capitalize font-medium text-slate-700 dark:text-slate-300">{entry.new_package}</span>
+                      </span>
+                      {entry.provider_tx_id && (
+                        <span className="font-mono text-slate-400 text-[10px]">{entry.provider_tx_id}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {upgradeSuccess && (
               <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
                 <CheckCircle className="w-4 h-4 text-emerald-500" />
                 <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">
-                  Your plan has been upgraded to Professional.
+                  Your plan has been upgraded to Professional. Invoicing is now enabled.
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* Upgrade button — visible only for Starter */}
-            {productType === 'starter' && (
-              <div className="rounded-xl border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/10 p-4 space-y-3">
+            {/* Upgrade card + plan comparison — visible for Starter when upgrade is allowed */}
+            {productType === 'starter' && canUpgrade && (
+              <div className="rounded-xl border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/10 p-4 space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                     <Star className="w-[18px] h-[18px]" />
@@ -502,48 +505,40 @@ function BillingCard({ isAdmin }: { isAdmin: boolean }) {
                     </p>
                   </div>
                 </div>
-                {isAdmin ? (
-                  <Button
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                    size="sm"
-                    onClick={handlePlanUpgrade}
-                    disabled={upgrading}
-                  >
-                    {upgrading
-                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Upgrading…</>
-                      : <><ArrowUpCircle className="w-4 h-4" />Upgrade to Professional</>}
-                  </Button>
-                ) : (
-                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5" />
-                    Admin or owner role required to upgrade.
-                  </p>
-                )}
-              </div>
-            )}
 
-            {!lsConfigured && null}
+                {/* Plan comparison */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Starter</p>
+                    <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />1 user</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />25 vendors</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />10 reports/month</li>
+                      <li className="flex items-start gap-1.5"><X className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />KSeF preview only (read-only)</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Professional</p>
+                    <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Up to 3 users</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Unlimited vendors and reports</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Full invoicing with KSeF</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Priority support</li>
+                    </ul>
+                  </div>
+                </div>
 
-            {isAdmin && lsConfigured && (
-              <div className="flex gap-2">
                 <Button
-                  variant="outline"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
                   size="sm"
-                  className="gap-2"
                   onClick={handleUpgrade}
-                  disabled={loading}
+                  disabled={upgrading}
                 >
-                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                  Manage Billing
+                  {upgrading
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Upgrading…</>
+                    : <><ArrowUpCircle className="w-4 h-4" />Upgrade to Professional</>}
                 </Button>
               </div>
-            )}
-
-            {!isAdmin && (
-              <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />
-                Admin or owner role required to manage billing.
-              </p>
             )}
           </>
         )}
@@ -809,7 +804,7 @@ export default function SettingsPage() {
             <BankAccountsCard isAdmin={isAdmin} />
 
             {/* Billing */}
-            <BillingCard isAdmin={isAdmin} />
+            <BillingCard role={role} />
 
             {/* KSeF */}
             <KsefCredentialsCard isAdmin={isAdmin} />

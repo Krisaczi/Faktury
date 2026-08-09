@@ -1,8 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/database';
+
+function getAdminClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function POST() {
   try {
+    const admin = getAdminClient();
+
+    // Verify the caller's session using the service client so we can trust
+    // the user id, then perform the upgrade with the same privileged client.
+    const authHeader =
+      typeof Request !== 'undefined'
+        ? undefined
+        : undefined;
+
+    // We need the user's auth token — read it from the incoming request via
+    // the server Supabase client instead.
+    const { getSupabaseServerClient } = await import('@/lib/supabase/server');
     const supabase = await getSupabaseServerClient();
     const {
       data: { user },
@@ -22,11 +43,12 @@ export async function POST() {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    if (!['owner'].includes(userRecord.role ?? '')) {
-      return NextResponse.json({ error: 'Owner role required' }, { status: 403 });
+    if (!['owner', 'accountant'].includes(userRecord.role ?? '')) {
+      return NextResponse.json({ error: 'Owner or accountant role required' }, { status: 403 });
     }
 
-    const { data: company } = await supabase
+    // Read the current package
+    const { data: company } = await admin
       .from('companies')
       .select('product_type, package_type')
       .eq('id', userRecord.company_id)
@@ -36,7 +58,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    const currentType = (company.product_type ?? company.package_type ?? 'starter') as string;
+    const currentType = (company.product_type ?? 'starter') as string;
 
     if (currentType === 'professional') {
       return NextResponse.json({ error: 'Already on Professional plan' }, { status: 409 });
@@ -46,29 +68,44 @@ export async function POST() {
       return NextResponse.json({ error: 'Cannot upgrade from current plan' }, { status: 422 });
     }
 
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
 
-    const { error: updateError } = await supabase
+    // Upgrade the company using the admin (service role) client
+    const { error: upgradeError } = await admin
       .from('companies')
       .update({
         product_type: 'professional',
         package_type: 'professional',
         subscription_status: 'active',
-        updated_at: now,
+        package_changed_at: nowIso,
+        updated_at: nowIso,
       })
       .eq('id', userRecord.company_id);
 
-    if (updateError) {
-      console.error('[billing/upgrade] update error', updateError);
+    if (upgradeError) {
+      console.error('[billing/upgrade] update error', upgradeError);
       return NextResponse.json({ error: 'Failed to upgrade plan' }, { status: 500 });
     }
 
-    await supabase.from('company_package_audit').insert({
+    // Audit log in billing_audit
+    await admin.from('billing_audit').insert({
+      company_id: userRecord.company_id,
+      actor_id: user.id,
+      old_package: 'starter',
+      new_package: 'professional',
+      provider: 'internal',
+      provider_tx_id: null,
+      created_at: nowIso,
+    });
+
+    // Audit log in company_package_audit
+    await admin.from('company_package_audit').insert({
       company_id: userRecord.company_id,
       changed_by: user.id,
-      previous: { product_type: 'starter', package_type: currentType },
+      previous: { product_type: 'starter', package_type: company.package_type ?? 'starter' },
       next: { product_type: 'professional', package_type: 'professional' },
-      reason: 'upgrade_plan',
+      reason: 'self_serve_upgrade',
+      created_at: nowIso,
     });
 
     return NextResponse.json({

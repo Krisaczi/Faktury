@@ -1,6 +1,6 @@
 'use client';
 
-import useSWR, { mutate as globalMutate } from 'swr';
+import useSWR from 'swr';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 async function apiGet<T>(url: string): Promise<T> {
@@ -53,18 +53,24 @@ export interface CompanySettingsResponse {
   role: 'owner' | 'accountant';
 }
 
-export interface BillingStatus {
-  plan_name: string;
-  status: 'active' | 'past_due' | 'cancelled' | 'paused';
-  renews_at: string | null;
-  ends_at: string | null;
-  ls_subscription_id: string | null;
+export interface BillingAuditEntry {
+  id: string;
+  company_id: string;
+  actor_id: string;
+  old_package: string;
+  new_package: string;
+  provider: string;
+  provider_tx_id: string | null;
+  amount_cents: number | null;
+  currency: string | null;
+  created_at: string;
 }
 
 export interface BillingStatusResponse {
-  billing: BillingStatus;
   product_type: 'starter' | 'professional';
-  lsConfigured: boolean;
+  subscription_status: string;
+  auditHistory?: BillingAuditEntry[];
+  canUpgrade?: boolean;
 }
 
 export interface CompanyUpdateInput {
@@ -97,14 +103,6 @@ export function useBillingStatus() {
     () => apiGet<BillingStatusResponse>('/api/billing/status'),
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
-}
-
-export function useCreateCheckout() {
-  async function createCheckout(): Promise<string> {
-    const result = await apiPost<{ checkoutUrl: string }>('/api/billing/checkout');
-    return result.checkoutUrl;
-  }
-  return { createCheckout };
 }
 
 export function useUpgradePlan() {
