@@ -609,7 +609,12 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
           <Shield className="w-4 h-4 text-slate-500" />
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Integracja z KseF</CardTitle>
         </div>
-        <CardDescription>Połącz się z Krajowym Systemem e-Faktur, aby automatycznie pobierać faktury.</CardDescription>
+        <CardDescription>Połącz się z Krajowym Systemem e-Faktur <a
+    href="https://ksef.podatki.gov.pl/aplikacja-podatnika-ksef-20/"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
+  >, aby automatycznie pobierać faktury.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Current token status */}
