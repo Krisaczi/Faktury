@@ -1001,6 +1001,10 @@ export type Database = {
         };
         Returns: number;
       };
+      self_serve_upgrade: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
     };
     Enums: {
     user_role: 

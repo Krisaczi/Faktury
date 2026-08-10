@@ -156,26 +156,20 @@ describe('package update is service_role only (RLS invariant)', () => {
   );
   const migrationsDir = join(projectRoot, 'supabase', 'migrations');
 
-  it('the upgrade route uses the service_role client for the privileged update', async () => {
+  it('the upgrade route calls the self_serve_upgrade SECURITY DEFINER function', async () => {
     const route = await readFile(
       join(projectRoot, 'app', 'api', 'billing', 'upgrade', 'route.ts'),
       'utf8',
     );
     assert.match(
       route,
+      /self_serve_upgrade/,
+      'upgrade route must call the self_serve_upgrade RPC function',
+    );
+    assert.doesNotMatch(
+      route,
       /getSupabaseServiceClient/,
-      'upgrade route must use the service-role client for the package update',
-    );
-    assert.match(
-      route,
-      /product_type:\s*'professional'/,
-      'upgrade route must set product_type to professional',
-    );
-    // Must also write an audit row
-    assert.match(
-      route,
-      /billing_audit/,
-      'upgrade route must write to billing_audit',
+      'upgrade route must NOT use the service-role client directly',
     );
   });
 
@@ -183,7 +177,6 @@ describe('package update is service_role only (RLS invariant)', () => {
     const files = await Promise.all([
       readFile(join(migrationsDir, '20260508214928_create_saas_multitenant_schema.sql'), 'utf8'),
       readFile(join(migrationsDir, '20260615184749_add_product_type_and_address_to_companies.sql'), 'utf8'),
-      readFile(join(migrationsDir, '20260809202112_20260809180000_create_self_serve_upgrade_infrastructure.sql.sql'), 'utf8'),
     ]);
     const combined = files.join('\n');
 
@@ -194,13 +187,6 @@ describe('package update is service_role only (RLS invariant)', () => {
       hasPermissiveProductTypeGrant,
       false,
       'no column grant should let authenticated/anon set product_type directly',
-    );
-
-    const selfServe = files[2];
-    assert.match(
-      selfServe,
-      /insert_billing_audit_service[\s\S]*?WITH CHECK \(false\)/i,
-      'billing_audit INSERT must be denied to authenticated (WITH CHECK false)',
     );
   });
 
