@@ -603,6 +603,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return (
+    <>
     <Card className="border-slate-200 dark:border-slate-800">
       <CardHeader>
         <div className="flex items-center gap-2">
@@ -690,6 +691,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         )}
       </CardContent>
     </Card>
+      </>
   );
 }
 
