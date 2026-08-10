@@ -35,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X } from 'lucide-react';
+import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import {
@@ -548,14 +548,21 @@ function BillingCard({ role }: { role: string }) {
 }
 
 // ─── KSeF credentials card ──────────────────────────────────────────────────────
-function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
+function canManageKSeF(role: string): boolean {
+  return role === 'owner' || role === 'accountant';
+}
+
+function KsefCredentialsCard({ role }: { role: string }) {
   const supabase = getSupabaseBrowserClient();
   const [token, setToken] = useState('');
   const [env, setEnv] = useState<'test' | 'prod'>('test');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [existing, setExisting] = useState<{ environment: string; updated_at: string } | null | undefined>(undefined);
+
+  const canManage = canManageKSeF(role);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -578,22 +585,29 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
     setSaving(true);
     setError('');
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-      const { data: userRecord } = await supabase
-        .from('users').select('company_id').eq('id', user.id).maybeSingle();
-      if (!userRecord?.company_id) throw new Error('No company');
-      const now = new Date().toISOString();
-      const { error: upsertError } = await supabase.from('ksef_credentials').upsert({
-        company_id:   userRecord.company_id,
-        token:        token.trim(),
-        environment:  env,
-        updated_at:   now,
-      }, { onConflict: 'company_id,environment' });
-      if (upsertError) throw upsertError;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/ksef/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ token: token.trim(), environment: env }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save' }));
+        throw new Error(err.error ?? 'Failed to save');
+      }
+
+      const data = await res.json() as { ok: boolean; environment: string; updated_at: string };
       setSaved(true);
       setToken('');
-      setExisting({ environment: env, updated_at: now });
+      setShowToken(false);
+      setExisting({ environment: data.environment, updated_at: data.updated_at });
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -615,6 +629,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
     target="_blank"
     rel="noopener noreferrer"
     aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
+    className=" text-blue-600"
   >(KSeF)</a>, aby automatycznie pobierać faktury.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -644,6 +659,15 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
         )}
         {error && <Alert variant="destructive" className="py-2"><AlertDescription>{error}</AlertDescription></Alert>}
 
+        {canManage && (
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 px-3 py-2">
+            <p className="text-xs text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5" />
+              Możesz zapisać token KSeF dla swojej firmy.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label>Środowisko</Label>
           <div className="flex gap-2">
@@ -651,7 +675,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
               <button
                 key={e}
                 onClick={() => setEnv(e)}
-                disabled={!isAdmin}
+                disabled={!canManage}
                 className={cn(
                   'flex-1 py-2 text-sm rounded-lg border transition-colors capitalize',
                   env === e
@@ -667,19 +691,31 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
 
         <div className="space-y-1.5">
           <Label htmlFor="ksef-token">{existing ? 'Replace Token' : 'API Token'}</Label>
-          <Input
-            id="ksef-token"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder={existing ? 'Paste new token to replace existing' : 'Paste your KSeF API token'}
-            disabled={!isAdmin}
-            className="font-mono text-sm"
-          />
+          <div className="relative">
+            <Input
+              id="ksef-token"
+              type={showToken ? 'text' : 'password'}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={existing ? 'Paste new token to replace existing' : 'Paste your KSeF API token'}
+              disabled={!canManage}
+              className="font-mono text-sm pr-10"
+            />
+            {canManage && token.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowToken((s) => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                aria-label={showToken ? 'Ukryj token' : 'Pokaż token'}
+              >
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
           <p className="text-xs text-slate-400">Token jest przechowywany po stronie serwera i nigdy nie jest zwracany do przeglądarki.</p>
         </div>
 
-        {isAdmin && (
+        {canManage && (
           <Button
             onClick={handleSave}
             disabled={saving || !token.trim()}
@@ -814,7 +850,7 @@ export default function SettingsPage() {
             <BillingCard role={role} />
 
             {/* KSeF */}
-            <KsefCredentialsCard isAdmin={isAdmin} />
+            <KsefCredentialsCard role={role} />
 
             {/* Appearance */}
             <Card className="border-slate-200 dark:border-slate-800">

@@ -410,6 +410,7 @@ export type Database = {
           environment: 'test' | 'prod';
           created_at: string;
           updated_at: string;
+          updated_by: string | null;
         };
         Insert: {
           id?: string;
@@ -418,11 +419,39 @@ export type Database = {
           environment?: 'test' | 'prod';
           created_at?: string;
           updated_at?: string;
+          updated_by?: string | null;
         };
         Update: {
           token?: string;
           environment?: 'test' | 'prod';
           updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      ksef_audit: {
+        Row: {
+          id: string;
+          company_id: string;
+          actor_id: string;
+          field_changed: string;
+          old_value_masked: string | null;
+          new_value_masked: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          actor_id: string;
+          field_changed: string;
+          old_value_masked?: string | null;
+          new_value_masked?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          field_changed?: string;
+          old_value_masked?: string | null;
+          new_value_masked?: string | null;
         };
         Relationships: [];
       };
