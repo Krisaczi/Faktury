@@ -118,9 +118,9 @@ describe('route source invariants', () => {
     assert.match(route, /export\s+async\s+function\s+POST/, 'must export POST');
   });
 
-  it('uses getAuthenticatedUser for session extraction', async () => {
+  it('uses supabase.auth.getUser for session extraction', async () => {
     const route = await readFile(routePath, 'utf8');
-    assert.match(route, /getAuthenticatedUser/, 'must use getAuthenticatedUser');
+    assert.match(route, /auth\.getUser/, 'must use auth.getUser for server-side session validation');
   });
 
   it('does not read company_id from request body', async () => {
@@ -174,12 +174,8 @@ describe('route source invariants', () => {
 
   it('returns 401 for UNAUTHORIZED (not 404)', async () => {
     const route = await readFile(routePath, 'utf8');
-    // The route uses err.status from AuthError, so 401 is in the helper
-    const helper = await readFile(helperPath, 'utf8');
-    assert.match(helper, /401/, 'helper must return 401 for unauthorized');
-    assert.match(helper, /UNAUTHORIZED/, 'helper must use UNAUTHORIZED code');
-    // Route must handle AuthError and use its status
-    assert.match(route, /AuthError/, 'route must handle AuthError');
+    assert.match(route, /401/, 'must return 401 for unauthorized');
+    assert.match(route, /UNAUTHORIZED/, 'must use UNAUTHORIZED code');
   });
 
   it('returns 400 for COMPANY_ID_MISSING', async () => {
@@ -211,36 +207,19 @@ describe('route source invariants', () => {
   });
 });
 
-// ─── 5. getAuthenticatedUser helper invariants ─────────────────────────────────
+// ─── 5. Route auth invariants ──────────────────────────────────────────────────
 
-describe('getAuthenticatedUser helper invariants', () => {
-  it('exports getAuthenticatedUser and AuthError', async () => {
-    const src = await readFile(helperPath, 'utf8');
-    assert.match(src, /export\s+async\s+function\s+getAuthenticatedUser/);
-    assert.match(src, /export\s+class\s+AuthError/);
-  });
-
-  it('reads from supabase.auth.getUser (not client-supplied data)', async () => {
-    const src = await readFile(helperPath, 'utf8');
-    assert.match(src, /auth\.getUser/);
-  });
-
+describe('route auth invariants', () => {
   it('queries the users table for company_id and role', async () => {
-    const src = await readFile(helperPath, 'utf8');
-    assert.match(src, /from\('users'\)/);
-    assert.match(src, /company_id/);
-    assert.match(src, /role/);
-  });
-
-  it('throws AuthError with 401 when no session', async () => {
-    const src = await readFile(helperPath, 'utf8');
-    assert.match(src, /UNAUTHORIZED/);
-    assert.match(src, /401/);
+    const route = await readFile(routePath, 'utf8');
+    assert.match(route, /from\('users'\)/);
+    assert.match(route, /company_id/);
+    assert.match(route, /role/);
   });
 
   it('does not accept company_id from client input', async () => {
-    const src = await readFile(helperPath, 'utf8');
-    assert.doesNotMatch(src, /req\.json|body\.company_id|params\.company_id/i,
+    const route = await readFile(routePath, 'utf8');
+    assert.doesNotMatch(route, /req\.json|body\.company_id|params\.company_id/i,
       'must not read company_id from client input');
   });
 });
