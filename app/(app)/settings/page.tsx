@@ -844,7 +844,7 @@ export default function SettingsPage() {
           {/* Right column */}
           <div className="space-y-6">
             {/* Bank Accounts */}
-            <BankAccountsCard isAdmin={isAdmin} />
+            <BankAccountsCard role={role} />
 
             {/* Billing */}
             <BillingCard role={role} />

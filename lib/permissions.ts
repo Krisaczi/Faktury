@@ -38,6 +38,13 @@ export function canSendToKsef(role: string | null | undefined, packageType: stri
 }
 
 /**
+ * Owner and accountants can manage bank accounts for their own company.
+ */
+export function canManageBankAccounts(role: string | null | undefined): boolean {
+  return role === 'owner' || role === 'accountant';
+}
+
+/**
  * Only the owner can delete invoices.
  */
 export function canDeleteInvoice(role: string | null | undefined): boolean {

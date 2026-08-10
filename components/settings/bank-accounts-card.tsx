@@ -46,16 +46,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { canManageBankAccounts } from '@/lib/permissions';
 import { useCompanyBankAccounts } from '@/hooks/use-bank-accounts';
 import { validateIban, validateBic, normalizeIban, formatIban, maskIban } from '@/lib/validations/iban';
 import type { BankAccountRow, CreateBankAccountInput, UpdateBankAccountPatch } from '@/lib/bank-accounts/types';
 import { maskIbanForDisplay, formatIbanForDisplay } from '@/lib/bank-accounts/types';
 
 interface Props {
-  isAdmin: boolean;
+  role: string;
 }
 
-export function BankAccountsCard({ isAdmin }: Props) {
+export function BankAccountsCard({ role }: Props) {
+  const canManage = canManageBankAccounts(role);
   const {
     accounts,
     isLoading,
@@ -117,7 +119,7 @@ export function BankAccountsCard({ isAdmin }: Props) {
               <BankAccountItem
                 key={account.id}
                 account={account}
-                isAdmin={isAdmin}
+                canManage={canManage}
                 onEdit={() => setEditingId(account.id)}
                 onDelete={() => { setDeleteTarget(account); setDeleteForce(false); }}
                 onSetDefault={async () => {
@@ -142,7 +144,7 @@ export function BankAccountsCard({ isAdmin }: Props) {
         )}
 
         {/* Add button */}
-        {isAdmin && (
+        {canManage && (
           <Button
             variant="outline"
             size="sm"
@@ -154,10 +156,10 @@ export function BankAccountsCard({ isAdmin }: Props) {
           </Button>
         )}
 
-        {!isAdmin && (
+        {!canManage && (
           <p className="text-xs text-slate-400 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
-            Do zarządzania kontami bankowymi wymagana jest rola administratora.
+            Do zarządzania kontami bankowymi wymagana jest rola właściciela lub księgowego.
           </p>
         )}
       </CardContent>
@@ -247,14 +249,14 @@ export function BankAccountsCard({ isAdmin }: Props) {
 
 function BankAccountItem({
   account,
-  isAdmin,
+  canManage,
   onEdit,
   onDelete,
   onSetDefault,
   onVerify,
 }: {
   account: BankAccountRow;
-  isAdmin: boolean;
+  canManage: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onSetDefault: () => void;
@@ -291,7 +293,7 @@ function BankAccountItem({
           )}
         </div>
 
-        {isAdmin && (
+        {canManage && (
           <div className="flex items-center gap-1 shrink-0">
             {!account.is_default && (
               <Button

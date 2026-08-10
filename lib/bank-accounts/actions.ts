@@ -19,7 +19,7 @@ interface AuthContext {
   role: AppRole;
 }
 
-async function requireCompanyAdmin(): Promise<AuthContext> {
+async function requireBankAccountManager(): Promise<AuthContext> {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthenticated');
@@ -33,8 +33,8 @@ async function requireCompanyAdmin(): Promise<AuthContext> {
 
   if (!u?.company_id) throw new Error('No company');
   const role = (u.role ?? 'accountant') as AppRole;
-  if (role !== 'owner') {
-    throw new Error('Brak uprawnień. Wymagana rola owner.');
+  if (role !== 'owner' && role !== 'accountant') {
+    throw new Error('Brak uprawnień. Wymagana rola owner lub accountant.');
   }
 
   return { userId: user.id, companyId: u.company_id as string, role };
@@ -104,7 +104,7 @@ export async function createCompanyBankAccount(
   input: CreateBankAccountInput,
 ): Promise<BankAccountActionResult> {
   try {
-    const { userId, companyId } = await requireCompanyAdmin();
+    const { userId, companyId } = await requireBankAccountManager();
     const supabase = await getSupabaseServerClient();
 
     // Validate IBAN
@@ -175,7 +175,7 @@ export async function updateCompanyBankAccount(
   patch: UpdateBankAccountPatch,
 ): Promise<BankAccountActionResult> {
   try {
-    const { userId, companyId } = await requireCompanyAdmin();
+    const { userId, companyId } = await requireBankAccountManager();
     const supabase = await getSupabaseServerClient();
 
     // Verify account belongs to this company
@@ -247,7 +247,7 @@ export async function deleteCompanyBankAccount(
   force: boolean = false,
 ): Promise<DeleteBankAccountResult> {
   try {
-    const { userId, companyId, role } = await requireCompanyAdmin();
+    const { userId, companyId, role } = await requireBankAccountManager();
     const supabase = await getSupabaseServerClient();
 
     // Verify account belongs to this company
@@ -339,7 +339,7 @@ export async function verifyCompanyBankAccount(
   accountId: string,
 ): Promise<BankAccountActionResult> {
   try {
-    const { userId, companyId } = await requireCompanyAdmin();
+    const { userId, companyId } = await requireBankAccountManager();
     const supabase = await getSupabaseServerClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
