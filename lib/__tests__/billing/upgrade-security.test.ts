@@ -156,15 +156,15 @@ describe('package update is service_role only (RLS invariant)', () => {
   );
   const migrationsDir = join(projectRoot, 'supabase', 'migrations');
 
-  it('the upgrade route uses the service_role key for the privileged update', async () => {
+  it('the upgrade route uses the service_role client for the privileged update', async () => {
     const route = await readFile(
       join(projectRoot, 'app', 'api', 'billing', 'upgrade', 'route.ts'),
       'utf8',
     );
     assert.match(
       route,
-      /SUPABASE_SERVICE_ROLE_KEY/,
-      'upgrade route must authenticate with the service_role key for the package update',
+      /getSupabaseServiceClient/,
+      'upgrade route must use the service-role client for the package update',
     );
     assert.match(
       route,
