@@ -264,7 +264,7 @@ export default function RiskReportPage() {
       <Stack gap="5" className="max-w-7xl">
         {/* Header */}
         <PageHeader
-          title="Risk Report"
+          title="Raport ryzyka"
           description="Paginated invoice risk analysis scoped to your company."
         >
           <Button
@@ -504,13 +504,13 @@ export default function RiskReportPage() {
                         <StateCard
                           variant="empty"
                           icon={FileText}
-                          title="No invoices found"
+                          title="Brak faktur"
                           description={activeFilters.length > 0
-                            ? 'Try adjusting your filters to see results.'
-                            : 'Upload invoices or fetch from KSeF to get started.'}
+                            ? 'Spróbuj zmienić filtry, aby zobaczyć wyniki.'
+                            : 'Prześlij faktury lub pobierz je z KSeF.'}
                           primaryAction={activeFilters.length === 0
-                            ? { label: 'Upload invoices', href: '/upload', icon: Upload, variant: 'default' }
-                            : { label: 'Clear filters', onClick: clearFilters, icon: X }}
+                            ? { label: 'Wczytaj faktury', href: '/upload', icon: Upload, variant: 'default' }
+                            : { label: 'Usuń filtry', onClick: clearFilters, icon: X }}
                         />
                       </td>
                     </tr>
@@ -557,7 +557,7 @@ export default function RiskReportPage() {
                                   <Info className="w-3.5 h-3.5" />
                                 </Link>
                               </TooltipTrigger>
-                              <TooltipContent>View details</TooltipContent>
+                              <TooltipContent>Zobacz szczegóły</TooltipContent>
                             </Tooltip>
                             {row.raw_file_url && (
                               <Tooltip>
@@ -571,7 +571,7 @@ export default function RiskReportPage() {
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </a>
                                 </TooltipTrigger>
-                                <TooltipContent>Download file</TooltipContent>
+                                <TooltipContent>Pobierz plik</TooltipContent>
                               </Tooltip>
                             )}
                           </div>
@@ -599,7 +599,7 @@ export default function RiskReportPage() {
                   variant="empty"
                   icon={FileText}
                   title="No invoices found"
-                  description={activeFilters.length > 0 ? 'Try adjusting your filters.' : 'Upload invoices to get started.'}
+                  description={activeFilters.length > 0 ? 'Spróbuj dostosować filtry.' : 'Prześlij faktury, aby rozpocząć.'}
                   compact
                 />
               ) : (

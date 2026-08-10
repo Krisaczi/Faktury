@@ -94,7 +94,7 @@ export default function VendorsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
-    if (!form.name.trim()) { setFormError('Vendor name is required'); return; }
+    if (!form.name.trim()) { setFormError('Nazwa firmy jest wymagana'); return; }
     setSaving(true);
     try {
       await addVendor({
@@ -107,7 +107,7 @@ export default function VendorsPage() {
       setDialogOpen(false);
       setForm(defaultForm);
     } catch {
-      setFormError('Failed to add vendor. Please try again.');
+      setFormError('Nie udało się dodać dostawcy, spróbuj ponownie.');
     } finally {
       setSaving(false);
     }
@@ -116,8 +116,8 @@ export default function VendorsPage() {
   return (
     <Stack gap="6" className="max-w-5xl">
       <PageHeader
-        title="Vendors"
-        description="Manage your third-party vendor relationships and risk profiles."
+        title="Dostawcy"
+        description="Zarządzaj Twoimi dostawcami oraz oceniaj ich poziom ryzyka."
       >
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -144,7 +144,7 @@ export default function VendorsPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="name">Vendor name *</Label>
+                <Label htmlFor="name">Nazwa firmy *</Label>
                 <Input
                   id="name"
                   value={form.name}
@@ -155,7 +155,7 @@ export default function VendorsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category">Kategoria</Label>
                   <Input
                     id="category"
                     value={form.category}
@@ -164,7 +164,7 @@ export default function VendorsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="risk_score">Risk score (0–100)</Label>
+                  <Label htmlFor="risk_score">Poziom ryzyka (0–100)</Label>
                   <Input
                     id="risk_score"
                     type="number"
@@ -177,7 +177,7 @@ export default function VendorsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="contact_email">Contact email</Label>
+                <Label htmlFor="contact_email">Wmail</Label>
                 <Input
                   id="contact_email"
                   type="email"
@@ -194,9 +194,9 @@ export default function VendorsPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="under_review">Under Review</SelectItem>
+                    <SelectItem value="active">Aktywny</SelectItem>
+                    <SelectItem value="inactive">Nieaktywny</SelectItem>
+                    <SelectItem value="under_review">W trakcie weryfikacji</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -206,7 +206,7 @@ export default function VendorsPage() {
                 </Button>
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={saving}>
                   {saving ? (
-                    <><InlineLoader size="sm" className="mr-2 text-white" />Adding…</>
+                    <><InlineLoader size="sm" className="mr-2 text-white" />Dodawanie…</>
                   ) : 'Add Vendor'}
                 </Button>
               </DialogFooter>
@@ -220,14 +220,14 @@ export default function VendorsPage() {
         <div role="alert" className="flex items-center gap-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
           <p className="text-sm text-red-700 dark:text-red-300 flex-1">
-            Failed to load vendors.
+            Nie udało się wczytać dostawcy.
           </p>
           <Button
             size="sm" variant="ghost"
             onClick={() => refresh()}
             className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 h-7 px-2"
           >
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />Retry
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />Spróbuj ponownie
           </Button>
         </div>
       )}
@@ -253,7 +253,7 @@ export default function VendorsPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <Input
-            placeholder="Search vendors by name or category…"
+            placeholder="Wyszukaj dostawcę po nazwie lub kategorii…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -268,8 +268,8 @@ export default function VendorsPage() {
       ) : error ? (
         <StateCard
           variant="error"
-          title="Could not load vendors"
-          description="There was a problem fetching your vendor list."
+          title="Nie udało się wczytać dostawców"
+          description="Wystąpił problem z pobraniem listy dostawców."
           primaryAction={{ label: 'Retry', onClick: () => refresh(), icon: RefreshCw, variant: 'default' }}
         />
       ) : filtered.length === 0 ? (
@@ -278,17 +278,17 @@ export default function VendorsPage() {
             <StateCard
               variant="empty"
               icon={Building2}
-              title={vendors.length === 0 ? 'No vendors yet' : 'No matching vendors'}
+              title={vendors.length === 0 ? 'Brak dostawców' : 'Brak pasująych dostawców'}
               description={
                 vendors.length === 0
-                  ? 'Add your first vendor to start tracking risk and activity.'
-                  : 'Try a different search term.'
+                  ? 'Dodaj swojego pierwszego dostawcę, aby zacząć monitorować ryzyko i aktywność.'
+                  : 'Spróbuj użyć innego kryterium wyszukiwania.'
               }
               primaryAction={vendors.length === 0
-                ? { label: 'Add first vendor', onClick: () => setDialogOpen(true), icon: Plus, variant: 'default' }
+                ? { label: 'Dodaj pierwszego dostawcę', onClick: () => setDialogOpen(true), icon: Plus, variant: 'default' }
                 : undefined}
               secondaryAction={search
-                ? { label: 'Clear search', onClick: () => setSearch('') }
+                ? { label: 'Wyczyść wyszukiwanie', onClick: () => setSearch('') }
                 : undefined}
             />
           </CardContent>

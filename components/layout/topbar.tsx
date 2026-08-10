@@ -9,11 +9,11 @@ import { Sidebar } from './sidebar';
 import { RoleSwitcher } from './role-switcher';
 
 const pageLabels: Record<string, string> = {
-  '/dashboard':      'Dashboard',
-  '/upload':         'Upload',
-  '/risk-report':    'Risk Report',
-  '/vendors':        'Vendors',
-  '/settings':       'Settings',
+  '/dashboard':      'Pulpit',
+  '/upload':         'Wczytaj faktury',
+  '/risk-report':    'Raporty ryzyka',
+  '/vendors':        'Dostawcy',
+  '/settings':       'Ustawienia',
   '/admin/invoices': 'Faktury wystawione',
 };
 

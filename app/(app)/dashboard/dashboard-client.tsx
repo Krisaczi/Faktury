@@ -162,25 +162,25 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
 
   const kpiCards = [
     {
-      title:     'Invoices Scanned',
+      title:     'Sprawdzone faktury',
       value:     metrics?.total_invoices_30d ?? 0,
-      sub:       'last 30 days',
+      sub:       'w ostatnich 30 dniach',
       icon:      FileText,
       iconBg:    'bg-blue-50 dark:bg-blue-900/20',
       iconColor: 'text-blue-600 dark:text-blue-400',
     },
     {
-      title:     'High-Risk Invoices',
+      title:     'Faktury wysokiego ryzyka',
       value:     metrics?.high_risk_count ?? 0,
-      sub:       `${pctFlagged}% of scanned`,
+      sub:       `${pctFlagged}% sprawdzonych`,
       icon:      AlertTriangle,
       iconBg:    (metrics?.high_risk_count ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20',
       iconColor: (metrics?.high_risk_count ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400',
     },
     {
-      title:     'Est. Savings',
+      title:     'Potencjalne oszczędności',
       value:     metrics ? formatCurrency(metrics.flagged_amount_sum, currency) : formatCurrency(0, currency),
-      sub:       'from flagged invoices',
+      sub:       'ze sprawdzonych faktur',
       icon:      ShieldCheck,
       iconBg:    'bg-emerald-50 dark:bg-emerald-900/20',
       iconColor: 'text-emerald-600 dark:text-emerald-400',
@@ -199,11 +199,11 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
     <Stack gap="6" className="max-w-7xl">
       {/* Header */}
       <PageHeader
-        title={`Good day, ${firstName}`}
+        title={`Witaj, ${firstName}`}
         description={
           companyName
-            ? `Invoice analytics for ${companyName}`
-            : 'Your company invoice analytics overview.'
+            ? `Analiza faktur firmy ${companyName}`
+            : 'Przegląd faktur Twojej firmy.'
         }
       >
         <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
             className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 h-7 px-2"
           >
             <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            Retry
+            Spróbuj ponownie
           </Button>
         </div>
       )}
@@ -259,7 +259,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-                    Invoices Over Time
+                    Twoje faktury
                   </CardTitle>
                   <CardDescription className="mt-0.5">
                     Skanowane i oznaczone faktury z ostatnich 30 dni
@@ -277,10 +277,10 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
                 <StateCard
                   variant="empty"
                   icon={FileText}
-                  title="No invoice data yet"
-                  description="Upload invoices to see activity trends here."
+                  title="Nie przeprocesowano jeszcze żadnych faktur"
+                  description="Wczytaj faktury, żeby zobaczyć ich statusy."
                   compact
-                  primaryAction={{ label: 'Upload invoices', href: '/upload', icon: Upload, variant: 'default' }}
+                  primaryAction={{ label: 'Wczytaj faktury', href: '/upload', icon: Upload, variant: 'default' }}
                 />
               ) : (
                 <div className="animate-fade-in">
@@ -379,8 +379,8 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
                 <StateCard
                   variant="empty"
                   icon={Clock}
-                  title="No recent activity"
-                  description="Actions and events will appear here."
+                  title="Brak aktywności"
+                  description="Tu pojawi rejestr Twoich działań."
                   compact
                 />
               ) : (
@@ -423,16 +423,16 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
       <Card className="border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-            Szybkie działania
+            Skróty
           </CardTitle>
         </CardHeader>
         <CardContent>
           <HStack gap="3" wrap>
             {[
-              { label: 'Upload Invoice',   href: '/upload',      icon: Upload },
-              { label: 'View Risk Report', href: '/risk-report', icon: FileBarChart2 },
-              { label: 'Manage Vendors',   href: '/vendors',     icon: Building2 },
-              { label: 'Account Settings', href: '/settings',    icon: Settings },
+              { label: 'Wczytaj faktury',   href: '/upload',      icon: Upload },
+              { label: 'Raport ryzyka', href: '/risk-report', icon: FileBarChart2 },
+              { label: 'Dostawcy',   href: '/vendors',     icon: Building2 },
+              { label: 'Ustawienia', href: '/settings',    icon: Settings },
             ].map(({ label, href, icon: Icon }) => (
               <a
                 key={href}
