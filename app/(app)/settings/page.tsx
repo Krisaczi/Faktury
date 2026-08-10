@@ -48,6 +48,7 @@ import {
 import { DemoGuard, DemoTooltip } from '@/components/layout/demo-banner';
 import { useDemoMode } from '@/components/providers/demo-provider';
 import { BankAccountsCard } from '@/components/settings/bank-accounts-card';
+import { ChangePasswordModal } from '@/components/settings/change-password-modal';
 
 // ─── Zod schema ────────────────────────────────────────────────────────────────
 const companySchema = z.object({
@@ -742,6 +743,7 @@ export default function SettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     if (profile?.full_name) setFullName(profile.full_name);
@@ -887,8 +889,12 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Zmiana hasła</p>
                     <p className="text-xs text-slate-400 dark:text-slate-500">Zaktualizuj hasło do swojego konta</p>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <a href="/forgot-password">Zresetuj hasło</a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setChangePasswordOpen(true)}
+                  >
+                    Zmień hasło
                   </Button>
                 </div>
                 <Separator />
@@ -897,6 +903,8 @@ export default function SettingsPage() {
             </Card>
           </div>
         </div>
+
+        <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       </div>
     </TooltipProvider>
   );
