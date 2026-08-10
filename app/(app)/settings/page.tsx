@@ -615,7 +615,7 @@ function KsefCredentialsCard({ isAdmin }: { isAdmin: boolean }) {
     target="_blank"
     rel="noopener noreferrer"
     aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
-  >, aby automatycznie pobierać faktury.</CardDescription>
+  >(KSeF)</a>, aby automatycznie pobierać faktury.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Current token status */}
