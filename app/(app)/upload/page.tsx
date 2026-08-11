@@ -142,10 +142,10 @@ function ParseSummaryCard({ jobId }: { jobId: string }) {
             <>
               <div className="grid grid-cols-3 gap-3 mb-3">
                 {[
-                  { label: 'Invoices created', value: r.invoicesCreated ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
-                  { label: 'Risk flags',       value: r.flagsCreated ?? 0,   color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Utworzone faktury', value: r.invoicesCreated ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
+                  { label: 'Poziomy ryzyka',       value: r.flagsCreated ?? 0,   color: 'text-amber-600 dark:text-amber-400' },
                   {
-                    label: 'Errors',
+                    label: 'Błędy',
                     value: r.errorCount ?? 0,
                     color: (r.errorCount ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400',
                   },
@@ -159,7 +159,7 @@ function ParseSummaryCard({ jobId }: { jobId: string }) {
 
               {hasErrors && r.errors && r.errors.length > 0 && (
                 <div className="space-y-1.5 mt-2">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Parsing errors:</p>
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Błąd przetwarzania danych:</p>
                   <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-red-100 dark:border-red-900/30">
                     {r.errors.map((e, i) => (
                       <div key={i} className="flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 px-3 py-2">
@@ -195,16 +195,16 @@ export default function UploadPage() {
   const handleKsefFetch = useCallback(() => {
     setDateError(null);
     if (!ksefStartDate || !ksefEndDate) {
-      setDateError('Please select both a start and end date.');
+      setDateError('Proszę wybrać zarówno datę rozpoczęcia, jak i zakończenia.');
       return;
     }
     if (ksefStartDate > ksefEndDate) {
-      setDateError('Start date must be before or equal to end date.');
+      setDateError('Data rozpoczęcia musi być wcześniejsza lub równa dacie zakończenia.');
       return;
     }
     const diffDays = (new Date(ksefEndDate).getTime() - new Date(ksefStartDate).getTime()) / (1000 * 60 * 60 * 24);
     if (diffDays > 89) {
-      setDateError('Date range cannot exceed 89 days (KSeF limit).');
+      setDateError('Zakres dat nie może przekraczać 89 dni (limit KSeF).');
       return;
     }
     fetchFromKSeF({ startDate: ksefStartDate, endDate: ksefEndDate });
@@ -235,12 +235,12 @@ export default function UploadPage() {
   return (
     <Stack gap="6" className="max-w-3xl mx-auto">
       <PageHeader
-        title="Upload Invoices"
-        description={`Upload invoice files or fetch directly from KSeF. Supported: ${ACCEPTED_LABELS.join(', ')}.`}
+        title="Wczytaj faktury"
+        description={`Prześlij pliki faktur lub pobierz je bezpośrednio z KSeF. Obsługiwane: ${ACCEPTED_LABELS.join(', ')}.`}
       />
 
       {/* Drop Zone */}
-      <DemoGuard message="File uploads are disabled in Demo Mode. Sign up to upload your own invoices.">
+      <DemoGuard message="W trybie demonstracyjnym przesyłanie plików jest wyłączone. Zarejestruj się, aby przesłać własne faktury.">
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -270,7 +270,7 @@ export default function UploadPage() {
               <Upload className={cn('w-6 h-6 transition-colors', dragging ? 'text-blue-600' : 'text-slate-500 group-hover:text-blue-500')} />
             </div>
             <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              {dragging ? 'Drop files here' : 'Drag & drop files, or click to browse'}
+              {dragging ? 'Upuść pliki tutaj' : 'Przeciągnij i upuść pliki lub kliknij, aby je wybrać'}
             </p>
             <p className="text-xs text-slate-400 mt-1.5">
               {ACCEPTED_LABELS.join(', ')} · max {MAX_MB} MB per file
@@ -288,21 +288,21 @@ export default function UploadPage() {
               <CloudDownload className="w-4 h-4 text-slate-600 dark:text-slate-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">Fetch from KSeF</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Pobierz faktury z KSeF</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                Retrieve XML invoices from the Krajowy System e-Faktur. Select a date range (max 89 days).
+                Pobierz faktury XML z Krajowego Systemu e-Faktur. Wybierz zakres dat (maks. 89 dni).
               </p>
             </div>
           </div>
 
           {/* Date range inputs */}
-          <DemoGuard message="KSeF fetch is disabled in Demo Mode.">
+          <DemoGuard message="Pobieranie danych z KSeF jest wyłączone w trybie demonstracyjnym.">
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="ksef-start" className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                     <Calendar className="w-3 h-3" />
-                    Start date
+                    Data od
                   </Label>
                   <Input
                     id="ksef-start"
@@ -317,7 +317,7 @@ export default function UploadPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="ksef-end" className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                     <Calendar className="w-3 h-3" />
-                    End date
+                    Data do
                   </Label>
                   <Input
                     id="ksef-end"
@@ -348,8 +348,8 @@ export default function UploadPage() {
                 className="w-full border-slate-200 dark:border-slate-700 h-8"
               >
                 {ksefLoading
-                  ? <><InlineLoader size="xs" className="mr-1.5 text-slate-500" />Fetching…</>
-                  : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Fetch invoices</>}
+                  ? <><InlineLoader size="xs" className="mr-1.5 text-slate-500" />Pobieranie…</>
+                  : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Pobierz faktury</>}
               </Button>
             </div>
           </DemoGuard>
@@ -363,10 +363,10 @@ export default function UploadPage() {
             <div className="flex items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">
-                  Files ({files.length})
+                  Pliki ({files.length})
                 </CardTitle>
                 <CardDescription className="mt-0.5">
-                  {doneCount} done · {errorCount} error{errorCount !== 1 ? 's' : ''} · {pendingCount} queued
+                  {doneCount} gotowe · {errorCount} error{errorCount !== 1 ? 's' : ''} · {pendingCount} w kolejce
                 </CardDescription>
               </div>
               <Button
@@ -376,14 +376,14 @@ export default function UploadPage() {
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 h-8 px-2"
               >
                 <X className="w-4 h-4 mr-1" />
-                Clear all
+                Wyczyść wszystko
               </Button>
             </div>
 
             {isUploading && (
               <div className="mt-2 space-y-1" aria-live="polite" aria-label="Upload progress">
                 <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>Overall progress</span>
+                  <span>Postęp</span>
                   <span className="tabular font-medium">{totalProgress}%</span>
                 </div>
                 <ProgressBar value={totalProgress} status="uploading" />
@@ -461,14 +461,14 @@ export default function UploadPage() {
             <>
               <Separator />
               <CardContent className="pt-3 pb-4">
-                <DemoGuard message="File uploads are disabled in Demo Mode." className="w-full">
+                <DemoGuard message="Przesyłanie plików jest wyłączone w trybie demonstracyjnym." className="w-full">
                   <Button
                     onClick={uploadAll}
                     disabled={isUploading}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10"
                   >
                     {isUploading ? (
-                      <><InlineLoader size="sm" className="mr-2 text-white" />Uploading…</>
+                      <><InlineLoader size="sm" className="mr-2 text-white" />Wczytywanie…</>
                     ) : (
                       <><Upload className="w-4 h-4 mr-2" />Upload {pendingCount} file{pendingCount !== 1 ? 's' : ''}</>
                     )}
@@ -489,17 +489,17 @@ export default function UploadPage() {
           {
             icon: FileCode2,
             title: 'XML / KSeF',
-            body:  'FA (Faktura) and UBL 2.1 formats are detected automatically. Multiple invoices per file are supported.',
+            body:  'Formaty FA (faktura) i UBL 2.1 są wykrywane automatycznie. Obsługiwane jest wiele faktur w jednym pliku.',
           },
           {
             icon: Info,
-            title: 'Other formats',
-            body:  'CSV, PDF, and ZIP files are stored and catalogued. Manual field review may be needed.',
+            title: 'Inne formaty',
+            body:  'Pliki CSV, PDF i ZIP są przechowywane i katalogowane. Może być wymagana ręczna weryfikacja pól.',
           },
           {
             icon: ShieldAlert,
-            title: 'Risk analysis',
-            body:  'Each parsed invoice is automatically checked for missing NIP, high value, and suspicious bank accounts.',
+            title: 'Analiza ryzyka',
+            body:  'Każda przetworzona faktura jest automatycznie weryfikowana pod kątem braku numeru NIP, wysokiej wartości oraz podejrzanych rachunków bankowych.',
           },
         ].map(({ icon: Icon, title, body }) => (
           <div

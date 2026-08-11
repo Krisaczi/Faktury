@@ -126,14 +126,14 @@ export default function VendorsPage() {
               onClick={() => { setForm(defaultForm); setFormError(''); }}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Vendor
+              Dadaj dostawcę
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Add Vendor</DialogTitle>
+              <DialogTitle>Dadaj dostawcę</DialogTitle>
               <DialogDescription>
-                Enter details about your new vendor relationship.
+                Wpisz dane dostawcy.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 py-2">
@@ -177,7 +177,7 @@ export default function VendorsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="contact_email">Wmail</Label>
+                <Label htmlFor="contact_email">Email</Label>
                 <Input
                   id="contact_email"
                   type="email"
@@ -207,7 +207,7 @@ export default function VendorsPage() {
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={saving}>
                   {saving ? (
                     <><InlineLoader size="sm" className="mr-2 text-white" />Dodawanie…</>
-                  ) : 'Add Vendor'}
+                  ) : 'Dadaj dostawcę'}
                 </Button>
               </DialogFooter>
             </form>

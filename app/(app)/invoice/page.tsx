@@ -249,8 +249,8 @@ export default function InvoicesPage() {
   return (
     <Stack gap="6" className="max-w-6xl">
       <PageHeader
-        title="Invoices"
-        description="Browse, search, and review all imported invoices."
+        title="Faktury"
+        description="Przeglądaj, wyszukuj i sprawdzaj wszystkie wczytane faktury."
       >
         <div className="flex items-center gap-2">
           <Button
@@ -291,7 +291,7 @@ export default function InvoicesPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <Input
-            placeholder="Search by invoice number or vendor…"
+            placeholder="Wyszukaj po numerze faktury lub nazwie dostawcy…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9"
@@ -363,24 +363,24 @@ export default function InvoicesPage() {
       ) : error ? (
         <StateCard
           variant="error"
-          title="Could not load invoices"
-          description="There was a problem fetching your invoice list."
+          title="Nie udało się wczytać faktur"
+          description="Wystąpił problem z pobraniem listy faktur."
           primaryAction={{ label: 'Retry', onClick: () => mutate(), icon: RefreshCw, variant: 'default' }}
         />
       ) : rows.length === 0 ? (
         <StateCard
           variant="empty"
           icon={FileText}
-          title={hasFilters ? 'No matching invoices' : 'No invoices yet'}
+          title={hasFilters ? 'Brak pasujących faktur' : 'Brak faktur'}
           description={
             hasFilters
-              ? 'Try adjusting your filters or search term.'
-              : 'Upload your first invoice to get started.'
+              ? 'Zmień kryteria wyszukiwania.'
+              : 'Prześlij swoją pierwszą fakturę, aby rozpocząć.'
           }
           primaryAction={
             hasFilters
-              ? { label: 'Clear filters', onClick: clearFilters, variant: 'outline' }
-              : { label: 'Upload invoices', onClick: () => { window.location.href = '/upload'; }, icon: FileText, variant: 'default' }
+              ? { label: 'Usuń filtry', onClick: clearFilters, variant: 'outline' }
+              : { label: 'Wczytaj faktury', onClick: () => { window.location.href = '/upload'; }, icon: FileText, variant: 'default' }
           }
         />
       ) : (
