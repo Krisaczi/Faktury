@@ -625,23 +625,29 @@ function KsefCredentialsCard({ role }: { role: string }) {
           <Shield className="w-4 h-4 text-slate-500" />
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Integracja z KseF</CardTitle>
         </div>
-        <CardDescription>Połącz się z Krajowym Systemem e-Faktur <a
-    href="https://ksef.podatki.gov.pl/aplikacja-podatnika-ksef-20/"
-    target="_blank"
-    rel="noopener noreferrer"
-    aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
-    className=" text-blue-600"
-  >(KSeF)</a>, aby automatycznie pobierać faktury.
-        <br></br>
-         Nie wiesz jak wygenerować token w KSeF?{" "}
-  <a
-    href="/docs/jak-wygenerowac-token-ksef.pdf"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="text-blue-600 underline hover:text-blue-700"
-  >
-    Zobacz jak to zrobić.
-  </a>
+        <CardDescription>
+          Połącz się z Krajowym Systemem e-Faktur{" "}
+          <a
+            href="https://ksef.podatki.gov.pl/aplikacja-podatnika-ksef-20/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
+            className="text-blue-600 hover:text-blue-700"
+          >
+            (KSeF)
+          </a>
+          , aby automatycznie pobierać faktury.
+          <br />
+          Nie wiesz jak wygenerować token w KSeF?{" "}
+          <a
+            href="/docs/jak-wygenerowac-token-ksef.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Zobacz jak wygenerować token KSeF — otwiera instrukcję PDF w nowej karcie"
+            className="text-blue-600 underline hover:text-blue-700"
+          >
+            Zobacz jak to zrobić.
+          </a>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
