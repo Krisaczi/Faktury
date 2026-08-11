@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import { CustomPricingSchema } from '@/app/(admin)/admin/owner/types';
 import type {
   OwnerDashboardData,
@@ -71,6 +71,9 @@ export async function getOwnerDashboard(trendMonths = 12): Promise<OwnerDashboar
     custom_pricing:      r.custom_pricing as CustomPricing | null,
     subscription_status: String(r.subscription_status ?? 'active'),
     product_type:        (r.product_type as 'starter' | 'professional' | null) ?? null,
+    plan:                String(r.plan ?? 'starter'),
+    plan_changed_at:     r.plan_changed_at ? String(r.plan_changed_at) : null,
+    plan_changed_by:     r.plan_changed_by ? String(r.plan_changed_by) : null,
     created_at:          String(r.created_at ?? ''),
     invoices_30d:        Number(r.invoices_30d  ?? 0),
     invoices_90d:        Number(r.invoices_90d  ?? 0),
@@ -275,4 +278,83 @@ export async function getOwnerAuditLogs(limit = 50): Promise<OwnerAuditLog[]> {
     .limit(limit);
 
   return (data ?? []) as OwnerAuditLog[];
+}
+
+// ─── CHANGE COMPANY PLAN ──────────────────────────────────────────────────────
+
+const ALLOWED_PLANS = ['starter', 'pro', 'trial', 'cancelled'] as const;
+type AllowedPlan = typeof ALLOWED_PLANS[number];
+
+export async function changeCompanyPlan(
+  companyId: string,
+  newPlan: string,
+  reason?: string,
+): Promise<OwnerActionResult> {
+  try {
+    const { user, supabase } = await requireOwnerUser();
+
+    if (!ALLOWED_PLANS.includes(newPlan as AllowedPlan)) {
+      return { ok: false, error: `Nieprawidłowy plan. Dostępne: ${ALLOWED_PLANS.join(', ')}.` };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: prev } = await (supabase as any)
+      .from('companies')
+      .select('plan')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    if (!prev) return { ok: false, error: 'Firma nie istnieje.' };
+
+    const oldPlan = prev.plan ?? 'starter';
+    if (oldPlan === newPlan) {
+      return { ok: false, error: 'Nowy plan jest taki sam jak obecny.' };
+    }
+
+    // Update companies.plan with audit columns
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from('companies')
+      .update({
+        plan: newPlan,
+        plan_changed_at: new Date().toISOString(),
+        plan_changed_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId);
+
+    if (updateError) return { ok: false, error: updateError.message };
+
+    // Insert into company_plan_audit via service role (RLS may block owner insert
+    // if the owner's company_id doesn't match the target company)
+    const serviceClient = getSupabaseServiceClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: auditError } = await (serviceClient as any)
+      .from('company_plan_audit')
+      .insert({
+        company_id: companyId,
+        actor_id: user.id,
+        old_plan: oldPlan,
+        new_plan: newPlan,
+        reason: reason ?? null,
+      });
+
+    if (auditError) {
+      console.error(JSON.stringify({
+        event: 'company_plan_audit_failed',
+        companyId,
+        actorId: user.id,
+        oldPlan,
+        newPlan,
+        error: auditError.message,
+        timestamp: new Date().toISOString(),
+      }));
+    }
+
+    await writeAudit(supabase, user.id, 'change_company_plan', companyId, { plan: oldPlan }, { plan: newPlan, reason });
+    revalidatePath('/admin/owner');
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
 }

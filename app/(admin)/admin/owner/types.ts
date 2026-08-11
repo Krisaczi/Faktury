@@ -33,7 +33,10 @@ export interface CompanyDashboardRow {
   pricing_tier_id:     string | null;
   custom_pricing:      CustomPricing | null;
   subscription_status: string;
+  plan:                string;
   product_type:        'starter' | 'professional' | null;
+  plan_changed_at:     string | null;
+  plan_changed_by:     string | null;
   created_at:          string;
   invoices_30d:        number;
   invoices_90d:        number;

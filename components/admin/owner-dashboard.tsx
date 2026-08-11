@@ -23,6 +23,7 @@ import {
   assignPricingTier,
   bulkAssignPricingTier,
   bulkDeactivateCompanies,
+  changeCompanyPlan,
 } from '@/app/(admin)/admin/owner/actions';
 import type {
   OwnerDashboardData,
@@ -287,6 +288,48 @@ function PricingModal({
   );
 }
 
+// ─── Plan badge helpers ───────────────────────────────────────────────────────
+
+const PLAN_LABELS: Record<string, string> = {
+  starter:    'Starter',
+  pro:        'Pro',
+  trial:      'Trial',
+  cancelled:  'Anulowany',
+};
+
+const PLAN_BADGE_CLASS: Record<string, string> = {
+  starter:    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
+  pro:        'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
+  trial:      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800',
+  cancelled:  'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
+};
+
+function PlanBadge({ plan, changedAt }: { plan: string; changedAt?: string | null }) {
+  const label = PLAN_LABELS[plan] ?? 'Unknown';
+  const cls = PLAN_BADGE_CLASS[plan] ?? 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+
+  if (plan === 'unknown' || !plan) {
+    return (
+      <span
+        className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium', cls)}
+        title="Plan nieustawiony — skontaktuj się z supportem"
+      >
+        <ShieldAlert className="w-3 h-3" />
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn('inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-medium', cls)}
+      title={changedAt ? `Ostatnia zmiana: ${fmtDate(changedAt)}` : undefined}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Companies table ──────────────────────────────────────────────────────────
 
 function CompaniesTable({
@@ -518,11 +561,10 @@ function CompaniesTable({
                   })()}
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
-                  {company.pricing_tier_name
-                    ? <Badge variant="secondary" className="text-[10px] font-medium">{company.pricing_tier_name}</Badge>
-                    : company.custom_pricing
-                      ? <Badge variant="secondary" className="text-[10px] font-medium bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400">Niestandardowy</Badge>
-                      : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
+                  <PlanBadge
+                    plan={company.plan ?? 'unknown'}
+                    changedAt={company.plan_changed_at}
+                  />
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300 hidden lg:table-cell">
                   {company.invoices_30d}
