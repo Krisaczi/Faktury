@@ -380,9 +380,9 @@ function BillingCard({ role }: { role: string }) {
       <CardHeader>
         <div className="flex items-center gap-2">
           <CreditCard className="w-4 h-4 text-slate-500" />
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Billing & Plan</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Twój Pakiet</CardTitle>
         </div>
-        <CardDescription>Manage your subscription and billing details.</CardDescription>
+        <CardDescription>Zarządzaj swoim pakietem.</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -397,8 +397,8 @@ function BillingCard({ role }: { role: string }) {
           <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/10 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Demo Plan</p>
-                <p className="text-xs text-slate-500 mt-0.5">Exploring with sample data — billing not active</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Pakiet Demo</p>
+                <p className="text-xs text-slate-500 mt-0.5">Zobacz jak to działa z użyciem przykładowych danych — rozliczanie nieaktywne</p>
               </div>
               <Badge className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">
                 Demo
@@ -406,7 +406,7 @@ function BillingCard({ role }: { role: string }) {
             </div>
             <div className="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 rounded-lg px-3 py-2.5">
               <FlaskConical className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>Sign up for a free account to access all billing features and keep your data.</span>
+              <span>Zarejestruj się, aby bezpłatnie korzystać przez pierwsze 7 dni. Dostęp do wszystkich funkcji rozliczeniowych. Jeżeli się zdecydujesz dane Twojej firmy pozostaną w aplikacji</span>
             </div>
             <DemoTooltip message="Billing management is disabled in Demo Mode.">
               <Button
@@ -414,7 +414,7 @@ function BillingCard({ role }: { role: string }) {
                 size="sm"
               >
                 <Zap className="w-4 h-4" />
-                Upgrade to Pro
+                Ulpesz swój pakiet do Pro
               </Button>
             </DemoTooltip>
           </div>
@@ -426,7 +426,7 @@ function BillingCard({ role }: { role: string }) {
         ) : error ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            Failed to load billing info.
+            Nie udało się wczytać informacji rozliczeniowych.
           </div>
         ) : (
           <>
@@ -436,7 +436,7 @@ function BillingCard({ role }: { role: string }) {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      Current Plan
+                      Obecny Pakiet
                     </p>
                     <Badge className={cn('text-xs capitalize', planCfg.badgeClass)}>
                       {planCfg.label}
@@ -485,7 +485,7 @@ function BillingCard({ role }: { role: string }) {
               <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
                 <CheckCircle className="w-4 h-4 text-emerald-500" />
                 <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">
-                  Your plan has been upgraded to Professional. Invoicing is now enabled.
+                  Twój plan został podniesiony do wersji Professional. Fakturowanie zostanie włączone po odświeżeniu strony.
                 </AlertDescription>
               </Alert>
             )}
@@ -499,10 +499,10 @@ function BillingCard({ role }: { role: string }) {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      Upgrade to Professional
+                      Ulepsz swój pakiet to Pro
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Get up to 3 users, unlimited vendors and reports, and full invoicing with KSeF.
+                      Zyskaj dostęp dla maksymalnie 3 użytkowników, nielimitowaną liczbę dostawców i raportów oraz pełną obsługę fakturowania z KSeF.
                     </p>
                   </div>
                 </div>
@@ -512,19 +512,19 @@ function BillingCard({ role }: { role: string }) {
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-3 space-y-2">
                     <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Starter</p>
                     <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />1 user</li>
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />25 vendors</li>
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />10 reports/month</li>
-                      <li className="flex items-start gap-1.5"><X className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />KSeF preview only (read-only)</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />1 użytkownik</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />25 dostawców</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />10 raportów miesięcznie</li>
+                      <li className="flex items-start gap-1.5"><X className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />Podgląd faktur z KSeF (tylko do odczytu)</li>
                     </ul>
                   </div>
                   <div className="rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">
-                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Professional</p>
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Profesjonalny</p>
                     <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Up to 3 users</li>
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Unlimited vendors and reports</li>
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Full invoicing with KSeF</li>
-                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Priority support</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Maks 3 users</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Nielimitowana liczba dostawców i generowanych raportów</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Możliwość wystawiania faktur w KSeF</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Priorytetowe wsparcie</li>
                     </ul>
                   </div>
                 </div>
@@ -644,10 +644,10 @@ function KsefCredentialsCard({ role }: { role: string }) {
           )}>
             {existing ? (
               <><CheckCircle className="w-4 h-4 shrink-0" />
-              Token configured &mdash; <span className="font-medium capitalize">{existing.environment}</span> environment
+              Token skonfigurowany &mdash; <span className="font-medium capitalize">{existing.environment}</span> środowisko
               {existing.updated_at && <span className="text-xs opacity-70 ml-auto">{fmt(existing.updated_at)}</span>}</>
             ) : (
-              <><AlertTriangle className="w-4 h-4 shrink-0" />No token saved &mdash; enter one below to enable KSeF sync</>
+              <><AlertTriangle className="w-4 h-4 shrink-0" />Brak zapisanego Tokenu &mdash; wprowadź Token, żeby połaczyć się z KSeF</>
             )}
           </div>
         )}
@@ -655,7 +655,7 @@ function KsefCredentialsCard({ role }: { role: string }) {
         {saved && (
           <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
             <CheckCircle className="w-4 h-4 text-emerald-500" />
-            <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">KSeF credentials saved.</AlertDescription>
+            <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">Dane uwierzytelniające KSeF zapisane.</AlertDescription>
           </Alert>
         )}
         {error && <Alert variant="destructive" className="py-2"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -691,14 +691,14 @@ function KsefCredentialsCard({ role }: { role: string }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="ksef-token">{existing ? 'Replace Token' : 'API Token'}</Label>
+          <Label htmlFor="ksef-token">{existing ? 'Zmień Token' : 'API Token'}</Label>
           <div className="relative">
             <Input
               id="ksef-token"
               type={showToken ? 'text' : 'password'}
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder={existing ? 'Paste new token to replace existing' : 'Paste your KSeF API token'}
+              placeholder={existing ? 'Wklej nowy token, aby zastąpić istniejący' : 'Wklej swój token API KSeF'}
               disabled={!canManage}
               className="font-mono text-sm pr-10"
             />
@@ -723,7 +723,7 @@ function KsefCredentialsCard({ role }: { role: string }) {
             className="bg-blue-600 hover:bg-blue-700 text-white"
             size="sm"
           >
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Zapisywanie…</> : (existing ? 'Replace Token' : 'Save Token')}
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Zapisywanie…</> : (existing ? 'Zmień Token' : 'Zapisz Token')}
           </Button>
         )}
       </CardContent>
@@ -773,7 +773,7 @@ export default function SettingsPage() {
     <TooltipProvider>
       <div className="max-w-5xl space-y-2">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Ustawienia</h2>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
             Zarządzaj swoim kontem, konfiguracją firmy i połączniem z KseF.
           </p>
