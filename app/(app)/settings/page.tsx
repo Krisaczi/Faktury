@@ -631,7 +631,18 @@ function KsefCredentialsCard({ role }: { role: string }) {
     rel="noopener noreferrer"
     aria-label="KSeF — otwiera stronę Krajowego Systemu e-Faktur w nowej karcie"
     className=" text-blue-600"
-  >(KSeF)</a>, aby automatycznie pobierać faktury.</CardDescription>
+  >(KSeF)</a>, aby automatycznie pobierać faktury.
+        <br></br>
+         Nie wiesz jak wygenerować token w KSeF?{" "}
+  <a
+    href="/docs/jak-wygenerowac-token-ksef.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="text-blue-600 underline hover:text-blue-700"
+  >
+    Zobacz jak to zrobić.
+  </a>
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Current token status */}
