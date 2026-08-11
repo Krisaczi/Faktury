@@ -212,8 +212,8 @@ describe('actions mapping invariants', () => {
       'must default plan to starter when null');
   });
 
-  it('maps product_type from RPC result', async () => {
+  it('does not map product_type from RPC (removed)', async () => {
     const src = await readFile(actionsPath, 'utf8');
-    assert.match(src, /r\.product_type/, 'must map product_type from RPC result');
+    assert.doesNotMatch(src, /r\.product_type/, 'must not map product_type');
   });
 });

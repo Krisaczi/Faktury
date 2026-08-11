@@ -7,7 +7,7 @@ import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History, Zap, Star } from 'lucide-react';
+import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,14 @@ function fmtMonth(ym: string) {
 function fmtDate(d: string | null) {
   if (!d) return '—';
   try { return format(parseISO(d), 'd MMM yyyy', { locale: pl }); } catch { return d; }
+}
+function fmtRegisteredDate(d: string | null) {
+  if (!d) return 'Unknown';
+  try { return format(parseISO(d), 'dd.MM.yyyy', { locale: pl }); } catch { return d; }
+}
+function fmtIsoTimestamp(d: string | null) {
+  if (!d) return null;
+  try { return parseISO(d).toISOString(); } catch { return d; }
 }
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
@@ -344,7 +352,7 @@ function CompaniesTable({
   const [selected, setSelected]       = useState<Set<string>>(new Set());
   const [deactivateTarget, setDeactivateTarget] = useState<CompanyDashboardRow | null>(null);
   const [pricingTarget, setPricingTarget]       = useState<CompanyDashboardRow | null>(null);
-  const [sortKey, setSortKey]         = useState<'company_name' | 'invoices_30d' | 'last_invoice_date'>('company_name');
+  const [sortKey, setSortKey]         = useState<'company_name' | 'registered_at' | 'invoices_30d' | 'last_invoice_date'>('company_name');
   const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('asc');
   const [isPending, start]            = useTransition();
   const [bulkTier, setBulkTier]       = useState('');
@@ -358,6 +366,14 @@ function CompaniesTable({
     .sort((a, b) => {
       const mul = sortDir === 'asc' ? 1 : -1;
       if (sortKey === 'invoices_30d') return (a.invoices_30d - b.invoices_30d) * mul;
+      if (sortKey === 'registered_at') {
+        const av = a.registered_at ?? '';
+        const bv = b.registered_at ?? '';
+        if (av === bv) return 0;
+        if (av === '') return 1;
+        if (bv === '') return -1;
+        return av < bv ? -mul : mul;
+      }
       if (sortKey === 'last_invoice_date') {
         return ((a.last_invoice_date ?? '') < (b.last_invoice_date ?? '') ? -1 : 1) * mul;
       }
@@ -487,7 +503,9 @@ function CompaniesTable({
                 Firma <SortIcon k="company_name" />
               </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Status</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Produkt</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('registered_at')}>
+                Data rejestracji <SortIcon k="registered_at" />
+              </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Plan</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide cursor-pointer select-none hidden lg:table-cell" onClick={() => toggleSort('invoices_30d')}>
                 Faktury 30d <SortIcon k="invoices_30d" />
@@ -546,18 +564,29 @@ function CompaniesTable({
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   {(() => {
-                    const pt = company.product_type;
-                    if (pt === 'professional') return (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <Star className="w-3 h-3" />Professional
-                      </span>
+                    const iso = fmtIsoTimestamp(company.registered_at);
+                    if (!company.registered_at || iso === null) {
+                      console.warn(JSON.stringify({ event: 'company_registered_at_missing', companyId: company.company_id, companyName: company.company_name, timestamp: new Date().toISOString() }));
+                      return (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs text-slate-400"
+                          title="Registration date not set"
+                          aria-label="Data rejestracji nieustawiona"
+                        >
+                          <ShieldAlert className="w-3 h-3" />
+                          Unknown
+                        </span>
+                      );
+                    }
+                    return (
+                      <time
+                        className="text-xs tabular-nums text-slate-600 dark:text-slate-300"
+                        dateTime={iso}
+                        title={iso}
+                      >
+                        {fmtRegisteredDate(company.registered_at)}
+                      </time>
                     );
-                    if (pt === 'starter') return (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-                        <Zap className="w-3 h-3" />Starter
-                      </span>
-                    );
-                    return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
                   })()}
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
