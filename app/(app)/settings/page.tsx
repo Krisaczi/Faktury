@@ -644,7 +644,7 @@ function KsefCredentialsCard({ role }: { role: string }) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Zobacz jak wygenerować token KSeF — otwiera instrukcję PDF w nowej karcie"
-            className="text-blue-600 underline hover:text-blue-700"
+            className="text-blue-600 hover:text-blue-700"
           >
             Zobacz jak to zrobić.
           </a>
