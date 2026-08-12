@@ -23,7 +23,7 @@ export default function TermsOfUsePage() {
   const updated = '19 maja 2026';
 
   return (
-    
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Top navigation */}
       <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -639,7 +639,7 @@ export default function TermsOfUsePage() {
           <br />
           <p>Created by  <a href="https://krisaczi.com" target="_blank"
     rel="noopener noreferrer"
-    className="text-blue-600 hover:text-blue-700"">KrisAczi</a></p>
+    className="text-blue-600 hover:text-blue-700">KrisAczi</a></p>
           <div className="flex gap-5 text-sm text-slate-400 dark:text-slate-500">
             <Link href="/privacy-policy" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
               Polityka prywatności
