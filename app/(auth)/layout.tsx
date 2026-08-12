@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { AuthBackButton } from './back-button';
 
 export const metadata: Metadata = {
-  title: 'Authentication — RiskGuard',
-  description: 'Sign in or create your account',
+  title: 'Uwierzytelnianie — BezpieczneFaktury',
+  description: 'Zaluguj się lub utwórz konto',
 };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               </svg>
             </div>
             <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-              RiskGuard
+              BezpieczneFaktury
             </span>
           </a>
           {/* spacer to keep logo centered */}

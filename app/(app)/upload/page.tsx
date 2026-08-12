@@ -273,7 +273,7 @@ export default function UploadPage() {
               {dragging ? 'Upuść pliki tutaj' : 'Przeciągnij i upuść pliki lub kliknij, aby je wybrać'}
             </p>
             <p className="text-xs text-slate-400 mt-1.5">
-              {ACCEPTED_LABELS.join(', ')} · max {MAX_MB} MB per file
+              {ACCEPTED_LABELS.join(', ')} · plik maksimum {MAX_MB} MB
             </p>
           </label>
         </div>

@@ -179,7 +179,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
       <Section title="Sprzedawca" icon={Building2}>
         <Grid2>
           <Field label="Nazwa firmy" required error={errors.seller_name?.message}>
-            <Input {...register('seller_name')} placeholder="RiskGuard Sp. z o.o." readOnly className="bg-slate-50 dark:bg-slate-800/60" />
+            <Input {...register('seller_name')} placeholder="BezpieczneFaktury" readOnly className="bg-slate-50 dark:bg-slate-800/60" />
           </Field>
           <Field label="NIP" required error={errors.seller_nip?.message}>
             <Input {...register('seller_nip')} placeholder="1234567890" readOnly className="bg-slate-50 dark:bg-slate-800/60 font-mono" />

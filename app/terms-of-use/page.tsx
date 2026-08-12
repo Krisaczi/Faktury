@@ -32,7 +32,7 @@ export default function TermsOfUsePage() {
               <Shield className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-              RiskGuard
+              BezpieczneFaktury
             </span>
           </Link>
           <div className="flex items-center gap-4">
@@ -96,7 +96,7 @@ export default function TermsOfUsePage() {
             </div>
             <p className="mt-4 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
               Niniejszy Regulamin świadczenia usług drogą elektroniczną (dalej: <strong>„Regulamin"</strong>)
-              określa zasady i warunki korzystania z platformy RiskGuard, zgodnie z ustawą z dnia
+              określa zasady i warunki korzystania z platformy BezpieczneFaktury, zgodnie z ustawą z dnia
               18 lipca 2002 r. o świadczeniu usług drogą elektroniczną (Dz.U. 2002 nr 144 poz. 1204
               ze zm., dalej: „UŚUDE") oraz przepisami Kodeksu cywilnego. Przed rozpoczęciem korzystania
               z Serwisu prosimy o uważne zapoznanie się z treścią Regulaminu.
@@ -118,7 +118,7 @@ export default function TermsOfUsePage() {
                 <Table
                   headers={['Pojęcie', 'Definicja']}
                   rows={[
-                    ['Usługodawca', 'RiskGuard Sp. z o.o. z siedzibą w Warszawie – podmiot prowadzący i udostępniający Serwis.'],
+                    ['Usługodawca', 'KrisAczi - Krzysztof Mrozowski z siedzibą w Warszawie – podmiot prowadzący i udostępniający Serwis.'],
                     ['Użytkownik', 'Każda osoba fizyczna, prawna lub jednostka organizacyjna nieposiadająca osobowości prawnej, która korzysta z Serwisu na podstawie zawartej Umowy.'],
                     ['Konto', 'Indywidualne konto Użytkownika w Serwisie, dostępne po rejestracji, umożliwiające korzystanie z funkcji Platformy.'],
                     ['Firma / Organizacja', 'Podmiot gospodarczy, w imieniu którego działa Użytkownik. Jedno Konto może być powiązane z jedną Organizacją.'],
@@ -143,13 +143,13 @@ export default function TermsOfUsePage() {
                 <InfoRow label="NIP">5213256335</InfoRow>
                 <InfoRow label="REGON">529127580</InfoRow>
                 <InfoRow label="E-mail kontaktowy">
-                  <a href="mailto:kontakt@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
                     kontakt@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
                 <InfoRow label="E-mail do spraw prawnych">
-                  <a href="mailto:legal@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    legal@bezpiecznefaktury.pl
+                  <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    kontakt@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
               </InfoCard>
@@ -276,7 +276,7 @@ export default function TermsOfUsePage() {
               </SubSection>
               <SubSection title="Rozwiązanie umowy przez Użytkownika">
                 <ul className="list-disc pl-5 space-y-1 mt-2">
-                  <li>Użytkownik może w każdej chwili usunąć Konto w ustawieniach Serwisu lub przesyłając żądanie na adres <a href="mailto:kontakt@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">kontakt@riskguard.pl</a>.</li>
+                  <li>Użytkownik może w każdej chwili usunąć Konto w ustawieniach Serwisu lub przesyłając żądanie na adres <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">kontakt@bezpiecznefaktury.pl</a>.</li>
                   <li>Wypowiedzenie Subskrypcji jest skuteczne na koniec bieżącego okresu rozliczeniowego. Do tego momentu Użytkownik zachowuje pełen dostęp.</li>
                   <li>Usunięcie Konta powoduje trwałe usunięcie danych zgodnie z Polityką Prywatności, z zastrzeżeniem danych, które muszą być przechowywane na podstawie obowiązujących przepisów prawa.</li>
                 </ul>
@@ -488,7 +488,7 @@ export default function TermsOfUsePage() {
                 <ul className="list-disc pl-5 space-y-1 mt-2">
                   <li>
                     <strong>E-mailem</strong> na adres{' '}
-                    <a href="mailto:kontakt@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
                       kontakt@bezpiecznefaktury.pl
                     </a>{' '}
                     z tytułem wiadomości: „Reklamacja – [krótki opis problemu]"
@@ -604,8 +604,8 @@ export default function TermsOfUsePage() {
                 <li>
                   <strong>Kontakt.</strong> W sprawach nieuregulowanych Regulaminem oraz
                   wszelkich pytaniach prosimy o kontakt pod adresem{' '}
-                  <a href="mailto:legal@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    legal@bezpiecznefaktury.pl
+                  <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    kontakt@bezpiecznefaktury.pl
                   </a>.
                 </li>
               </ol>
@@ -634,8 +634,12 @@ export default function TermsOfUsePage() {
             <span className="font-bold text-slate-900 dark:text-white">BezpieczneFaktury</span>
           </Link>
           <p className="text-sm text-slate-400 dark:text-slate-500">
-            &copy; {new Date().getFullYear()} RiskGuard. Wszelkie prawa zastrzeżone.
+            &copy; {new Date().getFullYear()} BezpieczneFaktury. Wszelkie prawa zastrzeżone.
           </p>
+          <br />
+          <p>Created by  <a href="https://krisaczi.com" target="_blank"
+    rel="noopener noreferrer"
+    className="text-blue-600 hover:text-blue-700"">KrisAczi</a></p>
           <div className="flex gap-5 text-sm text-slate-400 dark:text-slate-500">
             <Link href="/privacy-policy" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
               Polityka prywatności
@@ -643,7 +647,7 @@ export default function TermsOfUsePage() {
             <Link href="/terms-of-use" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors font-medium text-blue-600 dark:text-blue-400">
               Regulamin
             </Link>
-            <a href="mailto:kontakt@riskguard.pl" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Kontakt</a>
+            <a href="mailto:kontakt@bezpiecznefaktury.pl" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Kontakt</a>
           </div>
         </div>
       </footer>

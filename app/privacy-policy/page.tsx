@@ -85,7 +85,7 @@ export default function PrivacyPolicyPage() {
                   Polityka Prywatności
                 </h1>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">
-                  Platforma <strong className="text-slate-700 dark:text-slate-300">RiskGuard</strong>
+                  Platforma <strong className="text-slate-700 dark:text-slate-300">BezpieczneFaktury</strong>
                   &nbsp;· Ostatnia aktualizacja: <strong className="text-slate-700 dark:text-slate-300">{updated}</strong>
                 </p>
               </div>
@@ -114,8 +114,8 @@ export default function PrivacyPolicyPage() {
                 <InfoRow label="Adres">ul. Kluczborska 4/77, 01-461 Warszawa, Polska</InfoRow>
                 <InfoRow label="NIP">5213256335</InfoRow>
                 <InfoRow label="E-mail do spraw RODO">
-                  <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    privacy@bezpiecznefaktury.pl
+                  <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    kontaks@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
               </InfoCard>
@@ -251,8 +251,8 @@ export default function PrivacyPolicyPage() {
               <p>
                 Masz prawo uzyskać kopię zastosowanych zabezpieczeń. W tym celu skontaktuj się z
                 nami pod adresem{' '}
-                <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                  privacy@riskguard.pl
+                <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                 kontakt@bezpiecznefaktury.pl
                 </a>.
               </p>
             </Section>
@@ -281,8 +281,8 @@ export default function PrivacyPolicyPage() {
               <p>
                 Na podstawie RODO przysługują Ci następujące prawa. Możesz je realizować,
                 kontaktując się z nami na adres{' '}
-                <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                  privacy@riskguard.pl
+                <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  kontakt@bezpiecznefaktury.pl
                 </a>{' '}
                 lub za pomocą formularza w sekcji <a href="#kontakt" className="text-blue-600 dark:text-blue-400 hover:underline">Kontakt</a>.
               </p>
@@ -389,7 +389,7 @@ export default function PrivacyPolicyPage() {
                 <InfoRow label="E-mail">
                   <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
                     <Mail className="w-3.5 h-3.5" />
-                    privacy@bezpiecznefaktury.pl
+                    kontakt@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
                 <InfoRow label="Poczta">KrisAczi - Krzysztof Mrozowski, ul. Kluczborska 4/77, 01-461 warszawa</InfoRow>

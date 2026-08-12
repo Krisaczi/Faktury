@@ -24,7 +24,7 @@ export function Topbar() {
   const label =
     Object.entries(pageLabels).find(([path]) =>
       pathname === path || pathname.startsWith(`${path}/`)
-    )?.[1] ?? 'RiskGuard';
+    )?.[1] ?? 'BezpieczneFaktury';
 
   return (
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 md:px-6 flex-shrink-0">

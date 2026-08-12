@@ -63,7 +63,7 @@ export function Sidebar() {
           </div>
           {!collapsed && (
             <span className="text-white font-bold text-lg tracking-tight">
-              RiskGuard
+              BezpieczneFaktury
             </span>
           )}
         </div>
@@ -393,7 +393,7 @@ export function Sidebar() {
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
-                Sign out
+                Wyloguj się
               </TooltipContent>
             )}
           </Tooltip>

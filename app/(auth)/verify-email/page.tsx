@@ -116,7 +116,7 @@ export default function VerifyEmailPage() {
         return;
       }
 
-      fail('No verification token found. Please use the link from your email.');
+      fail('Nie znaleziono tokena weryfikacyjnego. Skorzystaj z linku w wiadomości e-mail.');
     }
 
     void run();
@@ -130,10 +130,10 @@ export default function VerifyEmailPage() {
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
           </div>
           <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
-            Verifying your email
+            Weryfikacja adresu e-mail
           </CardTitle>
           <CardDescription className="text-slate-500 dark:text-slate-400 text-base">
-            Please wait while we confirm your email address...
+            Proszę czekać, aż potwierdzimy Twój adres e-mail...
           </CardDescription>
         </CardHeader>
       </Card>
@@ -148,7 +148,7 @@ export default function VerifyEmailPage() {
             <AlertCircle className="w-8 h-8 text-red-500" />
           </div>
           <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
-            Verification failed
+            Weryfikacja nie powiodła się
           </CardTitle>
           <CardDescription className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
             {errorMsg || 'The verification link may have expired or already been used.'}
@@ -157,12 +157,12 @@ export default function VerifyEmailPage() {
         <CardFooter className="flex flex-col gap-3">
           <Link href="/signup" className="w-full">
             <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-              Try signing up again
+              Spróbuj zarejestrować się ponownie
             </Button>
           </Link>
           <Link href="/" className="w-full">
             <Button variant="ghost" className="w-full text-slate-500">
-              Back to home
+              Strona główna
             </Button>
           </Link>
         </CardFooter>
@@ -177,22 +177,22 @@ export default function VerifyEmailPage() {
           <MailCheck className="w-8 h-8 text-blue-600 dark:text-blue-400" />
         </div>
         <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
-          Email verified!
+          Adres e-mail zweryfikowany!
         </CardTitle>
         <CardDescription className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-          Your email address has been confirmed. You can now sign in to your account
-          and start using RiskGuard.
+          Twój adres e-mail został potwierdzony. Możesz teraz zalogować się na swoje konto
+          i zacząć korzystać z BezpieczneFaktury.
         </CardDescription>
       </CardHeader>
       <CardFooter className="flex flex-col gap-3">
         <Link href="/login" className="w-full">
           <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-            Continue to sign in
+            Kontynuuj logowanie
           </Button>
         </Link>
         <Link href="/" className="w-full">
           <Button variant="ghost" className="w-full text-slate-500">
-            Back to home
+            Strona główna
           </Button>
         </Link>
       </CardFooter>
