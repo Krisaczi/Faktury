@@ -648,6 +648,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not determine recipient address' }, { status: 400 });
     }
 
+    // ── Validate recipient domain ───────────────────────────────────────────
+    const ingestionDomain = process.env.INGESTION_EMAIL_DOMAIN ?? 'bezpiecznefaktury.pl';
+    const recipientDomain = email.recipient.split('@').pop()?.toLowerCase() ?? '';
+
+    if (recipientDomain !== ingestionDomain.toLowerCase()) {
+      await logEmailEvent({
+        event_type:  'rejected',
+        sender:      email.sender,
+        recipient:   email.recipient,
+        subject:     email.subject,
+        provider,
+        status_code: 422,
+        error_message: `Recipient domain "${recipientDomain}" is not the configured ingestion domain "${ingestionDomain}". Old domain invoiceguard.app is no longer active.`,
+        raw_metadata: { reason: 'wrong_domain', recipient_domain: recipientDomain, expected_domain: ingestionDomain },
+      });
+      return NextResponse.json({
+        error: `Emails to @${recipientDomain} are no longer accepted. Please send invoices to @${ingestionDomain}.`,
+      }, { status: 422 });
+    }
+
     // ── Log received event ─────────────────────────────────────────────────
     await logEmailEvent({
       event_type:        'received',

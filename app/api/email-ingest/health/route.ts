@@ -25,6 +25,7 @@ function getAdminClient() {
  * Usage: GET /api/email-ingest/health
  */
 export async function GET(_req: NextRequest) {
+  const ingestionDomain = process.env.INGESTION_EMAIL_DOMAIN ?? 'bezpiecznefaktury.pl';
   const checks: Record<string, { status: 'pass' | 'warn' | 'fail'; detail: string }> = {};
 
   // ── Check 1: Database connectivity & email_events table ──────────────────
@@ -129,7 +130,7 @@ export async function GET(_req: NextRequest) {
   // ── Check 6: DNS configuration guidance ──────────────────────────────────
   checks.dns_config = {
     status: 'warn',
-    detail: 'Ensure MX records for invoiceguard.app point to your mail provider (e.g. mailgun.org, mail.resend.com). SPF, DKIM, and DMARC records must be configured at the provider. A catch-all route or specific mailbox must exist for mleko@invoiceguard.app.',
+    detail: `Ensure MX records for ${ingestionDomain} point to your mail provider (e.g. mailgun.org, mail.resend.com). SPF, DKIM, and DMARC records must be configured at the provider. A catch-all route or specific mailbox must exist for addresses @${ingestionDomain}.`,
   };
 
   // ── Overall status ────────────────────────────────────────────────────────
@@ -144,9 +145,9 @@ export async function GET(_req: NextRequest) {
       dns: 'MX records must point to the mail provider. For Mailgun: mx.mailgun.org. For Resend: use inbound domains setup.',
       spf: 'SPF record must include the provider (e.g. v=spf1 include:mailgun.org ~all).',
       dkim: 'DKIM must be active — check provider dashboard for the DKIM TXT record.',
-      dmarc: 'DMARC policy should not block delivery (start with v=DMARC1; p=none; rua=mailto:admin@invoiceguard.app).',
-      routing: 'Configure a catch-all route forwarding *@invoiceguard.app to the /api/email-ingest webhook URL.',
-      mailbox: 'If not using catch-all, create mleko@invoiceguard.app as a specific mailbox in the provider dashboard.',
+      dmarc: `DMARC policy should not block delivery (start with v=DMARC1; p=none; rua=mailto:admin@${ingestionDomain}).`,
+      routing: `Configure a catch-all route forwarding *@${ingestionDomain} to the /api/email-ingest webhook URL.`,
+      mailbox: `If not using catch-all, create specific mailboxes under @${ingestionDomain} in the provider dashboard.`,
     },
   }, { status: overall === 'fail' ? 503 : 200 });
 }

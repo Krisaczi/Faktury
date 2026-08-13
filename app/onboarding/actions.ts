@@ -122,7 +122,8 @@ export async function createCompany(params: {
     };
   }
 
-  const ingestionEmail = `${slugify(params.companyName)}@invoiceguard.app`;
+  const ingestionDomain = process.env.INGESTION_EMAIL_DOMAIN ?? 'bezpiecznefaktury.pl';
+  const ingestionEmail = `${slugify(params.companyName)}@${ingestionDomain}`;
   // Generate the ID client-side so we don't need .select() after insert.
   // Chaining .select('id').single() after insert triggers a PostgREST RLS
   // violation because the SELECT policy can't see the row before the user
