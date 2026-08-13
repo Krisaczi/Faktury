@@ -575,6 +575,55 @@ export type Database = {
         };
         Relationships: [];
       };
+      email_events: {
+        Row: {
+          id: string;
+          event_type: 'received' | 'rejected' | 'processed' | 'error';
+          sender: string | null;
+          recipient: string | null;
+          subject: string | null;
+          provider: string | null;
+          status_code: number | null;
+          company_id: string | null;
+          upload_session_id: string | null;
+          attachments_count: number;
+          files_processed: number;
+          error_message: string | null;
+          raw_metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type?: 'received' | 'rejected' | 'processed' | 'error';
+          sender?: string | null;
+          recipient?: string | null;
+          subject?: string | null;
+          provider?: string | null;
+          status_code?: number | null;
+          company_id?: string | null;
+          upload_session_id?: string | null;
+          attachments_count?: number;
+          files_processed?: number;
+          error_message?: string | null;
+          raw_metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          event_type?: 'received' | 'rejected' | 'processed' | 'error';
+          sender?: string | null;
+          recipient?: string | null;
+          subject?: string | null;
+          provider?: string | null;
+          status_code?: number | null;
+          company_id?: string | null;
+          upload_session_id?: string | null;
+          attachments_count?: number;
+          files_processed?: number;
+          error_message?: string | null;
+          raw_metadata?: Json;
+        };
+        Relationships: [];
+      };
       issued_invoices: {
         Row: {
           id: string;

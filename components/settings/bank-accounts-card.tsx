@@ -437,7 +437,7 @@ function BankAccountFormDialog({
               id="ba-holder"
               value={holderName}
               onChange={(e) => setHolderName(e.target.value)}
-              placeholder="BezpieczneFaktury"
+              placeholder="RiskGuard Sp. z o.o."
               className={cn(errors.holderName && 'border-red-400')}
             />
             {errors.holderName && <p className="text-xs text-red-500">{errors.holderName}</p>}

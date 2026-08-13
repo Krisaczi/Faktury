@@ -5,7 +5,7 @@ import crypto from 'crypto';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ALLOWED_EXTENSIONS = new Set(['pdf', 'csv', 'xml', 'zip']);
+const ALLOWED_EXTENSIONS = new Set(['pdf', 'csv', 'xml', 'zip', 'jpg', 'jpeg', 'png']);
 
 const MIME_TO_EXT: Record<string, string> = {
   'application/pdf':       'pdf',
@@ -16,6 +16,9 @@ const MIME_TO_EXT: Record<string, string> = {
   'text/xml':              'xml',
   'application/zip':       'zip',
   'application/x-zip-compressed': 'zip',
+  'image/jpeg':            'jpg',
+  'image/jpg':             'jpg',
+  'image/png':             'png',
 };
 
 // ─── Admin client (service role — never sent to client) ───────────────────────
@@ -26,6 +29,45 @@ function getAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   );
+}
+
+// ─── Email event logger ───────────────────────────────────────────────────────
+
+type EmailEventType = 'received' | 'rejected' | 'processed' | 'error';
+
+async function logEmailEvent(params: {
+  event_type: EmailEventType;
+  sender?: string;
+  recipient?: string;
+  subject?: string;
+  provider?: string;
+  status_code?: number;
+  company_id?: string | null;
+  upload_session_id?: string | null;
+  attachments_count?: number;
+  files_processed?: number;
+  error_message?: string | null;
+  raw_metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const db = getAdminClient();
+    await db.from('email_events').insert({
+      event_type:        params.event_type,
+      sender:            params.sender ?? null,
+      recipient:         params.recipient ?? null,
+      subject:           params.subject ?? null,
+      provider:          params.provider ?? 'unknown',
+      status_code:       params.status_code ?? null,
+      company_id:        params.company_id ?? null,
+      upload_session_id: params.upload_session_id ?? null,
+      attachments_count: params.attachments_count ?? 0,
+      files_processed:   params.files_processed ?? 0,
+      error_message:     params.error_message ?? null,
+      raw_metadata:      params.raw_metadata ?? {},
+    } as never);
+  } catch (err) {
+    console.error('[email-ingest] Failed to log email event:', err);
+  }
 }
 
 // ─── Signature validation ─────────────────────────────────────────────────────
@@ -278,10 +320,11 @@ async function extractZipEntries(zipBuffer: Buffer): Promise<Attachment[]> {
 
 // ─── Core ingest logic ────────────────────────────────────────────────────────
 
-async function ingestEmail(email: NormalisedEmail): Promise<{
+async function ingestEmail(email: NormalisedEmail, provider: string): Promise<{
   upload_session_id: string;
   files_processed: number;
   parsing_jobs_started: number;
+  company_id: string | null;
 }> {
   const db = getAdminClient();
 
@@ -297,6 +340,17 @@ async function ingestEmail(email: NormalisedEmail): Promise<{
     .maybeSingle();
 
   if (!company) {
+    await logEmailEvent({
+      event_type:    'rejected',
+      sender:        email.sender,
+      recipient:     recipientAddr,
+      subject:       email.subject,
+      provider,
+      status_code:   400,
+      attachments_count: email.attachments.length,
+      error_message: `No company found for ingestion email: ${recipientAddr}`,
+      raw_metadata:  { reason: 'unknown_recipient' },
+    });
     throw Object.assign(new Error(`No company found for ingestion email: ${recipientAddr}`), { status: 400 });
   }
 
@@ -316,7 +370,19 @@ async function ingestEmail(email: NormalisedEmail): Promise<{
   }
 
   if (allFiles.length === 0) {
-    throw Object.assign(new Error('No supported attachments found in email (PDF, CSV, XML, ZIP)'), { status: 422 });
+    await logEmailEvent({
+      event_type:        'rejected',
+      sender:            email.sender,
+      recipient:         recipientAddr,
+      subject:           email.subject,
+      provider,
+      status_code:       422,
+      company_id:        companyId,
+      attachments_count: email.attachments.length,
+      error_message:     'No supported attachments found in email (PDF, CSV, XML, JPG, PNG, ZIP)',
+      raw_metadata:      { reason: 'no_supported_attachments' },
+    });
+    throw Object.assign(new Error('No supported attachments found in email (PDF, CSV, XML, JPG, PNG, ZIP)'), { status: 422 });
   }
 
   // ── Create upload session ─────────────────────────────────────────────────
@@ -338,6 +404,18 @@ async function ingestEmail(email: NormalisedEmail): Promise<{
     .single();
 
   if (sessionError || !session) {
+    await logEmailEvent({
+      event_type:    'error',
+      sender:        email.sender,
+      recipient:     recipientAddr,
+      subject:       email.subject,
+      provider,
+      status_code:   500,
+      company_id:    companyId,
+      attachments_count: allFiles.length,
+      error_message: `Failed to create upload session: ${sessionError?.message}`,
+      raw_metadata:  { reason: 'session_creation_failed' },
+    });
     throw new Error(`Failed to create upload session: ${sessionError?.message}`);
   }
 
@@ -412,6 +490,22 @@ async function ingestEmail(email: NormalisedEmail): Promise<{
     error_detail: errors as unknown as never,
   }).eq('id', sessionId);
 
+  // ── Log successful ingestion to email_events ──────────────────────────────
+  await logEmailEvent({
+    event_type:        'processed',
+    sender:            email.sender,
+    recipient:         recipientAddr,
+    subject:           email.subject,
+    provider,
+    status_code:       200,
+    company_id:        companyId,
+    upload_session_id: sessionId,
+    attachments_count: allFiles.length,
+    files_processed:   filesProcessed,
+    error_message:     errors.length > 0 ? `${errors.length} file(s) failed` : null,
+    raw_metadata:      { parsing_jobs_started: parsingJobsStarted, errors },
+  });
+
   // ── Audit log ─────────────────────────────────────────────────────────────
   await db.from('audit_logs').insert({
     company_id: companyId,
@@ -432,12 +526,16 @@ async function ingestEmail(email: NormalisedEmail): Promise<{
     upload_session_id:    sessionId,
     files_processed:      filesProcessed,
     parsing_jobs_started: parsingJobsStarted,
+    company_id:           companyId,
   };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  let provider = 'unknown';
+  let parsedEmail: NormalisedEmail | null = null;
+
   try {
     const contentType = req.headers.get('content-type') ?? '';
     const rawBody     = await req.text();
@@ -453,12 +551,21 @@ export async function POST(req: NextRequest) {
     const isResendWebhook  = !!(svixId && svixTimestamp && svixSignature);
     const isMailgunWebhook = !isResendWebhook;
 
+    provider = isResendWebhook ? 'resend' : 'mailgun';
+
     if (isResendWebhook) {
       if (!resendKey) {
         console.warn('[email-ingest] RESEND_WEBHOOK_SECRET not configured — skipping signature check');
       } else {
         const valid = verifyResendSignature(resendKey, svixId!, svixTimestamp!, svixSignature!, rawBody);
         if (!valid) {
+          await logEmailEvent({
+            event_type:  'rejected',
+            provider,
+            status_code: 401,
+            error_message: 'Invalid webhook signature',
+            raw_metadata: { reason: 'invalid_signature' },
+          });
           return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
         }
       }
@@ -473,17 +580,38 @@ export async function POST(req: NextRequest) {
         const signature = tempForm.get('signature') ?? '';
 
         if (!timestamp || !token || !signature) {
+          await logEmailEvent({
+            event_type:  'rejected',
+            provider,
+            status_code: 400,
+            error_message: 'Missing Mailgun signature fields',
+            raw_metadata: { reason: 'missing_signature_fields' },
+          });
           return NextResponse.json({ error: 'Missing Mailgun signature fields' }, { status: 400 });
         }
 
         // Reject stale timestamps (>5 minutes)
         const age = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
         if (age > 300) {
+          await logEmailEvent({
+            event_type:  'rejected',
+            provider,
+            status_code: 401,
+            error_message: 'Webhook timestamp too old',
+            raw_metadata: { reason: 'stale_timestamp', age_seconds: age },
+          });
           return NextResponse.json({ error: 'Webhook timestamp too old' }, { status: 401 });
         }
 
         const valid = verifyMailgunSignature(mailgunKey, timestamp, token, signature);
         if (!valid) {
+          await logEmailEvent({
+            event_type:  'rejected',
+            provider,
+            status_code: 401,
+            error_message: 'Invalid webhook signature',
+            raw_metadata: { reason: 'invalid_signature' },
+          });
           return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
         }
       }
@@ -505,18 +633,63 @@ export async function POST(req: NextRequest) {
       email = await parseMailgunPayload(form);
     }
 
+    parsedEmail = email;
+
     if (!email.recipient) {
+      await logEmailEvent({
+        event_type:  'rejected',
+        sender:      email.sender,
+        subject:     email.subject,
+        provider,
+        status_code: 400,
+        error_message: 'Could not determine recipient address',
+        raw_metadata: { reason: 'missing_recipient' },
+      });
       return NextResponse.json({ error: 'Could not determine recipient address' }, { status: 400 });
     }
 
+    // ── Log received event ─────────────────────────────────────────────────
+    await logEmailEvent({
+      event_type:        'received',
+      sender:            email.sender,
+      recipient:         email.recipient,
+      subject:           email.subject,
+      provider,
+      attachments_count: email.attachments.length,
+      raw_metadata:      { has_attachments: email.attachments.length > 0 },
+    });
+
     // ── Run ingest ─────────────────────────────────────────────────────────
-    const result = await ingestEmail(email);
+    const result = await ingestEmail(email, provider);
 
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     const status  = (err as { status?: number }).status ?? 500;
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[email-ingest]', err);
+
+    await logEmailEvent({
+      event_type:    status >= 500 ? 'error' : 'rejected',
+      sender:        parsedEmail?.sender,
+      recipient:     parsedEmail?.recipient,
+      subject:       parsedEmail?.subject,
+      provider,
+      status_code:   status,
+      attachments_count: parsedEmail?.attachments.length ?? 0,
+      error_message: message,
+    });
+
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+// GET handler — health check for the ingestion endpoint
+export async function GET() {
+  return NextResponse.json({
+    status:     'ok',
+    endpoint:   '/api/email-ingest',
+    methods:    ['POST'],
+    providers:  ['mailgun', 'resend'],
+    description: 'Incoming email ingestion webhook. Accepts forwarded emails from Mailgun or Resend.',
+  });
 }

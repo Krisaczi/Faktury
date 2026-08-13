@@ -114,7 +114,7 @@ export default function PrivacyPolicyPage() {
                 <InfoRow label="Adres">ul. Kluczborska 4/77, 01-461 Warszawa, Polska</InfoRow>
                 <InfoRow label="NIP">5213256335</InfoRow>
                 <InfoRow label="E-mail do spraw RODO">
-                  <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
                     kontaks@bezpiecznefaktury.pl
                   </a>
                 </InfoRow>
@@ -251,8 +251,8 @@ export default function PrivacyPolicyPage() {
               <p>
                 Masz prawo uzyskać kopię zastosowanych zabezpieczeń. W tym celu skontaktuj się z
                 nami pod adresem{' '}
-                <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                 kontakt@bezpiecznefaktury.pl
+                <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  privacy@riskguard.pl
                 </a>.
               </p>
             </Section>
@@ -281,8 +281,8 @@ export default function PrivacyPolicyPage() {
               <p>
                 Na podstawie RODO przysługują Ci następujące prawa. Możesz je realizować,
                 kontaktując się z nami na adres{' '}
-                <a href="mailto:kontakt@bezpiecznefaktury.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
-                  kontakt@bezpiecznefaktury.pl
+                <a href="mailto:privacy@riskguard.pl" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  privacy@riskguard.pl
                 </a>{' '}
                 lub za pomocą formularza w sekcji <a href="#kontakt" className="text-blue-600 dark:text-blue-400 hover:underline">Kontakt</a>.
               </p>
@@ -434,22 +434,9 @@ export default function PrivacyPolicyPage() {
             </div>
             <span className="font-bold text-slate-900 dark:text-white">BezpieczneFaktury</span>
           </Link>
-         <div className="flex flex-col justify-center text-sm text-slate-400 dark:text-slate-500">
-        <span>
-          &copy; <time dateTime={new Date().getFullYear().toString()}>{new Date().getFullYear()}</time> BezpieczneFaktury. Wszelkie prawa zastrzeżone.
-        </span>
-
-        <span className="mt-1 flex justify-center">Created by  &nbsp;
-          <a
-            href="https://krisaczi.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-700"
-          >
-            KrisAczi
-          </a>
-        </span>
-      </div>
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            &copy; {new Date().getFullYear()} RiskGuard. Wszelkie prawa zastrzeżone.
+          </p>
           <div className="flex gap-5 text-sm text-slate-400 dark:text-slate-500">
             <Link href="/privacy-policy" className="hover:text-slate-700 dark:hover:text-slate-300 transition-colors font-medium text-blue-600 dark:text-blue-400">
               Polityka prywatności
