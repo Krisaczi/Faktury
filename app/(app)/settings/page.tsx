@@ -803,7 +803,7 @@ export default function SettingsPage() {
             <CompanyInfoCard isAdmin={isAdmin} />
 
             {/* Ingestion Email */}
-            <IngestionEmailCard />
+             {/* <IngestionEmailCard />*/}
 
             {/* Profile */}
             <Card className="border-slate-200 dark:border-slate-800">
