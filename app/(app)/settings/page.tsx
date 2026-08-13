@@ -257,86 +257,86 @@ function CompanyInfoCard({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-// ─── Ingestion Email Card ───────────────────────────────────────────────────────
-function IngestionEmailCard() {
-  const { data, isLoading } = useCompanySettings();
-  const [copied, setCopied] = useState(false);
+// // ─── Ingestion Email Card ───────────────────────────────────────────────────────
+// function IngestionEmailCard() {
+//   const { data, isLoading } = useCompanySettings();
+//   const [copied, setCopied] = useState(false);
 
-  const ingestionEmail = data?.company?.ingestion_email;
+//   const ingestionEmail = data?.company?.ingestion_email;
 
-  async function handleCopy() {
-    if (!ingestionEmail) return;
-    try {
-      await navigator.clipboard.writeText(ingestionEmail);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-      // Fire and forget audit log
-      logIngestionEmailCopy().catch(() => {});
-    } catch {
-      // clipboard not available — silently ignore
-    }
-  }
+//   async function handleCopy() {
+//     if (!ingestionEmail) return;
+//     try {
+//       await navigator.clipboard.writeText(ingestionEmail);
+//       setCopied(true);
+//       setTimeout(() => setCopied(false), 2500);
+//       // Fire and forget audit log
+//       logIngestionEmailCopy().catch(() => {});
+//     } catch {
+//       // clipboard not available — silently ignore
+//     }
+//   }
 
-  return (
-    <Card className="border-slate-200 dark:border-slate-800">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Mail className="w-4 h-4 text-slate-500" />
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Ingestion Email</CardTitle>
-        </div>
-        <CardDescription>Faktury wysłane na ten adres są automatycznie procesowane.</CardDescription>
-      </CardHeader>
+//   return (
+//     <Card className="border-slate-200 dark:border-slate-800">
+//       <CardHeader>
+//         <div className="flex items-center gap-2">
+//           <Mail className="w-4 h-4 text-slate-500" />
+//           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Ingestion Email</CardTitle>
+//         </div>
+//         <CardDescription>Faktury wysłane na ten adres są automatycznie procesowane.</CardDescription>
+//       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {isLoading ? (
-          <Skeleton className="h-10 w-full" />
-        ) : ingestionEmail ? (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5">
-              <p className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{ingestionEmail}</p>
-            </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'shrink-0 gap-1.5 transition-all',
-                      copied && 'border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400'
-                    )}
-                    onClick={handleCopy}
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied!' : 'Copy'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Skopiuj wiadomość e-mail do schowka</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2.5">
-            <Info className="w-4 h-4 flex-shrink-0" />
-            Nie skonfigurowano adresu e-mail do odbioru. Skontaktuj się z pomocą techniczną, aby go skonfigurować.
-          </div>
-        )}
+//       <CardContent className="space-y-4">
+//         {isLoading ? (
+//           <Skeleton className="h-10 w-full" />
+//         ) : ingestionEmail ? (
+//           <div className="flex items-center gap-2">
+//             <div className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5">
+//               <p className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{ingestionEmail}</p>
+//             </div>
+//             <TooltipProvider>
+//               <Tooltip>
+//                 <TooltipTrigger asChild>
+//                   <Button
+//                     variant="outline"
+//                     size="sm"
+//                     className={cn(
+//                       'shrink-0 gap-1.5 transition-all',
+//                       copied && 'border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400'
+//                     )}
+//                     onClick={handleCopy}
+//                   >
+//                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+//                     {copied ? 'Copied!' : 'Copy'}
+//                   </Button>
+//                 </TooltipTrigger>
+//                 <TooltipContent>Skopiuj wiadomość e-mail do schowka</TooltipContent>
+//               </Tooltip>
+//             </TooltipProvider>
+//           </div>
+//         ) : (
+//           <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2.5">
+//             <Info className="w-4 h-4 flex-shrink-0" />
+//             Nie skonfigurowano adresu e-mail do odbioru. Skontaktuj się z pomocą techniczną, aby go skonfigurować.
+//           </div>
+//         )}
 
-        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 p-3 space-y-1.5">
-          <p className="text-xs font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5" />
-            Jak to działa
-          </p>
-          <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
-            <li>Prześlij faktury na ten adres.</li>
-            <li>Załączniki (XML, PDF) są przetwarzane automatycznie.</li>
-            <li>Przetworzone faktury pojawiają się w Raporcie Ryzyka w ciągu kilku minut.</li>
-          </ul>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+//         <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 p-3 space-y-1.5">
+//           <p className="text-xs font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+//             <Info className="w-3.5 h-3.5" />
+//             Jak to działa
+//           </p>
+//           <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
+//             <li>Prześlij faktury na ten adres.</li>
+//             <li>Załączniki (XML, PDF) są przetwarzane automatycznie.</li>
+//             <li>Przetworzone faktury pojawiają się w Raporcie Ryzyka w ciągu kilku minut.</li>
+//           </ul>
+//         </div>
+//       </CardContent>
+//     </Card>
+//   );
+// }
 
 // ─── Billing Card ──────────────────────────────────────────────────────────────
 const planConfig: Record<string, { label: string; badgeClass: string }> = {
