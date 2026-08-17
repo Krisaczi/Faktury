@@ -18,6 +18,7 @@ export interface BuyerCompany {
   default_payment_method:      string;
   notes:                       string | null;
   deleted_at:                  string | null;
+  last_used_at:                string | null;
   created_at:                  string;
   updated_at:                  string;
 }

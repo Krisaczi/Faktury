@@ -7,6 +7,7 @@ import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import type { VatRate } from '@/types/issued-invoice';
+import type { Customer } from '@/components/invoice/customer-picker';
 
 export const metadata = { title: 'Admin — Edytuj fakturę' };
 
@@ -80,6 +81,7 @@ export default async function EditInvoicePage({
     buyer_nip:           invoice.buyer_nip ?? undefined,
     buyer_address:       invoice.buyer_address ?? undefined,
     buyer_email:         invoice.buyer_email ?? undefined,
+    buyer_company_id:    invoice.buyer_company_id ?? undefined,
     notes:               invoice.notes ?? undefined,
     items: invoice.items.map((item) => ({
       name:           item.name,
@@ -90,6 +92,18 @@ export default async function EditInvoicePage({
       discount_pct:   item.discount_pct ?? undefined,
     })),
   };
+
+  // Fetch buyer company for the picker if linked
+  let initialCustomer: Customer | null = null;
+  if (invoice.buyer_company_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: bc } = await (supabase as any)
+      .from('buyer_companies')
+      .select('id, name, nip, street, postal_code, city, country, email, phone, billing_email, last_used_at')
+      .eq('id', invoice.buyer_company_id)
+      .maybeSingle();
+    if (bc) initialCustomer = bc as Customer;
+  }
 
   return (
     <Stack gap="6" className="max-w-5xl">
@@ -111,6 +125,7 @@ export default async function EditInvoicePage({
         mode="edit"
         invoiceId={params.id}
         defaultValues={defaultValues}
+        initialCustomer={initialCustomer}
       />
     </Stack>
   );

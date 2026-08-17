@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +30,7 @@ import {
 import type { InvoiceFormValues } from '@/app/(admin)/admin/invoices/actions';
 import { createInvoice, updateInvoice } from '@/app/(admin)/admin/invoices/actions';
 import { BankAccountSelector } from '@/components/invoice/bank-account-selector';
+import { CustomerPicker, type Customer } from '@/components/invoice/customer-picker';
 
 // ─── Local form schema (mirrors InvoiceFormValues) ────────────────────────────
 
@@ -54,6 +55,7 @@ const FormSchema = z.object({
   seller_address:      z.string().min(1, 'Wymagane'),
   seller_bank_account: z.string().optional(),
   company_bank_account_id: z.string().uuid().nullable().optional(),
+  buyer_company_id:    z.string().uuid().nullable().optional(),
   buyer_name:          z.string().min(1, 'Wymagane'),
   buyer_nip:           z.string().regex(/^\d{10}$/, 'Musi zawierać 10 cyfr').optional().or(z.literal('')),
   buyer_address:       z.string().optional(),
@@ -77,11 +79,13 @@ interface Props {
     bank_account?: string;
   };
   buyerDefaults?: {
-    buyer_name?:    string;
-    buyer_nip?:     string;
-    buyer_address?: string;
-    buyer_email?:   string;
+    buyer_name?:         string;
+    buyer_nip?:          string;
+    buyer_address?:      string;
+    buyer_email?:        string;
+    buyer_company_id?:   string;
   };
+  initialCustomer?: Customer | null;
 }
 
 const VAT_LABELS: Record<VatRate, string> = {
@@ -98,10 +102,12 @@ const PAYMENT_LABELS = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults }: Props) {
+export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults, initialCustomer }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
+  const [buyerTouched, setBuyerTouched] = useState(false);
 
   const {
     register,
@@ -120,6 +126,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
       seller_nip:     defaultValues?.seller_nip     ?? sellerDefaults?.nip     ?? '',
       seller_address: defaultValues?.seller_address ?? sellerDefaults?.address ?? '',
       seller_bank_account: defaultValues?.seller_bank_account ?? sellerDefaults?.bank_account ?? '',
+      buyer_company_id: defaultValues?.buyer_company_id ?? buyerDefaults?.buyer_company_id ?? null,
       buyer_name:     defaultValues?.buyer_name     ?? buyerDefaults?.buyer_name    ?? '',
       buyer_nip:      defaultValues?.buyer_nip      ?? buyerDefaults?.buyer_nip     ?? '',
       buyer_address:  defaultValues?.buyer_address  ?? buyerDefaults?.buyer_address ?? '',
@@ -209,20 +216,82 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
 
       {/* ── Buyer ─────────────────────────────────────────────────────── */}
       <Section title="Nabywca" icon={User}>
-        <Grid2>
-          <Field label="Nazwa / Imię i nazwisko" required error={errors.buyer_name?.message}>
-            <Input {...register('buyer_name')} placeholder="Firma ABC Sp. z o.o." />
-          </Field>
-          <Field label="NIP nabywcy" error={errors.buyer_nip?.message}>
-            <Input {...register('buyer_nip')} placeholder="1234567890" className="font-mono" />
-          </Field>
-          <Field label="Adres nabywcy" error={errors.buyer_address?.message} className="sm:col-span-2">
-            <Input {...register('buyer_address')} placeholder="ul. Przykładowa 1, 00-001 Warszawa" />
-          </Field>
-          <Field label="E-mail nabywcy" error={errors.buyer_email?.message}>
-            <Input {...register('buyer_email')} type="email" placeholder="kontakt@firma.pl" />
-          </Field>
-        </Grid2>
+        <CustomerPicker
+          value={selectedCustomer}
+          onChange={(c) => {
+            setSelectedCustomer(c);
+            setBuyerTouched(true);
+            if (c) {
+              const addressParts = [c.street, [c.postal_code, c.city].filter(Boolean).join(' '), c.country]
+                .filter(Boolean).join(', ');
+              setValue('buyer_company_id', c.id, { shouldValidate: true });
+              setValue('buyer_name', c.name, { shouldValidate: true });
+              setValue('buyer_nip', c.nip ?? '', { shouldValidate: true });
+              setValue('buyer_address', addressParts, { shouldValidate: true });
+              setValue('buyer_email', c.billing_email ?? c.email ?? '', { shouldValidate: true });
+            } else {
+              setValue('buyer_company_id', null);
+              setValue('buyer_name', '', { shouldValidate: true });
+              setValue('buyer_nip', '', { shouldValidate: true });
+              setValue('buyer_address', '', { shouldValidate: true });
+              setValue('buyer_email', '', { shouldValidate: true });
+            }
+          }}
+        />
+
+        {selectedCustomer && (
+          <div className="mt-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">NIP</p>
+                <p className="text-slate-700 dark:text-slate-300 font-mono">{selectedCustomer.nip ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Adres</p>
+                <p className="text-slate-700 dark:text-slate-300">
+                  {[selectedCustomer.street, [selectedCustomer.postal_code, selectedCustomer.city].filter(Boolean).join(' '), selectedCustomer.country].filter(Boolean).join(', ') || '—'}
+                </p>
+              </div>
+              {(selectedCustomer.billing_email ?? selectedCustomer.email) && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">E-mail</p>
+                  <p className="text-slate-700 dark:text-slate-300">{selectedCustomer.billing_email ?? selectedCustomer.email}</p>
+                </div>
+              )}
+              {selectedCustomer.phone && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Telefon</p>
+                  <p className="text-slate-700 dark:text-slate-300">{selectedCustomer.phone}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!selectedCustomer && (
+          <div className="mt-3">
+            <details className="group">
+              <summary className="text-xs text-slate-400 cursor-pointer flex items-center gap-1.5 select-none">
+                <Info className="w-3 h-3" />
+                Wprowadź dane nabywcy ręcznie
+              </summary>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Nazwa / Imię i nazwisko" required error={errors.buyer_name?.message}>
+                  <Input {...register('buyer_name')} placeholder="Firma ABC Sp. z o.o." />
+                </Field>
+                <Field label="NIP nabywcy" error={errors.buyer_nip?.message}>
+                  <Input {...register('buyer_nip')} placeholder="1234567890" className="font-mono" />
+                </Field>
+                <Field label="Adres nabywcy" error={errors.buyer_address?.message} className="sm:col-span-2">
+                  <Input {...register('buyer_address')} placeholder="ul. Przykładowa 1, 00-001 Warszawa" />
+                </Field>
+                <Field label="E-mail nabywcy" error={errors.buyer_email?.message}>
+                  <Input {...register('buyer_email')} type="email" placeholder="kontakt@firma.pl" />
+                </Field>
+              </div>
+            </details>
+          </div>
+        )}
       </Section>
 
       {/* ── Dates & payment ───────────────────────────────────────────── */}

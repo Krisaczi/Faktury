@@ -653,6 +653,7 @@ export type Database = {
           ksef_error_message: string | null;
           ksef_sent_at: string | null;
           ksef_accepted_at: string | null;
+          buyer_company_id: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -675,6 +676,7 @@ export type Database = {
           buyer_nip?: string | null;
           buyer_address?: string;
           buyer_email?: string | null;
+          buyer_company_id?: string | null;
           net_total?: number;
           vat_total?: number;
           gross_total?: number;
@@ -723,6 +725,7 @@ export type Database = {
           ksef_error_message?: string | null;
           ksef_sent_at?: string | null;
           ksef_accepted_at?: string | null;
+          buyer_company_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -730,6 +733,131 @@ export type Database = {
             foreignKeyName: 'issued_invoices_company_id_fkey';
             columns: ['company_id'];
             referencedRelation: 'companies';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'issued_invoices_buyer_company_id_fkey';
+            columns: ['buyer_company_id'];
+            referencedRelation: 'buyer_companies';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      buyer_companies: {
+        Row: {
+          id: string;
+          company_id: string;
+          owner_id: string;
+          name: string;
+          nip: string | null;
+          vat_payer: boolean;
+          street: string | null;
+          postal_code: string | null;
+          city: string | null;
+          country: string;
+          email: string | null;
+          phone: string | null;
+          billing_email: string | null;
+          default_payment_terms_days: number;
+          default_payment_method: string;
+          notes: string | null;
+          last_used_at: string | null;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          owner_id: string;
+          name: string;
+          nip?: string | null;
+          vat_payer?: boolean;
+          street?: string | null;
+          postal_code?: string | null;
+          city?: string | null;
+          country?: string;
+          email?: string | null;
+          phone?: string | null;
+          billing_email?: string | null;
+          default_payment_terms_days?: number;
+          default_payment_method?: string;
+          notes?: string | null;
+          last_used_at?: string | null;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          nip?: string | null;
+          vat_payer?: boolean;
+          street?: string | null;
+          postal_code?: string | null;
+          city?: string | null;
+          country?: string;
+          email?: string | null;
+          phone?: string | null;
+          billing_email?: string | null;
+          default_payment_terms_days?: number;
+          default_payment_method?: string;
+          notes?: string | null;
+          last_used_at?: string | null;
+          deleted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'buyer_companies_company_id_fkey';
+            columns: ['company_id'];
+            referencedRelation: 'companies';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'buyer_companies_owner_id_fkey';
+            columns: ['owner_id'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      customer_audit_log: {
+        Row: {
+          id: string;
+          company_id: string;
+          user_id: string;
+          event_type: 'created' | 'validation_failed' | 'duplicate_blocked';
+          customer_name: string | null;
+          customer_nip: string | null;
+          error_detail: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          user_id: string;
+          event_type: 'created' | 'validation_failed' | 'duplicate_blocked';
+          customer_name?: string | null;
+          customer_nip?: string | null;
+          error_detail?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          customer_name?: string | null;
+          customer_nip?: string | null;
+          error_detail?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'customer_audit_log_company_id_fkey';
+            columns: ['company_id'];
+            referencedRelation: 'companies';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'customer_audit_log_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'users';
             referencedColumns: ['id'];
           }
         ];

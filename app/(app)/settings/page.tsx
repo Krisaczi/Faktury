@@ -845,7 +845,7 @@ export default function SettingsPage() {
                   <Alert variant="destructive" className="py-2"><AlertDescription>{profileError}</AlertDescription></Alert>
                 )}
                 <div className="space-y-1.5">
-                  <Label htmlFor="fullName">Pełna nazwa firmy</Label>
+                  <Label htmlFor="fullName">Imię i Nazwisko</Label>
                   <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
                 </div>
                 <div className="space-y-1.5">

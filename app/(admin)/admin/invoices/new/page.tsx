@@ -6,6 +6,7 @@ import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { canWriteInvoice, type AppRole } from '@/lib/permissions';
 import { getBuyerCompanyById } from '@/app/(admin)/admin/companies/actions';
+import type { Customer } from '@/components/invoice/customer-picker';
 
 export const metadata = { title: 'Admin — Nowa faktura' };
 
@@ -32,11 +33,14 @@ async function getSellerDefaults(buyerCompanyId?: string) {
 
   // Prefill buyer if a buyer_company_id was provided
   let buyerDefaults: {
-    buyer_name?:    string;
-    buyer_nip?:     string;
-    buyer_address?: string;
-    buyer_email?:   string;
+    buyer_name?:         string;
+    buyer_nip?:          string;
+    buyer_address?:      string;
+    buyer_email?:        string;
+    buyer_company_id?:   string;
   } | undefined;
+
+  let initialCustomer: Customer | null = null;
 
   if (buyerCompanyId) {
     const detail = await getBuyerCompanyById(buyerCompanyId);
@@ -44,10 +48,24 @@ async function getSellerDefaults(buyerCompanyId?: string) {
       const bc = detail.company;
       const addressParts = [bc.street, bc.postal_code, bc.city, bc.country].filter(Boolean).join(', ');
       buyerDefaults = {
-        buyer_name:    bc.name,
-        buyer_nip:     bc.nip ?? undefined,
-        buyer_address: addressParts || undefined,
-        buyer_email:   bc.billing_email ?? bc.email ?? undefined,
+        buyer_name:         bc.name,
+        buyer_nip:          bc.nip ?? undefined,
+        buyer_address:      addressParts || undefined,
+        buyer_email:        bc.billing_email ?? bc.email ?? undefined,
+        buyer_company_id:   bc.id,
+      };
+      initialCustomer = {
+        id:            bc.id,
+        name:          bc.name,
+        nip:           bc.nip ?? null,
+        street:        bc.street ?? null,
+        postal_code:   bc.postal_code ?? null,
+        city:          bc.city ?? null,
+        country:       bc.country ?? 'Polska',
+        email:         bc.email ?? null,
+        phone:         bc.phone ?? null,
+        billing_email: bc.billing_email ?? null,
+        last_used_at:  bc.last_used_at ?? null,
       };
     }
   }
@@ -59,6 +77,7 @@ async function getSellerDefaults(buyerCompanyId?: string) {
     role:          (userRecord.role ?? 'accountant') as AppRole,
     productType:   company.product_type ?? null,
     buyerDefaults,
+    initialCustomer,
   };
 }
 
@@ -95,6 +114,7 @@ export default async function NewInvoicePage({
         mode="create"
         sellerDefaults={sellerDefaults}
         buyerDefaults={defaults?.buyerDefaults}
+        initialCustomer={defaults?.initialCustomer ?? null}
       />
     </Stack>
   );

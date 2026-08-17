@@ -73,6 +73,7 @@ const FormItemSchema = IssuedInvoiceItemSchema.omit({
 const FormSchema = IssuedInvoiceSchema
   .omit({ id: true, company_id: true, items: true })
   .extend({
+    buyer_company_id: z.string().uuid().nullable().optional(),
     items: z.array(FormItemSchema).min(1, 'Dodaj co najmniej jedną pozycję'),
   });
 
@@ -151,6 +152,7 @@ export async function createInvoice(
         seller_address:      data.seller_address,
         seller_bank_account: data.seller_bank_account ?? null,
         company_bank_account_id: data.company_bank_account_id ?? null,
+        buyer_company_id:    data.buyer_company_id ?? null,
         buyer_name:          data.buyer_name,
         buyer_nip:           data.buyer_nip ?? null,
         buyer_address:       data.buyer_address ?? '',
@@ -246,6 +248,7 @@ export async function updateInvoice(
         seller_address:      data.seller_address,
         seller_bank_account: data.seller_bank_account ?? null,
         company_bank_account_id: data.company_bank_account_id ?? null,
+        buyer_company_id:    data.buyer_company_id ?? null,
         buyer_name:          data.buyer_name,
         buyer_nip:           data.buyer_nip ?? null,
         buyer_address:       data.buyer_address ?? '',
