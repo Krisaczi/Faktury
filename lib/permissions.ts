@@ -38,6 +38,16 @@ export function canSendToKsef(role: string | null | undefined, packageType: stri
 }
 
 /**
+ * Customer management: only accountants on the Professional plan (and owners)
+ * can access the dedicated /customers page and perform CRUD on customers.
+ */
+export function canManageCustomers(role: string | null | undefined, packageType: string | null | undefined): boolean {
+  if (role === 'owner') return true;
+  if (role !== 'accountant') return false;
+  return packageType === 'professional';
+}
+
+/**
  * Owner and accountants can manage bank accounts for their own company.
  */
 export function canManageBankAccounts(role: string | null | undefined): boolean {

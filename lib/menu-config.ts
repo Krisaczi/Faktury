@@ -1,4 +1,4 @@
-import { LayoutDashboard, Upload, FileText, ChartBar, Building2, Settings } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, ChartBar, Building2, Settings, Users } from 'lucide-react';
 import type { AppRole } from '@/lib/permissions';
 
 export interface NavItem {
@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Pulpit', icon: LayoutDashboard },
   { href: '/upload',    label: 'Wczytwanie faktur',    icon: Upload,    visibleTo: ['accountant'] },
   { href: '/invoice',   label: 'Faktury',  icon: FileText },
+  { href: '/customers', label: 'Klienci',  icon: Users,    visibleTo: ['accountant'] },
   { href: '/risk-report', label: 'Raporty ryzyka', icon: ChartBar, visibleTo: ['accountant'] },
   { href: '/vendors',   label: 'Dostawcy',   icon: Building2,   visibleTo: ['accountant'] },
   { href: '/settings',  label: 'Ustawienia',  icon: Settings },

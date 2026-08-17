@@ -37,7 +37,10 @@ export function Sidebar() {
     : (roleData?.role as AppRole | undefined);
 
   const hasInvoicing = canAccessInvoicing(effectiveRole, roleData?.packageType);
-  const visibleNavItems = getVisibleNavItems(effectiveRole);
+  const canManageCust = canAccessInvoicing(effectiveRole, roleData?.packageType);
+  const visibleNavItems = getVisibleNavItems(effectiveRole).filter(
+    (item) => item.href !== '/customers' || canManageCust,
+  );
 
   const initials = profile?.full_name
     ? profile.full_name

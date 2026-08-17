@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getCompanyPackage } from '@/lib/packages/get-company-package';
+import { canManageCustomers } from '@/lib/permissions';
 
-// ─── GET /api/customers?search=<query>&limit=<n> ──────────────────────────────
+// ─── GET /api/customers?search=&page=&limit=&sort= ────────────────────────────
 
 export async function GET(req: NextRequest) {
   const supabase = await getSupabaseServerClient();
@@ -11,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { data: u } = await supabase
     .from('users')
-    .select('company_id')
+    .select('company_id, role')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -19,27 +21,60 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = (searchParams.get('search') ?? '').trim();
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '20', 10) || 20, 50);
+  const page   = Math.max(parseInt(searchParams.get('page')   ?? '1', 10) || 1, 1);
+  const limit  = Math.min(parseInt(searchParams.get('limit')  ?? '20', 10) || 20, 100);
+  const sort   = (searchParams.get('sort') ?? 'recent').trim();
+
+  const offset = (page - 1) * limit;
+
+  // Determine sort order
+  let orderCol: string   = 'last_used_at';
+  let ascending: boolean = false;
+
+  if (sort === 'name') {
+    orderCol = 'name';
+    ascending = true;
+  } else if (sort === 'createdAt') {
+    orderCol = 'created_at';
+    ascending = false;
+  } else if (sort === 'recent') {
+    orderCol = 'last_used_at';
+    ascending = false;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from('buyer_companies')
-    .select('id, name, nip, street, postal_code, city, country, email, phone, billing_email, last_used_at, deleted_at')
+    .select('id, name, nip, street, postal_code, city, country, email, phone, billing_email, last_used_at, created_at, deleted_at', { count: 'exact' })
     .eq('company_id', u.company_id)
-    .is('deleted_at', null)
-    .order('last_used_at', { ascending: false, nullsFirst: false })
-    .order('name', { ascending: true })
-    .limit(limit);
+    .is('deleted_at', null);
 
   if (search.length > 0) {
     query = query.or(`name.ilike.%${search}%,nip.ilike.%${search}%`);
   }
 
-  const { data, error } = await query;
+  // For "recent" sort, also do a secondary sort by name
+  if (sort === 'recent') {
+    query = query.order('last_used_at', { ascending: false, nullsFirst: false })
+                 .order('name', { ascending: true });
+  } else {
+    query = query.order(orderCol, { ascending });
+  }
+
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, count, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ customers: data ?? [] });
+  const total   = count ?? 0;
+  const hasNext = offset + limit < total;
+  const hasPrev = page > 1;
+
+  return NextResponse.json({
+    customers: data ?? [],
+    pagination: { page, limit, total, hasNext, hasPrev },
+  });
 }
 
 // ─── POST /api/customers ──────────────────────────────────────────────────────
@@ -52,30 +87,43 @@ const CreateCustomerSchema = z.object({
   phone:   z.string().max(50).optional().or(z.literal('')),
 });
 
+async function requireCustomerAccess(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
+  const { data: u } = await supabase
+    .from('users')
+    .select('company_id, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!u?.company_id) return { error: 'No company', status: 403, user: null, companyId: null, role: null };
+  if (!['owner', 'accountant'].includes(u.role ?? 'accountant')) {
+    return { error: 'Brak uprawnień.', status: 403, user: null, companyId: null, role: null };
+  }
+
+  const pkg = await getCompanyPackage(u.company_id);
+  const allowed = canManageCustomers(u.role, pkg.type);
+  if (!allowed) {
+    return { error: 'Zarządzanie klientami jest dostępne tylko w planie Professional.', status: 403, user: null, companyId: null, role: null };
+  }
+
+  return { error: null, status: 200, user: { id: userId }, companyId: u.company_id, role: u.role };
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: u } = await supabase
-    .from('users')
-    .select('company_id, role')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (!u?.company_id) return NextResponse.json({ error: 'No company' }, { status: 403 });
-  if (!['owner', 'accountant'].includes(u.role ?? 'accountant')) {
-    return NextResponse.json({ error: 'Brak uprawnień do dodawania klientów.' }, { status: 403 });
-  }
+  const access = await requireCustomerAccess(supabase, user.id);
+  if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+  const companyId = access.companyId!;
 
   const body = await req.json().catch(() => ({}));
   const parsed = CreateCustomerSchema.safeParse(body);
 
   if (!parsed.success) {
-    // Log validation failure
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('customer_audit_log').insert({
-      company_id:    u.company_id,
+      company_id:    companyId,
       user_id:       user.id,
       event_type:    'validation_failed',
       customer_name: body.name ?? null,
@@ -104,16 +152,15 @@ export async function POST(req: NextRequest) {
   const { data: existing } = await (supabase as any)
     .from('buyer_companies')
     .select('id')
-    .eq('company_id', u.company_id)
+    .eq('company_id', companyId)
     .eq('nip', nip)
     .is('deleted_at', null)
     .maybeSingle();
 
   if (existing) {
-    // Log duplicate attempt
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('customer_audit_log').insert({
-      company_id:    u.company_id,
+      company_id:    companyId,
       user_id:       user.id,
       event_type:    'duplicate_blocked',
       customer_name: name,
@@ -133,7 +180,7 @@ export async function POST(req: NextRequest) {
     .from('buyer_companies')
     .insert({
       id:         newId,
-      company_id: u.company_id,
+      company_id: companyId,
       owner_id:   user.id,
       name,
       nip,
@@ -144,15 +191,14 @@ export async function POST(req: NextRequest) {
       email:      email || null,
       phone:      phone || null,
     })
-    .select('id, name, nip, street, postal_code, city, country, email, phone, billing_email, last_used_at')
+    .select('id, name, nip, street, postal_code, city, country, email, phone, billing_email, last_used_at, created_at')
     .single();
 
   if (insertErr) {
-    // Check if it's a unique constraint violation
     if (insertErr.code === '23505') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('customer_audit_log').insert({
-        company_id:    u.company_id,
+        company_id:    companyId,
         user_id:       user.id,
         event_type:    'duplicate_blocked',
         customer_name: name,
@@ -168,10 +214,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  // Log successful creation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('customer_audit_log').insert({
-    company_id:    u.company_id,
+    company_id:    companyId,
     user_id:       user.id,
     event_type:    'created',
     customer_name: name,
