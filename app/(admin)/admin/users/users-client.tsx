@@ -298,6 +298,7 @@ export interface UsersClientProps {
   isOwner:       boolean;
   initialUsers:  CompanyUser[];
   initialLogs:   RoleChangeLog[];
+  fetchError?:   string | null;
 }
 
 type ModalAction =
@@ -306,7 +307,7 @@ type ModalAction =
   | { kind: 'repair' }
   | { kind: 'managePlan'; user: CompanyUser };
 
-export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs }: UsersClientProps) {
+export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs, fetchError }: UsersClientProps) {
   const router                           = useRouter();
   const [search, setSearch]              = useState('');
   const [modal, setModal]                = useState<ModalAction | null>(null);
@@ -388,6 +389,16 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
         </div>
       )}
 
+      {fetchError && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">Błąd ładowania użytkowników</p>
+            <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{fetchError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Users table */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
@@ -441,6 +452,9 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
                       {isSelf && <span className="text-xs text-slate-400">(Ty)</span>}
                     </div>
                     {u.full_name && <p className="text-xs text-slate-500 truncate">{u.email}</p>}
+                    {u.company_name && (
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{u.company_name}</p>
+                    )}
                   </div>
 
                   {/* Inactive badge */}

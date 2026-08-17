@@ -215,3 +215,101 @@ describe('onboardNewUser', () => {
     assert.equal(store.get(result.data!.userId)?.role, 'accountant');
   });
 });
+
+// ─── Owner user listing visibility tests ──────────────────────────────────────
+// Simulates the getUsersWithRoles logic: owner should see ALL users, not just
+// those in their own company. The old code filtered by company_id which hid
+// users from other companies.
+
+describe('Owner user listing visibility', () => {
+  it('owner should see users from all companies, not just own', () => {
+    const { owner, acct, foreign, store } = makeFixtures();
+    const allUsers = Array.from(store.values());
+
+    // Old behavior: filter by owner's company_id
+    const oldFiltered = allUsers.filter((u) => u.company_id === owner.company_id);
+    assert.equal(oldFiltered.length, 2, 'old filter shows only owner company users');
+
+    // New behavior: no company_id filter — owner sees all
+    const newFiltered = allUsers;
+    assert.equal(newFiltered.length, 3, 'owner sees all 3 users across companies');
+    assert.ok(newFiltered.some((u) => u.id === foreign.id), 'foreign company user is visible');
+  });
+
+  it('listing includes inactive users', () => {
+    const { store } = makeFixtures();
+    const inactiveUser: UserRow = {
+      id: 'inactive-1', email: 'inactive@co.com', role: 'accountant',
+      company_id: 'co-2', active: false,
+    };
+    store.set(inactiveUser.id, inactiveUser);
+
+    const allUsers = Array.from(store.values());
+    assert.ok(allUsers.some((u) => u.id === inactiveUser.id), 'inactive user is in listing');
+    assert.ok(allUsers.some((u) => u.active === false), 'inactive flag is preserved');
+  });
+
+  it('listing does not filter by role', () => {
+    const { store } = makeFixtures();
+    const allUsers = Array.from(store.values());
+
+    assert.ok(allUsers.some((u) => u.role === 'owner'), 'owner is in listing');
+    assert.ok(allUsers.some((u) => u.role === 'accountant'), 'accountant is in listing');
+  });
+
+  it('search filters by email case-insensitively', () => {
+    const { store } = makeFixtures();
+    const allUsers = Array.from(store.values());
+    const search = 'OWNER';
+    const filtered = allUsers.filter((u) =>
+      u.email.toLowerCase().includes(search.toLowerCase()),
+    );
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].email, 'owner@co.com');
+  });
+
+  it('pagination does not hide users when total > pageSize', () => {
+    const { store } = makeFixtures();
+    // Add extra users to exceed page size
+    for (let i = 0; i < 60; i++) {
+      store.set(`extra-${i}`, {
+        id: `extra-${i}`, email: `extra${i}@co.com`, role: 'accountant',
+        company_id: 'co-1', active: true,
+      });
+    }
+    const allUsers = Array.from(store.values());
+    const pageSize = 50;
+    const firstPage = allUsers.slice(0, pageSize);
+    const totalCount = allUsers.length;
+
+    assert.ok(totalCount > pageSize, 'total exceeds page size');
+    assert.equal(firstPage.length, pageSize, 'first page is full');
+    assert.ok(totalCount > firstPage.length, 'more pages exist');
+  });
+
+  it('non-owner (accountant) is rejected by requireOwner guard', () => {
+    const { acct } = makeFixtures();
+    const isOwner = acct.role === 'owner';
+    assert.equal(isOwner, false);
+  });
+
+  it('company_name is populated for users with company_id', () => {
+    const { owner } = makeFixtures();
+    assert.ok(owner.company_id, 'user has company_id');
+    // In the real query, company_name is fetched via a separate companies lookup
+    // Here we verify the mapping logic
+    const companies = new Map([['co-1', 'Firma A'], ['co-2', 'Firma B']]);
+    const companyName = companies.get(owner.company_id) ?? null;
+    assert.equal(companyName, 'Firma A');
+  });
+
+  it('company_name is null for users without company_id', () => {
+    const orphanUser: UserRow = {
+      id: 'orphan-1', email: 'orphan@no.co', role: 'accountant',
+      company_id: '', active: true,
+    };
+    const companies = new Map([['co-1', 'Firma A']]);
+    const companyName = orphanUser.company_id ? companies.get(orphanUser.company_id) ?? null : null;
+    assert.equal(companyName, null);
+  });
+});

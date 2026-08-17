@@ -30,6 +30,7 @@ export default async function AdminUsersPage() {
   ]);
 
   const users = usersResult.ok ? usersResult.data.rows : [];
+  const usersError = usersResult.ok ? null : usersResult.error;
 
   return (
     <Stack gap="6" className="max-w-5xl">
@@ -42,6 +43,7 @@ export default async function AdminUsersPage() {
         isOwner={isOwner}
         initialUsers={users}
         initialLogs={logs}
+        fetchError={usersError}
       />
     </Stack>
   );

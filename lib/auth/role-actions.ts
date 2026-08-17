@@ -11,13 +11,14 @@ export type RoleActionResult<T = void> =
   | { ok: false; error: string };
 
 export interface CompanyUser {
-  id:         string;
-  email:      string;
-  full_name:  string | null;
-  role:       AppRole;
-  active:     boolean;
-  company_id: string | null;
-  created_at: string;
+  id:           string;
+  email:        string;
+  full_name:    string | null;
+  role:         AppRole;
+  active:       boolean;
+  company_id:   string | null;
+  company_name: string | null;
+  created_at:   string;
 }
 
 export interface RoleChangeLog {
@@ -110,13 +111,14 @@ export async function getUser(
     return {
       ok: true,
       data: {
-        id:         u.id,
-        email:      u.email,
-        full_name:  profile?.full_name ?? null,
-        role:       (u.role ?? 'accountant') as AppRole,
-        active:     u.active ?? true,
-        company_id: u.company_id,
-        created_at: u.created_at,
+        id:           u.id,
+        email:        u.email,
+        full_name:    profile?.full_name ?? null,
+        role:         (u.role ?? 'accountant') as AppRole,
+        active:       u.active ?? true,
+        company_id:   u.company_id,
+        company_name: null,
+        created_at:   u.created_at,
       },
     };
   } catch (e) {
@@ -139,17 +141,19 @@ export async function getUsersWithRoles(params: {
   search?:   string;
 } = {}): Promise<RoleActionResult<{ rows: CompanyUser[]; totalCount: number }>> {
   try {
-    const { supabase, companyId } = await requireOwner();
+    await requireOwner();
+    const service = getSupabaseServiceClient();
     const { page = 1, pageSize = 50, search } = params;
 
     const from = (page - 1) * pageSize;
     const to   = from + pageSize - 1;
 
+    // Platform owner sees ALL users across ALL companies.
+    // Service client bypasses RLS so the company_id scoping policy doesn't hide them.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+    let query = (service as any)
       .from('users')
       .select('id, email, role, company_id, active, created_at', { count: 'exact' })
-      .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -161,27 +165,37 @@ export async function getUsersWithRoles(params: {
     if (error) return { ok: false, error: error.message };
 
     const userIds = (data ?? []).map((u: { id: string }) => u.id);
+    const companyIds = Array.from(new Set(
+      (data ?? []).map((u: { company_id: string | null }) => u.company_id).filter(Boolean)
+    )) as string[];
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: profiles } = await (supabase as any)
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', userIds);
+    const [profilesRes, companiesRes] = await Promise.all([
+      (service as any).from('profiles').select('id, full_name').in('id', userIds),
+      companyIds.length > 0
+        ? (service as any).from('companies').select('id, name').in('id', companyIds)
+        : Promise.resolve({ data: [] }),
+    ]);
 
     const profileMap = new Map(
-      (profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name])
+      (profilesRes.data ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name])
+    );
+    const companyMap = new Map(
+      (companiesRes.data ?? []).map((c: { id: string; name: string }) => [c.id, c.name])
     );
 
     const rows: CompanyUser[] = (data ?? []).map((u: {
       id: string; email: string; role: string; company_id: string | null;
       active: boolean; created_at: string;
     }) => ({
-      id:         u.id,
-      email:      u.email,
-      full_name:  (profileMap.get(u.id) as string | null) ?? null,
-      role:       (u.role ?? 'accountant') as AppRole,
-      active:     u.active ?? true,
-      company_id: u.company_id,
-      created_at: u.created_at,
+      id:           u.id,
+      email:        u.email,
+      full_name:    (profileMap.get(u.id) as string | null) ?? null,
+      role:         (u.role ?? 'accountant') as AppRole,
+      active:       u.active ?? true,
+      company_id:   u.company_id,
+      company_name: u.company_id ? (companyMap.get(u.company_id) as string | null) ?? null : null,
+      created_at:   u.created_at,
     }));
 
     return { ok: true, data: { rows, totalCount: count ?? 0 } };
@@ -197,10 +211,11 @@ export async function getRoleChangeLogs(
   limit = 30,
 ): Promise<RoleChangeLog[]> {
   try {
-    const { supabase } = await requireOwner();
+    await requireOwner();
+    const service = getSupabaseServiceClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+    let query = (service as any)
       .from('role_change_logs')
       .select('*')
       .order('created_at', { ascending: false })
@@ -217,7 +232,7 @@ export async function getRoleChangeLogs(
     const allUserIds = ids.filter((id, i) => ids.indexOf(id) === i);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: users } = await (supabase as any)
+    const { data: users } = await (service as any)
       .from('users')
       .select('id, email')
       .in('id', allUserIds);
