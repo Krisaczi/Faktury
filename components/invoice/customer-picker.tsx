@@ -189,7 +189,7 @@ export function CustomerPicker({ value, onChange, onCustomerCreated }: Props) {
 
           {/* Dropdown results */}
           {showDropdown && (
-            <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-72 overflow-y-auto">
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-72">
               {results.length > 0 ? (
                 <ul className="py-1">
                   {results.map((c, i) => (
