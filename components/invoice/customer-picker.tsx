@@ -274,6 +274,7 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
   const [name, setName] = useState('');
   const [nip, setNip] = useState('');
   const [address, setAddress] = useState('');
+  const [zip, setZip] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -286,6 +287,7 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
       setName(defaultName ?? '');
       setNip('');
       setAddress('');
+      setZip('');
       setEmail('');
       setPhone('');
       setErrors({});
@@ -305,6 +307,11 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
       e.address = 'Adres jest wymagany';
     } else if (address.trim().length < 3) {
       e.address = 'Adres musi mieć min. 3 znaki';
+    }
+    if (!zip.trim()) {
+      e.zip = 'Kod pocztowy jest wymagany';
+    } else if (!/^\d{2}-\d{3}$/.test(zip.trim())) {
+      e.zip = 'Kod pocztowy musi mieć format XX-XXX';
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       e.email = 'Nieprawidłowy adres e-mail';
@@ -326,6 +333,7 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
           name:    name.trim(),
           nip:     nip.trim(),
           address: address.trim(),
+          zip:     zip.trim(),
           email:   email.trim() || undefined,
           phone:   phone.trim() || undefined,
         }),
@@ -402,13 +410,32 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
             <Input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="ul. Przykładowa 1, 00-001 Warszawa"
+              placeholder="ul. Przykładowa 1"
               className={errors.address ? 'border-red-400' : ''}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/* ZIP */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                Kod pocztowy <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={zip}
+                onChange={(e) => {
+                  let val = e.target.value.replace(/[^\d-]/g, '');
+                  // Auto-format: insert dash after 2 digits
+                  if (val.length === 2 && !val.includes('-')) val = val + '-';
+                  setZip(val.slice(0, 6));
+                }}
+                placeholder="00-001"
+                className={cn('font-mono', errors.zip && 'border-red-400')}
+              />
+              {errors.zip && <p className="text-xs text-red-500">{errors.zip}</p>}
+            </div>
+
             {/* Email */}
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
@@ -423,18 +450,18 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
               />
               {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
             </div>
+          </div>
 
-            {/* Phone */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                Telefon
-              </Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+48 123 456 789"
-              />
-            </div>
+          {/* Phone */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+              Telefon
+            </Label>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+48 123 456 789"
+            />
           </div>
 
           {submitError && (

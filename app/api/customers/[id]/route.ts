@@ -4,10 +4,13 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyPackage } from '@/lib/packages/get-company-package';
 import { canManageCustomers } from '@/lib/permissions';
 
+const ZIP_REGEX = /^\d{2}-\d{3}$/;
+
 const UpdateCustomerSchema = z.object({
   name:    z.string().min(1, 'Nazwa firmy jest wymagana').max(200),
   nip:     z.string().regex(/^\d{10}$/, 'NIP musi zawierać 10 cyfr'),
   address: z.string().min(3, 'Adres jest wymagany (min. 3 znaki)').max(500),
+  zip:     z.string().regex(ZIP_REGEX, 'Kod pocztowy musi mieć format XX-XXX'),
   email:   z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   phone:   z.string().max(50).optional().or(z.literal('')),
 });
@@ -55,15 +58,12 @@ export async function PUT(
     }, { status: 400 });
   }
 
-  const { name, nip, address, email, phone } = parsed.data;
+  const { name, nip, address, zip, email, phone } = parsed.data;
 
-  // Parse address
+  // Parse address (ZIP is now a separate field)
   const addressParts = address.split(',').map((s) => s.trim());
   const street = addressParts[0] || address;
-  const postalCity = addressParts.slice(1).join(', ').trim() || null;
-  const postalMatch = postalCity?.match(/(\d{2}-\d{3})/);
-  const postalCode = postalMatch?.[1] ?? null;
-  const city = postalCity?.replace(/\d{2}-\d{3}\s*/, '').trim() || postalCity || null;
+  const city = addressParts.slice(1).join(', ').trim() || null;
 
   // Check duplicate NIP (excluding current record)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +89,7 @@ export async function PUT(
       name,
       nip,
       street,
-      postal_code: postalCode,
+      postal_code: zip,
       city,
       email:      email || null,
       phone:      phone || null,

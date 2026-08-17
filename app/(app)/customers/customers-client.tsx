@@ -231,6 +231,7 @@ export function CustomersClient() {
               </th>
               <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">NIP</th>
               <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">Adres</th>
+              <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">Kod</th>
               <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">E-mail</th>
               <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">Telefon</th>
               <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">
@@ -248,14 +249,14 @@ export function CustomersClient() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
+                <td colSpan={8} className="px-4 py-12 text-center">
                   <Loader2 className="w-6 h-6 text-slate-300 mx-auto mb-2 animate-spin" />
                   <p className="text-sm text-slate-400">Ładowanie klientów…</p>
                 </td>
               </tr>
             ) : customers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
+                <td colSpan={8} className="px-4 py-12 text-center">
                   <Building2 className="w-10 h-10 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
                     {search ? `Brak wyników dla „${search}"` : 'Brak zapisanych klientów'}
@@ -294,6 +295,7 @@ export function CustomersClient() {
                   </td>
                   <td className="px-4 py-3 text-sm font-mono text-slate-600 dark:text-slate-400">{c.nip ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate">{formatAddress(c)}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-slate-600 dark:text-slate-400">{c.postal_code ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{c.email ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{c.phone ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(c.created_at)}</td>
@@ -366,6 +368,9 @@ export function CustomersClient() {
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{formatAddress(c)}</p>
                   <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline" className="text-[10px] py-0 font-mono">
+                      {c.postal_code ?? '—'}
+                    </Badge>
                     <Badge variant="outline" className="text-[10px] py-0">
                       {formatDate(c.created_at)}
                     </Badge>
@@ -480,6 +485,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
   const [name, setName]         = useState('');
   const [nip, setNip]           = useState('');
   const [address, setAddress]   = useState('');
+  const [zip, setZip]           = useState('');
   const [email, setEmail]       = useState('');
   const [phone, setPhone]       = useState('');
   const [errors, setErrors]     = useState<Record<string, string>>({});
@@ -492,13 +498,12 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
       if (mode === 'edit' && customer) {
         setName(customer.name);
         setNip(customer.nip ?? '');
-        const addrParts = [customer.street, [customer.postal_code, customer.city].filter(Boolean).join(' '), customer.country]
-          .filter(Boolean).join(', ');
-        setAddress(addrParts || '');
+        setAddress(customer.street ?? '');
+        setZip(customer.postal_code ?? '');
         setEmail(customer.email ?? '');
         setPhone(customer.phone ?? '');
       } else {
-        setName(''); setNip(''); setAddress(''); setEmail(''); setPhone('');
+        setName(''); setNip(''); setAddress(''); setZip(''); setEmail(''); setPhone('');
       }
       setErrors({});
       setSubmitError('');
@@ -518,6 +523,11 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
     } else if (address.trim().length < 3) {
       e.address = 'Adres musi mieć min. 3 znaki';
     }
+    if (!zip.trim()) {
+      e.zip = 'Kod pocztowy jest wymagany';
+    } else if (!/^\d{2}-\d{3}$/.test(zip.trim())) {
+      e.zip = 'Kod pocztowy musi mieć format XX-XXX';
+    }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       e.email = 'Nieprawidłowy adres e-mail';
     }
@@ -535,6 +545,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
         name:    name.trim(),
         nip:     nip.trim(),
         address: address.trim(),
+        zip:     zip.trim(),
         email:   email.trim() || undefined,
         phone:   phone.trim() || undefined,
       };
@@ -615,13 +626,30 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
             <Input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="ul. Przykładowa 1, 00-001 Warszawa"
+              placeholder="ul. Przykładowa 1"
               className={errors.address ? 'border-red-400' : ''}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                Kod pocztowy <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={zip}
+                onChange={(e) => {
+                  let val = e.target.value.replace(/[^\d-]/g, '');
+                  if (val.length === 2 && !val.includes('-')) val = val + '-';
+                  setZip(val.slice(0, 6));
+                }}
+                placeholder="00-001"
+                className={cn('font-mono', errors.zip && 'border-red-400')}
+              />
+              {errors.zip && <p className="text-xs text-red-500">{errors.zip}</p>}
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
                 E-mail
@@ -635,17 +663,17 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
               />
               {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
             </div>
+          </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                Telefon
-              </Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+48 123 456 789"
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+              Telefon
+            </Label>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+48 123 456 789"
+            />
           </div>
 
           {submitError && (
@@ -678,3 +706,6 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
     </Dialog>
   );
 }
+
+
+export { CustomersClient }

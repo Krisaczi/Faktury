@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = (searchParams.get('search') ?? '').trim();
+  const zip    = (searchParams.get('zip')    ?? '').trim();
   const page   = Math.max(parseInt(searchParams.get('page')   ?? '1', 10) || 1, 1);
   const limit  = Math.min(parseInt(searchParams.get('limit')  ?? '20', 10) || 20, 100);
   const sort   = (searchParams.get('sort') ?? 'recent').trim();
@@ -53,6 +54,10 @@ export async function GET(req: NextRequest) {
     query = query.or(`name.ilike.%${search}%,nip.ilike.%${search}%`);
   }
 
+  if (zip.length > 0) {
+    query = query.eq('postal_code', zip);
+  }
+
   // For "recent" sort, also do a secondary sort by name
   if (sort === 'recent') {
     query = query.order('last_used_at', { ascending: false, nullsFirst: false })
@@ -79,10 +84,13 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/customers ──────────────────────────────────────────────────────
 
+const ZIP_REGEX = /^\d{2}-\d{3}$/;
+
 const CreateCustomerSchema = z.object({
   name:    z.string().min(1, 'Nazwa firmy jest wymagana').max(200),
   nip:     z.string().regex(/^\d{10}$/, 'NIP musi zawierać 10 cyfr'),
   address: z.string().min(3, 'Adres jest wymagany (min. 3 znaki)').max(500),
+  zip:     z.string().regex(ZIP_REGEX, 'Kod pocztowy musi mieć format XX-XXX'),
   email:   z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   phone:   z.string().max(50).optional().or(z.literal('')),
 });
@@ -137,15 +145,12 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { name, nip, address, email, phone } = parsed.data;
+  const { name, nip, address, zip, email, phone } = parsed.data;
 
-  // Parse address into street / postal_code / city (best effort)
+  // Parse address into street / city (ZIP is now a separate field)
   const addressParts = address.split(',').map((s) => s.trim());
   const street = addressParts[0] || address;
-  const postalCity = addressParts.slice(1).join(', ').trim() || null;
-  const postalMatch = postalCity?.match(/(\d{2}-\d{3})/);
-  const postalCode = postalMatch?.[1] ?? null;
-  const city = postalCity?.replace(/\d{2}-\d{3}\s*/, '').trim() || postalCity || null;
+  const city = addressParts.slice(1).join(', ').trim() || null;
 
   // Check for duplicate NIP
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -185,7 +190,7 @@ export async function POST(req: NextRequest) {
       name,
       nip,
       street,
-      postal_code: postalCode,
+      postal_code: zip,
       city,
       country:    'Polska',
       email:      email || null,
