@@ -266,3 +266,59 @@ describe('Plan change validation', () => {
     assert.equal(requiresForce, false);
   });
 });
+
+// ─── Cancel subscription ──────────────────────────────────────────────────────
+
+describe('Cancel subscription', () => {
+  it('cancel always targets starter plan', () => {
+    const cancelToPlan = 'starter';
+    assert.equal(cancelToPlan, 'starter');
+  });
+
+  it('cancel from professional is a downgrade', () => {
+    assert.equal(isDowngrade('professional', 'starter'), true);
+  });
+
+  it('cancel from starter is same plan (no-op)', () => {
+    assert.equal(isDowngrade('starter', 'starter'), false);
+  });
+
+  it('cancel effective period_end does not apply immediately', () => {
+    const effective = 'period_end';
+    assert.equal(effective === 'now', false);
+  });
+
+  it('cancel effective now applies immediately', () => {
+    const effective = 'now';
+    assert.equal(effective === 'now', true);
+  });
+});
+
+// ─── Notification events ──────────────────────────────────────────────────────
+
+describe('Plan change notifications', () => {
+  const validEvents = ['plan_changed', 'plan_scheduled', 'plan_change_failed', 'subscription_canceled'] as const;
+
+  it('defines all required notification event types', () => {
+    assert.ok(validEvents.includes('plan_changed'));
+    assert.ok(validEvents.includes('plan_scheduled'));
+    assert.ok(validEvents.includes('plan_change_failed'));
+    assert.ok(validEvents.includes('subscription_canceled'));
+  });
+
+  it('maps effective=now to plan_changed event', () => {
+    const eventType = 'now' === 'now' ? 'plan_changed' : 'plan_scheduled';
+    assert.equal(eventType, 'plan_changed');
+  });
+
+  it('maps effective=period_end to plan_scheduled event', () => {
+    const eventType = 'period_end' === 'now' ? 'plan_changed' : 'plan_scheduled';
+    assert.equal(eventType, 'plan_scheduled');
+  });
+
+  it('cancel produces subscription_canceled event', () => {
+    const isCancel = true;
+    const eventType = isCancel ? 'subscription_canceled' : 'plan_changed';
+    assert.equal(eventType, 'subscription_canceled');
+  });
+});

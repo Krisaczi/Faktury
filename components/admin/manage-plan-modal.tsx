@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, Loader as Loader2, TriangleAlert as AlertTriangle, Check, Clock, TrendingUp, TrendingDown, ArrowRight, Calendar } from 'lucide-react';
+import { CreditCard, Loader as Loader2, TriangleAlert as AlertTriangle, Check, Clock, TrendingUp, TrendingDown, ArrowRight, Calendar, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,8 +76,8 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
 
     try {
       const [plansRes, subRes] = await Promise.all([
-        fetch('/api/admin/plans'),
-        fetch(`/api/admin/users/${user.id}/subscription`),
+        fetch('/api/owner/plans'),
+        fetch(`/api/owner/users/${user.id}/subscription`),
       ]);
 
       const plansData = await plansRes.json() as { plans: PlanInfo[] };
@@ -120,7 +120,7 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
     setConflicts([]);
 
     try {
-      const res = await fetch(`/api/admin/users/${user.id}/change-plan`, {
+      const res = await fetch(`/api/owner/users/${user.id}/change-plan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -149,6 +149,37 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
       }
 
       setResult({ fromPlan: data.fromPlan, toPlan: data.toPlan, effective: data.effective });
+      setStep('success');
+      setIsSubmitting(false);
+    } catch {
+      setError('Błąd połączenia z serwerem.');
+      setStep('error');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/owner/users/${user.id}/change-plan`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          cancel:     true,
+          effective:  'period_end',
+          reason:     reason || undefined,
+          notes:      notes || undefined,
+          notifyUser,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Błąd anulowania subskrypcji.');
+        setIsSubmitting(false);
+        return;
+      }
+      setResult({ fromPlan: data.fromPlan, toPlan: 'starter', effective: data.effective });
       setStep('success');
       setIsSubmitting(false);
     } catch {
@@ -463,8 +494,18 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
             </Button>
           ) : step === 'detail' ? (
             <>
+              <Button
+                variant="ghost"
+                onClick={handleCancel}
+                disabled={isSubmitting || subscription?.currentPlan.id === 'starter'}
+                className="gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+              >
+                <Ban className="w-4 h-4" />
+                Anuluj subskrypcję
+              </Button>
+              <div className="flex-1" />
               <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
-                Anuluj
+                Zamknij
               </Button>
               <Button
                 onClick={handleSubmit}

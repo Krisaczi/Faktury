@@ -7,7 +7,7 @@ import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History } from 'lucide-react';
+import { Building2, Users, FileText, TrendingUp, MoveHorizontal as MoreHorizontal, CircleCheck as CheckCircle2, Circle as XCircle, Loader as Loader2, Tag, ChevronDown, ChevronUp, ShieldAlert, Receipt, Search, X, RefreshCw, Clock, History, CreditCard, ArrowRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -721,12 +721,26 @@ function AuditList({ logs }: { logs: OwnerAuditLog[] }) {
 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
-interface Props {
-  data:      OwnerDashboardData;
-  auditLogs: OwnerAuditLog[];
+export interface PlanChangeEntry {
+  id:              string;
+  from_plan:       string;
+  to_plan:         string;
+  effective:       string;
+  reason:          string | null;
+  notes:           string | null;
+  created_at:      string;
+  owner_id:        string;
+  target_user_id:  string;
+  company_id:      string | null;
 }
 
-export function OwnerDashboard({ data: initialData, auditLogs: initialLogs }: Props) {
+interface Props {
+  data:        OwnerDashboardData;
+  auditLogs:   OwnerAuditLog[];
+  planChanges?: PlanChangeEntry[];
+}
+
+export function OwnerDashboard({ data: initialData, auditLogs: initialLogs, planChanges }: Props) {
   const router    = useRouter();
   const [data, setData] = useState(initialData);
 
@@ -797,6 +811,29 @@ export function OwnerDashboard({ data: initialData, auditLogs: initialLogs }: Pr
           onRefresh={handleRefresh}
         />
       </Section>
+
+      {/* Plan changes widget */}
+      {planChanges && planChanges.length > 0 && (
+        <Section title="Ostatnie zmiany planów" icon={CreditCard}>
+          <div className="space-y-2">
+            {planChanges.slice(0, 8).map((pc) => (
+              <div key={pc.id} className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-mono text-xs text-slate-500">{pc.from_plan}</span>
+                  <ArrowRight className="w-3 h-3 text-slate-400" />
+                  <span className="font-mono text-xs font-medium text-slate-700 dark:text-slate-300">{pc.to_plan}</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {pc.effective === 'now' ? 'natychmiast' : 'koniec okresu'}
+                  </Badge>
+                </div>
+                <time className="text-xs text-slate-400 tabular-nums">
+                  {fmtIsoTimestamp(pc.created_at) ? format(parseISO(pc.created_at), 'dd.MM.yyyy HH:mm') : pc.created_at}
+                </time>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* Audit log */}
       <Section title="Dziennik zdarzeń" icon={History}>

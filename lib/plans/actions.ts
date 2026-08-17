@@ -147,7 +147,7 @@ export function computeProration(fromPlan: string, toPlan: string, effective: 'n
 }
 
 export async function logPlanChange(params: {
-  adminId:       string;
+  ownerId:       string;
   targetUserId:  string;
   companyId:     string | null;
   fromPlan:      string;
@@ -155,12 +155,12 @@ export async function logPlanChange(params: {
   effective:     'now' | 'period_end';
   reason?:       string;
   notes?:        string;
-  adminIp?:      string;
+  ownerIp?:      string;
 }) {
   const supabase = await getSupabaseServerClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('plan_change_audit').insert({
-    admin_id:       params.adminId,
+    owner_id:       params.ownerId,
     target_user_id: params.targetUserId,
     company_id:     params.companyId,
     from_plan:      params.fromPlan,
@@ -168,6 +168,132 @@ export async function logPlanChange(params: {
     effective:      params.effective,
     reason:         params.reason ?? null,
     notes:          params.notes ?? null,
-    admin_ip:       params.adminIp ?? null,
+    owner_ip:       params.ownerIp ?? null,
   });
+}
+
+export async function logPlanNotification(params: {
+  companyId:  string;
+  userEmail:  string;
+  eventType:  'plan_changed' | 'plan_scheduled' | 'plan_change_failed' | 'subscription_canceled';
+  fromPlan:   string;
+  toPlan:     string;
+  effective:  'now' | 'period_end';
+}) {
+  const supabase = await getSupabaseServerClient();
+  const subjectMap: Record<string, string> = {
+    plan_changed:          `Plan zmieniony: ${params.fromPlan} → ${params.toPlan}`,
+    plan_scheduled:        `Zmiana planu zaplanowana: ${params.fromPlan} → ${params.toPlan}`,
+    plan_change_failed:    `Błąd zmiany planu: ${params.fromPlan} → ${params.toPlan}`,
+    subscription_canceled: `Subskrypcja anulowana (plan: ${params.fromPlan})`,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from('email_events_log').insert({
+    company_id:    params.companyId,
+    recipient:     params.userEmail,
+    subject:       subjectMap[params.eventType] ?? params.eventType,
+    event_type:    params.eventType,
+    status:        'pending',
+    provider:      'internal',
+    created_at:    new Date().toISOString(),
+  });
+}
+
+export interface CancelResult {
+  ok:           boolean;
+  fromPlan:     string;
+  effective:    'now' | 'period_end';
+  message:      string;
+}
+
+export async function cancelSubscription(params: {
+  ownerId:       string;
+  targetUserId:  string;
+  companyId:     string;
+  effective:     'now' | 'period_end';
+  reason?:       string;
+  notes?:        string;
+  ownerIp?:      string;
+  notifyUser:    boolean;
+}): Promise<CancelResult> {
+  const supabase = await getSupabaseServerClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: company } = await (supabase as any)
+    .from('companies')
+    .select('product_type')
+    .eq('id', params.companyId)
+    .maybeSingle();
+
+  const fromPlan = (company?.product_type ?? 'starter') as string;
+
+  if (params.effective === 'now') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('companies')
+      .update({
+        product_type:        'starter',
+        package_type:        'starter',
+        subscription_status: 'canceled',
+        package_assigned_at: new Date().toISOString(),
+        updated_at:          new Date().toISOString(),
+      })
+      .eq('id', params.companyId);
+
+    if (error) {
+      return { ok: false, fromPlan, effective: params.effective, message: 'Błąd anulowania subskrypcji.' };
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from('billing_audit').insert({
+    company_id:  params.companyId,
+    event_type:  'subscription_canceled',
+    from_plan:   fromPlan,
+    to_plan:     'starter',
+    changed_by:  params.ownerId,
+    metadata:    { reason: params.reason ?? null, notes: params.notes ?? null, effective: params.effective },
+  });
+
+  await logPlanChange({
+    ownerId:       params.ownerId,
+    targetUserId:  params.targetUserId,
+    companyId:     params.companyId,
+    fromPlan,
+    toPlan:        'starter',
+    effective: params.effective,
+    reason:        params.reason,
+    notes:         params.notes,
+    ownerIp:       params.ownerIp,
+  });
+
+  if (params.notifyUser) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: targetUser } = await (supabase as any)
+      .from('users')
+      .select('email')
+      .eq('id', params.targetUserId)
+      .maybeSingle();
+
+    if (targetUser?.email) {
+      await logPlanNotification({
+        companyId:  params.companyId,
+        userEmail:  targetUser.email,
+        eventType:  'subscription_canceled',
+        fromPlan,
+        toPlan:     'starter',
+        effective:  params.effective,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    fromPlan,
+    effective: params.effective,
+    message: params.effective === 'now'
+      ? 'Subskrypcja anulowana natychmiast.'
+      : 'Anulowanie subskrypcji zaplanowane na koniec okresu.',
+  };
 }
