@@ -706,6 +706,3 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
     </Dialog>
   );
 }
-
-
-export { CustomersClient }
