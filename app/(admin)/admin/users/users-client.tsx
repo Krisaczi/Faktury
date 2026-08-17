@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { repairMisassignedOwners } from '@/lib/auth/repair-misassigned-owners';
 import { deactivateUser, reactivateUser } from '@/lib/auth/user-status-actions';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type AppRole } from '@/lib/permissions';
 import type { CompanyUser, RoleChangeLog } from '@/lib/auth/role-actions';
+import { ManagePlanModal } from '@/components/admin/manage-plan-modal';
 
 // ─── Role colours ─────────────────────────────────────────────────────────────
 
@@ -302,7 +303,8 @@ export interface UsersClientProps {
 type ModalAction =
   | { kind: 'deactivate'; user: CompanyUser }
   | { kind: 'reactivate'; user: CompanyUser }
-  | { kind: 'repair' };
+  | { kind: 'repair' }
+  | { kind: 'managePlan'; user: CompanyUser };
 
 export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs }: UsersClientProps) {
   const router                           = useRouter();
@@ -460,30 +462,44 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
                   </time>
 
                   {/* Actions — owner only, not self, not owner row */}
-                  {isOwner && !isSelf && !isOwnerRow && (
+                  {isOwner && !isSelf && (
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Deactivate — active users */}
-                      {!isInactive && (
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => setModal({ kind: 'deactivate', user: u })}
-                          className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          title="Dezaktywuj konto"
-                        >
-                          <UserX className="w-4 h-4" />
-                        </Button>
-                      )}
+                      {/* Manage plan */}
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => setModal({ kind: 'managePlan', user: u })}
+                        className="h-8 w-8 p-0 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        title="Zarządzaj planem"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                      </Button>
 
-                      {/* Reactivate — inactive users */}
-                      {isInactive && (
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => setModal({ kind: 'reactivate', user: u })}
-                          className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                          title="Reaktywuj konto"
-                        >
-                          <UserCheck className="w-4 h-4" />
-                        </Button>
+                      {!isOwnerRow && (
+                        <>
+                          {/* Deactivate — active users */}
+                          {!isInactive && (
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => setModal({ kind: 'deactivate', user: u })}
+                              className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Dezaktywuj konto"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </Button>
+                          )}
+
+                          {/* Reactivate — inactive users */}
+                          {isInactive && (
+                            <Button
+                              variant="ghost" size="sm"
+                              onClick={() => setModal({ kind: 'reactivate', user: u })}
+                              className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                              title="Reaktywuj konto"
+                            >
+                              <UserCheck className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -554,6 +570,15 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs 
 
       {modal?.kind === 'repair' && (
         <RepairModal onClose={() => { setModal(null); router.refresh(); }} />
+      )}
+
+      {modal?.kind === 'managePlan' && (
+        <ManagePlanModal
+          open
+          onOpenChange={() => { setModal(null); }}
+          user={modal.user}
+          onSuccess={() => router.refresh()}
+        />
       )}
     </div>
   );
