@@ -31,6 +31,8 @@ import type { InvoiceFormValues } from '@/app/(admin)/admin/invoices/actions';
 import { createInvoice, updateInvoice } from '@/app/(admin)/admin/invoices/actions';
 import { BankAccountSelector } from '@/components/invoice/bank-account-selector';
 import { CustomerPicker, type Customer } from '@/components/invoice/customer-picker';
+import { useInvoiceUsage } from '@/hooks/use-invoice-usage';
+import { CircleAlert as LimitIcon, TrendingUp } from 'lucide-react';
 
 // ─── Local form schema (mirrors InvoiceFormValues) ────────────────────────────
 
@@ -108,6 +110,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
   const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
   const [buyerTouched, setBuyerTouched] = useState(false);
+  const usage = useInvoiceUsage();
 
   const {
     register,
@@ -477,6 +480,41 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
         </Field>
       </Section>
 
+      {/* ── Usage indicator (Starter plan only) ──────────────────────── */}
+      {usage.isLimited && !usage.isLoading && (
+        <div className={cn(
+          'flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-colors',
+          usage.atLimit
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
+            : usage.nearLimit
+              ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
+              : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+        )}>
+          <LimitIcon className="w-4 h-4 flex-shrink-0" />
+          <div className="flex-1">
+            {usage.atLimit ? (
+              <span>
+                Osiągnięto miesięczny limit <strong>{usage.limit}</strong> wystawionych faktur.
+                {usage.override > 0 && <> (w tym {usage.override} dodatkowe od właściciela)</>}
+                {' '}Zaktualizuj do Professional, aby wystawiać bez limitów.
+              </span>
+            ) : (
+              <span>
+                Wystawiono <strong>{usage.issued}</strong> z <strong>{usage.limit}</strong> faktur w tym miesiącu.
+                {usage.override > 0 && <> (w tym {usage.override} dodatkowe od właściciela)</>}
+                {' '}— pozostało <strong>{usage.remaining}</strong>.
+              </span>
+            )}
+          </div>
+          {!usage.atLimit && (
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium tabular-nums">
+              <TrendingUp className="w-3 h-3" />
+              {usage.issued}/{usage.limit}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Action bar ────────────────────────────────────────────────── */}
       <div className="sticky bottom-0 z-10 flex items-center justify-between gap-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 px-0 py-4">
         <div className="flex items-center gap-3">
@@ -506,9 +544,10 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
           </Button>
           <Button
             type="button"
-            disabled={isPending}
+            disabled={isPending || (usage.isLimited && usage.atLimit)}
             onClick={() => { setIntent('issue'); onSubmit('issue'); }}
             className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-600/20"
+            title={usage.isLimited && usage.atLimit ? 'Osiągnięto miesięczny limit faktur' : undefined}
           >
             {isPending && intent === 'issue' ? (
               <Loader className="w-4 h-4 animate-spin" />

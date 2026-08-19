@@ -3,21 +3,25 @@ import { z } from 'zod';
 // ─── Features ─────────────────────────────────────────────────────────────────
 
 export interface PackageFeatures {
-  vendors_limit:      number | null; // null = unlimited
-  reports_per_month:  number | null; // null = unlimited
-  users_limit:        number | null; // null = unlimited; Starter = 3, Professional = null
-  file_uploads:       boolean;
-  invoicing:          boolean;
-  support:            'email' | 'priority' | 'none';
+  vendors_limit:        number | null; // null = unlimited
+  reports_per_month:    number | null; // null = unlimited
+  users_limit:          number | null; // null = unlimited; Starter = 1, Professional = 3
+  invoices_per_month:   number | null; // null = unlimited; Starter = 10, Professional = null
+  file_uploads:         boolean;
+  invoicing:            boolean;
+  support:              'email' | 'priority' | 'none';
 }
 
+export const STARTER_INVOICE_LIMIT = 10;
+
 export const DEFAULT_STARTER_FEATURES: PackageFeatures = {
-  vendors_limit:     25,
-  reports_per_month: 10,
-  users_limit:       1,
-  file_uploads:      true,
-  invoicing:         false,
-  support:           'email',
+  vendors_limit:      25,
+  reports_per_month:  10,
+  users_limit:        1,
+  invoices_per_month: STARTER_INVOICE_LIMIT,
+  file_uploads:       true,
+  invoicing:          false,
+  support:            'email',
 };
 
 export type PackageType = 'starter' | 'professional' | 'pro' | 'individual';
@@ -66,13 +70,14 @@ export interface EnforcementResult {
 // ─── Individual options schema (Zod) ─────────────────────────────────────────
 
 export const IndividualOptionsSchema = z.object({
-  vendors_limit:     z.number().int().min(0).nullable().default(25),
-  reports_per_month: z.number().int().min(0).nullable().default(10),
-  users_limit:       z.number().int().min(0).nullable().default(3),
-  file_uploads:      z.boolean().default(true),
-  invoicing:         z.boolean().default(false),
-  support:           z.enum(['email', 'priority', 'none']).default('email'),
-});
+    vendors_limit:      z.number().int().min(0).nullable().default(25),
+    reports_per_month:  z.number().int().min(0).nullable().default(10),
+    users_limit:        z.number().int().min(0).nullable().default(3),
+    invoices_per_month: z.number().int().min(0).nullable().default(STARTER_INVOICE_LIMIT),
+    file_uploads:       z.boolean().default(true),
+    invoicing:          z.boolean().default(false),
+    support:            z.enum(['email', 'priority', 'none']).default('email'),
+  });
 
 export type IndividualOptions = z.infer<typeof IndividualOptionsSchema>;
 

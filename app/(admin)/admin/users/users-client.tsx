@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard, FilePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -305,7 +305,8 @@ type ModalAction =
   | { kind: 'deactivate'; user: CompanyUser }
   | { kind: 'reactivate'; user: CompanyUser }
   | { kind: 'repair' }
-  | { kind: 'managePlan'; user: CompanyUser };
+  | { kind: 'managePlan'; user: CompanyUser }
+  | { kind: 'allowance'; user: CompanyUser };
 
 export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs, fetchError }: UsersClientProps) {
   const router                           = useRouter();
@@ -488,6 +489,16 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
                         <CreditCard className="w-4 h-4" />
                       </Button>
 
+                      {/* Grant invoice allowance */}
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => setModal({ kind: 'allowance', user: u })}
+                        className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                        title="Przyznaj dodatkowe faktury"
+                      >
+                        <FilePlus className="w-4 h-4" />
+                      </Button>
+
                       {!isOwnerRow && (
                         <>
                           {/* Deactivate — active users */}
@@ -594,6 +605,128 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
           onSuccess={() => router.refresh()}
         />
       )}
+
+      {modal?.kind === 'allowance' && (
+        <AllowanceModal
+          target={modal.user}
+          onClose={() => { setModal(null); setModalError(null); }}
+          isPending={isPending}
+          error={modalError}
+          onConfirm={async (extra, reason) => {
+            setModalError(null);
+            start(async () => {
+              const res = await fetch(`/api/owner/users/${modal.user.id}/allowance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extraInvoices: extra, reason: reason || undefined }),
+              });
+              if (!res.ok) {
+                const err = await res.json();
+                setModalError(err.error ?? 'Błąd');
+                return;
+              }
+              refreshAndClose();
+            });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Allowance modal ──────────────────────────────────────────────────────────
+
+function AllowanceModal({
+  target,
+  onClose,
+  onConfirm,
+  isPending,
+  error,
+}: {
+  target:    CompanyUser;
+  onClose:   () => void;
+  onConfirm: (extra: number, reason: string) => Promise<void>;
+  isPending: boolean;
+  error:     string | null;
+}) {
+  const [extra, setExtra] = useState(5);
+  const [reason, setReason] = useState('');
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FilePlus className="w-4 h-4 text-emerald-500" />
+            Dodatkowe faktury
+          </DialogTitle>
+          <DialogDescription>
+            Przyznaj dodatkowe faktury w bieżącym miesiącu dla tej firmy.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                {(target.full_name ?? target.email)[0]?.toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                {target.full_name ?? target.email}
+              </p>
+              <p className="text-xs text-slate-500 truncate">{target.email}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Liczba dodatkowych faktur</Label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={extra}
+              onChange={(e) => setExtra(Math.max(1, Number(e.target.value) || 1))}
+              className="text-sm"
+            />
+            <p className="text-xs text-slate-400">
+              Te faktury zostaną dodane do limitu miesięcznego (tylko na bieżący miesiąc).
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Powód (opcjonalnie)</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="np. duży miesiąc rozliczeniowy"
+              className="text-sm resize-none h-20"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Anuluj
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void onConfirm(extra, reason)}
+            disabled={isPending}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+            Przyznaj {extra} faktur
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

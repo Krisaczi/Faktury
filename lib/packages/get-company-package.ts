@@ -10,12 +10,13 @@ import type {
 import { DEFAULT_STARTER_FEATURES } from './types';
 
 const DEFAULT_PROFESSIONAL_FEATURES: PackageFeatures = {
-  vendors_limit:     null,
-  reports_per_month: null,
-  users_limit:       3,
-  file_uploads:      true,
-  invoicing:         true,
-  support:           'priority',
+  vendors_limit:      null,
+  reports_per_month:  null,
+  users_limit:        3,
+  invoices_per_month: null,
+  file_uploads:       true,
+  invoicing:          true,
+  support:            'priority',
 };
 
 // ─── Core resolver ────────────────────────────────────────────────────────────

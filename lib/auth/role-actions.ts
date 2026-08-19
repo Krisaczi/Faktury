@@ -36,7 +36,9 @@ export interface RoleChangeLog {
 // ─── Auth guard ─────────────────────────────────────────────────────────────────
 
 /**
- * Verifies the caller is the active owner as defined by OWNER_USER_ID env var.
+ * Verifies the caller is the active owner.
+ * Uses OWNER_USER_ID env var when available; otherwise falls back to checking
+ * the users table for role='owner' via the service client (bypasses RLS).
  * Returns caller context on success, throws on failure.
  */
 async function requireOwner() {
@@ -45,11 +47,13 @@ async function requireOwner() {
   if (!user) throw new Error('Unauthenticated');
 
   const ownerId = process.env.OWNER_USER_ID;
-  if (!ownerId) throw new Error('OWNER_USER_ID not configured.');
-  if (user.id !== ownerId) throw new Error('Tylko właściciel może zarządzać rolami.');
+  if (ownerId && user.id !== ownerId) {
+    throw new Error('Tylko właściciel może zarządzać rolami.');
+  }
 
+  const service = getSupabaseServiceClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: u } = await (supabase as any)
+  const { data: u } = await (service as any)
     .from('users')
     .select('role, company_id, active')
     .eq('id', user.id)
@@ -88,7 +92,7 @@ export async function getUser(
   targetUserId: string,
 ): Promise<RoleActionResult<CompanyUser>> {
   try {
-    const { supabase, companyId } = await requireOwner();
+    await requireOwner();
     const service = getSupabaseServiceClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,13 +100,12 @@ export async function getUser(
       .from('users')
       .select('id, email, role, company_id, active, created_at')
       .eq('id', targetUserId)
-      .eq('company_id', companyId)
       .maybeSingle();
 
     if (error || !u) return { ok: false, error: 'Użytkownik nie istnieje.' };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: profile } = await (supabase as any)
+    const { data: profile } = await (service as any)
       .from('profiles')
       .select('full_name')
       .eq('id', targetUserId)

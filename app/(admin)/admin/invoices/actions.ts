@@ -21,6 +21,7 @@ import {
   type AppRole,
 } from '@/lib/permissions';
 import { requireInvoicingEnabled } from '@/lib/packages/get-company-package';
+import { checkInvoiceLimit, consumeOverride } from '@/lib/packages/invoice-limit';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,6 +129,14 @@ export async function createInvoice(
     const items = buildItems(data.items);
     const totals = computeInvoiceTotals(items);
 
+    // Monthly invoice limit check (only for 'issue' intent, not drafts)
+    if (intent === 'issue') {
+      const limitCheck = await checkInvoiceLimit(companyId);
+      if (!limitCheck.allowed) {
+        return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
+      }
+    }
+
     const invoiceNumber =
       intent === 'issue'
         ? await generateInvoiceNumber(companyId)
@@ -179,6 +188,11 @@ export async function createInvoice(
       return { ok: false, error: itemsErr.message };
     }
 
+    // Consume an override slot if the company has active allowances
+    if (intent === 'issue') {
+      await consumeOverride(companyId);
+    }
+
     revalidatePath('/admin/invoices');
     return { ok: true, id: invoice.id as string };
   } catch (e) {
@@ -222,6 +236,14 @@ export async function updateInvoice(
     if (!existing) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
     if (existing.status !== 'draft') {
       return { ok: false, error: 'Tylko faktury w stanie "Szkic" mogą być edytowane.' };
+    }
+
+    // Monthly invoice limit check (only when transitioning draft → issued)
+    if (intent === 'issue' && existing.status === 'draft') {
+      const limitCheck = await checkInvoiceLimit(companyId);
+      if (!limitCheck.allowed) {
+        return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
+      }
     }
 
     const items = buildItems(data.items);
@@ -276,6 +298,11 @@ export async function updateInvoice(
       .insert(items.map((it) => ({ ...it, invoice_id: id })));
 
     if (itemsErr) return { ok: false, error: itemsErr.message };
+
+    // Consume an override slot if we just issued the invoice
+    if (intent === 'issue' && existing.status === 'draft') {
+      await consumeOverride(companyId);
+    }
 
     revalidatePath('/admin/invoices');
     revalidatePath(`/admin/invoices/${id}`);
