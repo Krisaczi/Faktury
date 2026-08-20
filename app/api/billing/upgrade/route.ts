@@ -62,6 +62,19 @@ export async function POST() {
 
     // ── 3. Success ─────────────────────────────────────────────────────────────
     logBilling('info', 'upgrade successful', { ...ctx, productType: res.product_type });
+
+    // Sync the subscriptions table after upgrade
+    const { syncSubscriptionFromCompany } = await import('@/lib/plans/canonical-plan');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userRow } = await (supabase as any)
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (userRow?.company_id) {
+      await syncSubscriptionFromCompany(user.id, userRow.company_id);
+    }
+
     return NextResponse.json({
       product_type: 'professional',
       message: 'Plan upgraded to Professional',

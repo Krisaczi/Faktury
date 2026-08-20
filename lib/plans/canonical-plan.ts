@@ -13,6 +13,8 @@ export interface EffectivePlan {
   source:           PlanSource;
   subscriptionStatus: string;
   lastSyncedAt:     string | null;
+  effectiveFrom:    string | null;
+  effectiveUntil:   string | null;
   companyId:        string | null;
   currentPeriodEnd: string | null;
   limits: PlanInfo['limits'] | null;
@@ -42,7 +44,7 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sub } = await (supabase as any)
     .from('subscriptions')
-    .select('id, plan_id, status, current_period_end, last_synced_at, company_id')
+    .select('id, plan_id, status, current_period_end, last_synced_at, effective_from, effective_until, company_id')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -57,6 +59,8 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
       source:       'subscription',
       subscriptionStatus: sub.status ?? 'active',
       lastSyncedAt: sub.last_synced_at ?? null,
+      effectiveFrom:    sub.effective_from ?? null,
+      effectiveUntil:   sub.effective_until ?? null,
       companyId:    sub.company_id ?? null,
       currentPeriodEnd: sub.current_period_end ?? null,
       limits:       plan?.limits ?? null,
@@ -98,6 +102,8 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
     source:       'company',
     subscriptionStatus: company.subscription_status ?? 'active',
     lastSyncedAt: null,
+    effectiveFrom:    null,
+    effectiveUntil:   null,
     companyId:    user.company_id,
     currentPeriodEnd: null,
     limits:       plan?.limits ?? null,
@@ -114,6 +120,8 @@ function defaultPlan(companyId?: string): EffectivePlan {
     source:           'default',
     subscriptionStatus: 'active',
     lastSyncedAt:     null,
+    effectiveFrom:    null,
+    effectiveUntil:   null,
     companyId:        companyId ?? null,
     currentPeriodEnd: null,
     limits:           plan?.limits ?? null,
@@ -131,7 +139,7 @@ export async function getEffectivePlanByCompanyId(companyId: string): Promise<Ef
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sub } = await (supabase as any)
     .from('subscriptions')
-    .select('id, plan_id, status, current_period_end, last_synced_at, user_id, company_id')
+    .select('id, plan_id, status, current_period_end, last_synced_at, effective_from, effective_until, user_id, company_id')
     .eq('company_id', companyId)
     .eq('status', 'active')
     .maybeSingle();
@@ -147,6 +155,8 @@ export async function getEffectivePlanByCompanyId(companyId: string): Promise<Ef
       source:       'subscription',
       subscriptionStatus: sub.status ?? 'active',
       lastSyncedAt: sub.last_synced_at ?? null,
+      effectiveFrom:    sub.effective_from ?? null,
+      effectiveUntil:   sub.effective_until ?? null,
       companyId:    sub.company_id ?? companyId,
       currentPeriodEnd: sub.current_period_end ?? null,
       limits:       plan?.limits ?? null,
@@ -172,6 +182,8 @@ export async function getEffectivePlanByCompanyId(companyId: string): Promise<Ef
     source:       'company',
     subscriptionStatus: company?.subscription_status ?? 'active',
     lastSyncedAt: null,
+    effectiveFrom:    null,
+    effectiveUntil:   null,
     companyId:    companyId,
     currentPeriodEnd: null,
     limits:       plan?.limits ?? null,
@@ -209,6 +221,35 @@ export async function syncSubscriptionFromCompany(
       plan_id:        planId,
       status,
       last_synced_at: new Date().toISOString(),
+      effective_from: new Date().toISOString(),
       updated_at:     new Date().toISOString(),
     }, { onConflict: 'user_id' });
+}
+
+// ─── Provider guard ────────────────────────────────────────────────────────────
+
+/**
+ * Checks if an attempt to update plan state from an external provider should be blocked.
+ * All external provider updates are blocked by default — the platform uses local-only plan management.
+ */
+export async function assertNotExternalProviderUpdate(source: string): Promise<void> {
+  const externalSources = ['stripe', 'lemonsqueezy', 'lemon_squeezy', 'paddle', 'external', 'webhook'];
+  if (externalSources.includes(source.toLowerCase())) {
+    const supabase = await getSupabaseServerClient();
+    // Log the blocked attempt
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('provider_update_guard')
+      .insert({
+        source,
+        event_type: 'plan_update_attempt',
+        payload: { blocked: true, reason: 'External provider updates are disabled' },
+        blocked: true,
+        reason: 'External provider updates are disabled — platform uses local-only plan management',
+      });
+    throw Object.assign(
+      new Error('External billing provider updates are disabled. Plan state is managed locally.'),
+      { code: 'EXTERNAL_PROVIDER_DISABLED', status: 403 },
+    );
+  }
 }

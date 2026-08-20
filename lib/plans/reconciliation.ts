@@ -304,6 +304,203 @@ export async function reconcileAll(
   return { results, totalFixed, totalNoop, totalErrors };
 }
 
+// ─── Reconcile by emails (batch) ────────────────────────────────────────────────
+
+/**
+ * Reconciles a specific set of users identified by email addresses.
+ * If no emails are provided, reconciles all mismatched users.
+ */
+export async function reconcileBatch(
+  ownerId: string,
+  ownerIp: string | undefined,
+  options: { emails?: string[]; dryRun?: boolean; reason?: string } = {},
+): Promise<{ results: ReconcileResult[]; totalFixed: number; totalNoop: number; totalErrors: number; totalScanned: number }> {
+  const supabase = await getSupabaseServerClient();
+
+  let targetUserIds: { id: string; email: string }[] = [];
+
+  if (options.emails && options.emails.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: users } = await (supabase as any)
+      .from('users')
+      .select('id, email')
+      .in('email', options.emails)
+      .eq('active', true);
+    targetUserIds = users ?? [];
+  } else {
+    // All active users
+    const report = await generateReconciliationReport();
+    return {
+      ...await reconcileAll(ownerId, ownerIp, options),
+      totalScanned: report.totalUsers,
+    };
+  }
+
+  const results: ReconcileResult[] = [];
+  let totalFixed = 0;
+  let totalNoop = 0;
+  let totalErrors = 0;
+
+  for (const u of targetUserIds) {
+    const result = await reconcileUser(ownerId, u.id, ownerIp, options);
+    results.push(result);
+    if (result.ok) {
+      if (result.action === 'fix') totalFixed++;
+      else totalNoop++;
+    } else {
+      totalErrors++;
+    }
+  }
+
+  return { results, totalFixed, totalNoop, totalErrors, totalScanned: targetUserIds.length };
+}
+
+// ─── Force set plan ────────────────────────────────────────────────────────────
+
+export interface ForceSetPlanResult {
+  ok:        boolean;
+  userId:    string;
+  fromPlan:  string;
+  toPlan:    string;
+  auditId:   string | null;
+  error?:    string;
+}
+
+/**
+ * Force-sets a user's plan to a specific plan ID. Writes to subscriptions,
+ * companies, and plan_change_audit with full audit trail.
+ * This is the owner's direct plan assignment tool.
+ */
+export async function forceSetPlan(
+  ownerId: string,
+  targetUserId: string,
+  planId: string,
+  ownerIp: string | undefined,
+  options: { effectiveFrom?: string; reason?: string } = {},
+): Promise<ForceSetPlanResult> {
+  const supabase = await getSupabaseServerClient();
+
+  const normalizedPlanId = normalizePlanId(planId);
+
+  // Get target user
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: user, error: userErr } = await (supabase as any)
+    .from('users')
+    .select('id, email, company_id')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
+  if (userErr || !user) {
+    return { ok: false, userId: targetUserId, fromPlan: '', toPlan: normalizedPlanId, auditId: null, error: 'Użytkownik nie znaleziony.' };
+  }
+
+  if (!user.company_id) {
+    return { ok: false, userId: targetUserId, fromPlan: '', toPlan: normalizedPlanId, auditId: null, error: 'Użytkownik nie ma firmy.' };
+  }
+
+  // Get current subscription for fromPlan
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: sub } = await (supabase as any)
+    .from('subscriptions')
+    .select('id, plan_id')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  const fromPlan = normalizePlanId(sub?.plan_id ?? 'starter');
+  const now = new Date().toISOString();
+  const effectiveFrom = options.effectiveFrom ?? now;
+
+  // 1. Upsert subscription
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: upsertErr } = await (supabase as any)
+    .from('subscriptions')
+    .upsert({
+      user_id:        targetUserId,
+      company_id:     user.company_id,
+      plan_id:        normalizedPlanId,
+      status:         'active',
+      last_synced_at: now,
+      effective_from: effectiveFrom,
+      updated_at:     now,
+    }, { onConflict: 'user_id' });
+
+  if (upsertErr) {
+    return { ok: false, userId: targetUserId, fromPlan, toPlan: normalizedPlanId, auditId: null, error: 'Błąd ustawiania planu.' };
+  }
+
+  // 2. Sync companies table
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('companies')
+    .update({
+      product_type:        normalizedPlanId,
+      package_type:        normalizedPlanId,
+      subscription_status: 'active',
+      package_assigned_at: now,
+      updated_at:          now,
+    })
+    .eq('id', user.company_id);
+
+  // 3. Log to plan_change_audit
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('plan_change_audit')
+    .insert({
+      owner_id:       ownerId,
+      target_user_id: targetUserId,
+      company_id:     user.company_id,
+      from_plan:      fromPlan,
+      to_plan:        normalizedPlanId,
+      effective:      'now',
+      reason:         options.reason ?? 'Owner force-set plan',
+      owner_ip:       ownerIp ?? null,
+      provider:       'owner',
+    });
+
+  // 4. Log to billing_audit
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('billing_audit')
+    .insert({
+      company_id:  user.company_id,
+      actor_id:    ownerId,
+      old_package: fromPlan,
+      new_package: normalizedPlanId,
+      provider:    'internal',
+      event_type:  'plan_changed',
+      from_plan:   fromPlan,
+      to_plan:     normalizedPlanId,
+      changed_by:  ownerId,
+      metadata:    { reason: options.reason ?? 'Owner force-set plan', source: 'owner' },
+    });
+
+  // 5. Log to plan_reconciliation_log
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: auditRow } = await (supabase as any)
+    .from('plan_reconciliation_log')
+    .insert({
+      owner_id:       ownerId,
+      target_user_id: targetUserId,
+      company_id:     user.company_id,
+      local_plan:     fromPlan,
+      canonical_plan: normalizedPlanId,
+      source:         'manual',
+      action:         'fix',
+      reason:         options.reason ?? 'Owner force-set plan',
+      owner_ip:       ownerIp ?? null,
+    })
+    .select('id')
+    .maybeSingle();
+
+  return {
+    ok: true,
+    userId: targetUserId,
+    fromPlan,
+    toPlan: normalizedPlanId,
+    auditId: auditRow?.id ?? null,
+  };
+}
+
 // ─── Force sync ─────────────────────────────────────────────────────────────────
 
 /**

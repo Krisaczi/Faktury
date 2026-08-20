@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getEffectivePlan } from '@/lib/plans/canonical-plan';
 
 export async function GET() {
   try {
@@ -22,11 +23,8 @@ export async function GET() {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    const { data: company } = await supabase
-      .from('companies')
-      .select('product_type, subscription_status')
-      .eq('id', userRecord.company_id)
-      .maybeSingle();
+    // Use canonical plan resolver — reads from subscriptions table first
+    const effectivePlan = await getEffectivePlan(user.id);
 
     const { data: auditHistory } = await supabase
       .from('billing_audit')
@@ -35,14 +33,13 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(10);
 
-    const productType = (company?.product_type as 'starter' | 'professional' | null) ?? 'starter';
-    const subscriptionStatus = company?.subscription_status ?? 'active';
-
     return NextResponse.json({
-      product_type: productType,
-      subscription_status: subscriptionStatus,
+      product_type: effectivePlan.planId as 'starter' | 'professional',
+      subscription_status: effectivePlan.subscriptionStatus,
+      plan_source: effectivePlan.source,
+      last_synced_at: effectivePlan.lastSyncedAt,
       auditHistory: auditHistory ?? [],
-      canUpgrade: productType === 'starter',
+      canUpgrade: effectivePlan.planId === 'starter',
     });
   } catch (err) {
     console.error('[api/billing/status]', err);
