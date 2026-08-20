@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { AppRole } from '@/lib/permissions';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -51,9 +51,10 @@ async function requireOwner() {
     throw new Error('Tylko właściciel może zarządzać rolami.');
   }
 
-  const service = getSupabaseServiceClient();
+  // Use the server client (with session) so RLS can resolve auth.uid().
+  // The service client may not have SUPABASE_SERVICE_ROLE_KEY configured.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: u } = await (service as any)
+  const { data: u } = await (supabase as any)
     .from('users')
     .select('role, company_id, active')
     .eq('id', user.id)
@@ -75,9 +76,9 @@ async function writeRoleAuditLog(opts: {
   newRole:      string;
   reason:       string | null;
 }): Promise<void> {
-  const service = getSupabaseServiceClient();
+  const supabase = await getSupabaseServerClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (service as any).from('role_change_logs').insert({
+  await (supabase as any).from('role_change_logs').insert({
     user_id:       opts.targetUserId,
     changed_by:    opts.changedBy,
     previous_role: opts.previousRole,
@@ -92,11 +93,10 @@ export async function getUser(
   targetUserId: string,
 ): Promise<RoleActionResult<CompanyUser>> {
   try {
-    await requireOwner();
-    const service = getSupabaseServiceClient();
+    const { supabase } = await requireOwner();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: u, error } = await (service as any)
+    const { data: u, error } = await (supabase as any)
       .from('users')
       .select('id, email, role, company_id, active, created_at')
       .eq('id', targetUserId)
@@ -105,7 +105,7 @@ export async function getUser(
     if (error || !u) return { ok: false, error: 'Użytkownik nie istnieje.' };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: profile } = await (service as any)
+    const { data: profile } = await (supabase as any)
       .from('profiles')
       .select('full_name')
       .eq('id', targetUserId)
@@ -144,17 +144,16 @@ export async function getUsersWithRoles(params: {
   search?:   string;
 } = {}): Promise<RoleActionResult<{ rows: CompanyUser[]; totalCount: number }>> {
   try {
-    await requireOwner();
-    const service = getSupabaseServiceClient();
+    const { supabase } = await requireOwner();
     const { page = 1, pageSize = 50, search } = params;
 
     const from = (page - 1) * pageSize;
     const to   = from + pageSize - 1;
 
-    // Platform owner sees ALL users across ALL companies.
-    // Service client bypasses RLS so the company_id scoping policy doesn't hide them.
+    // Owner sees ALL users via the "Owner can view all users" RLS policy
+    // (is_caller_owner()). Using the server client so auth.uid() is set.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (service as any)
+    let query = (supabase as any)
       .from('users')
       .select('id, email, role, company_id, active, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
@@ -174,9 +173,9 @@ export async function getUsersWithRoles(params: {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [profilesRes, companiesRes] = await Promise.all([
-      (service as any).from('profiles').select('id, full_name').in('id', userIds),
+      (supabase as any).from('profiles').select('id, full_name').in('id', userIds),
       companyIds.length > 0
-        ? (service as any).from('companies').select('id, name').in('id', companyIds)
+        ? (supabase as any).from('companies').select('id, name').in('id', companyIds)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -214,11 +213,10 @@ export async function getRoleChangeLogs(
   limit = 30,
 ): Promise<RoleChangeLog[]> {
   try {
-    await requireOwner();
-    const service = getSupabaseServiceClient();
+    const { supabase } = await requireOwner();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (service as any)
+    let query = (supabase as any)
       .from('role_change_logs')
       .select('*')
       .order('created_at', { ascending: false })
@@ -235,7 +233,7 @@ export async function getRoleChangeLogs(
     const allUserIds = ids.filter((id, i) => ids.indexOf(id) === i);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: users } = await (service as any)
+    const { data: users } = await (supabase as any)
       .from('users')
       .select('id, email')
       .in('id', allUserIds);
@@ -273,10 +271,9 @@ export async function syncRolesToCanonical(): Promise<RoleActionResult<{
 }>> {
   try {
     const { user: callerUser, supabase } = await requireOwner();
-    const service = getSupabaseServiceClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: usersRows } = await (service as any)
+    const { data: usersRows } = await (supabase as any)
       .from('users')
       .select('id, email, role, company_id');
 
@@ -293,7 +290,7 @@ export async function syncRolesToCanonical(): Promise<RoleActionResult<{
 
       if (canonicalRole !== row.role) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (service as any)
+        const { error } = await (supabase as any)
           .from('users')
           .update({ role: canonicalRole, updated_at: new Date().toISOString() })
           .eq('id', row.id);

@@ -4,9 +4,19 @@ import { cookies } from 'next/headers';
 import type { Database } from '@/types/database';
 
 export function getSupabaseServiceClient() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceRoleKey) {
+    return createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceRoleKey,
+      { auth: { persistSession: false } }
+    );
+  }
+  // Fallback: use anon key without a session. RLS will apply.
+  // Callers that need the user's auth context should use getSupabaseServerClient() instead.
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { persistSession: false } }
   );
 }
