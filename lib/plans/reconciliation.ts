@@ -549,6 +549,7 @@ export async function forceSyncUser(
   const status = company?.subscription_status === 'canceled' ? 'canceled' : 'active';
 
   // Force overwrite subscription
+  const now = new Date().toISOString();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: upsertErr } = await (supabase as any)
     .from('subscriptions')
@@ -557,8 +558,9 @@ export async function forceSyncUser(
       company_id:     user.company_id,
       plan_id:        toPlan,
       status,
-      last_synced_at: new Date().toISOString(),
-      updated_at:     new Date().toISOString(),
+      last_synced_at: now,
+      effective_from: now,
+      updated_at:     now,
     }, { onConflict: 'user_id' });
 
   if (upsertErr) {
@@ -567,10 +569,14 @@ export async function forceSyncUser(
 
   // Also fix companies.package_type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: companyErr } = await (supabase as any)
     .from('companies')
-    .update({ package_type: toPlan, updated_at: new Date().toISOString() })
+    .update({ package_type: toPlan, updated_at: now })
     .eq('id', user.company_id);
+
+  if (companyErr) {
+    return { ok: false, userId: targetUserId, fromPlan, toPlan, action: 'flag', auditId: null, error: 'Błąd aktualizacji firmy.' };
+  }
 
   // Audit log
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
