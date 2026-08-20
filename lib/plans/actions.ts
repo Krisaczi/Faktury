@@ -249,6 +249,10 @@ export async function cancelSubscription(params: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('billing_audit').insert({
     company_id:  params.companyId,
+    actor_id:    params.ownerId,
+    old_package: fromPlan,
+    new_package: 'starter',
+    provider:    'internal',
     event_type:  'subscription_canceled',
     from_plan:   fromPlan,
     to_plan:     'starter',
@@ -267,6 +271,10 @@ export async function cancelSubscription(params: {
     notes:         params.notes,
     ownerIp:       params.ownerIp,
   });
+
+  // Sync subscription record
+  const { syncSubscriptionFromCompany } = await import('./canonical-plan');
+  await syncSubscriptionFromCompany(params.targetUserId, params.companyId);
 
   if (params.notifyUser) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

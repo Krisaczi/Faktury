@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, Loader as Loader2, TriangleAlert as AlertTriangle, Check, Clock, TrendingUp, TrendingDown, ArrowRight, Calendar, Ban } from 'lucide-react';
+import { CreditCard, Loader as Loader2, TriangleAlert as AlertTriangle, Check, Clock, TrendingUp, TrendingDown, ArrowRight, Calendar, Ban, RefreshCw as RefreshCwIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,9 +35,17 @@ interface SubscriptionData {
   currentPlan: {
     id:           string;
     name:         string;
+    label?:       string;
     description:  string;
     monthlyPrice: number;
     limits:       PlanInfo['limits'] | null;
+  };
+  subscription: {
+    status:           string;
+    assignedAt:       string | null;
+    currentPeriodEnd: string | null;
+    lastSyncedAt?:    string | null;
+    source?:          string;
   };
   usage: {
     activeUsers:      number;
@@ -245,6 +254,19 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
                   Aktywny
                 </Badge>
               </div>
+
+              {/* Sync indicator */}
+              {subscription.subscription.lastSyncedAt && (
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <RefreshCwIcon className="w-3 h-3" />
+                  Ostatnia synchronizacja: {format(new Date(subscription.subscription.lastSyncedAt), 'dd.MM.yyyy HH:mm')}
+                  {subscription.subscription.source && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 ml-1">
+                      {subscription.subscription.source === 'subscription' ? 'subskrypcja' : 'firma'}
+                    </Badge>
+                  )}
+                </div>
+              )}
 
               {/* Usage stats */}
               <Separator className="my-3" />

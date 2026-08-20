@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard, FilePlus } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard, FilePlus, ArrowLeftRight, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -306,7 +306,9 @@ type ModalAction =
   | { kind: 'reactivate'; user: CompanyUser }
   | { kind: 'repair' }
   | { kind: 'managePlan'; user: CompanyUser }
-  | { kind: 'allowance'; user: CompanyUser };
+  | { kind: 'allowance'; user: CompanyUser }
+  | { kind: 'reconcile' }
+  | { kind: 'forceSync'; user: CompanyUser };
 
 export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs, fetchError }: UsersClientProps) {
   const router                           = useRouter();
@@ -378,6 +380,14 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
             >
               <Wrench className="w-3.5 h-3.5" />
               Napraw właścicieli
+            </Button>
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setModal({ kind: 'reconcile' })}
+              className="gap-2 text-slate-600 dark:text-slate-400"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              Uzgodnij plany
             </Button>
           </>
         )}
@@ -499,6 +509,16 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
                         <FilePlus className="w-4 h-4" />
                       </Button>
 
+                      {/* Force sync plan */}
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => setModal({ kind: 'forceSync', user: u })}
+                        className="h-8 w-8 p-0 text-amber-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        title="Wymuś synchronizację planu"
+                      >
+                        <Zap className="w-4 h-4" />
+                      </Button>
+
                       {!isOwnerRow && (
                         <>
                           {/* Deactivate — active users */}
@@ -603,6 +623,37 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
           onOpenChange={() => { setModal(null); }}
           user={modal.user}
           onSuccess={() => router.refresh()}
+        />
+      )}
+
+      {modal?.kind === 'reconcile' && (
+        <ReconciliationModal
+          onClose={() => { setModal(null); router.refresh(); }}
+        />
+      )}
+
+      {modal?.kind === 'forceSync' && (
+        <ForceSyncModal
+          target={modal.user}
+          onClose={() => { setModal(null); setModalError(null); }}
+          isPending={isPending}
+          error={modalError}
+          onConfirm={async (reason) => {
+            setModalError(null);
+            start(async () => {
+              const res = await fetch(`/api/owner/users/${modal.user.id}/force-sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: reason || undefined }),
+              });
+              if (!res.ok) {
+                const err = await res.json();
+                setModalError(err.error ?? 'Błąd');
+                return;
+              }
+              refreshAndClose();
+            });
+          }}
         />
       )}
 
@@ -725,6 +776,318 @@ function AllowanceModal({
             {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
             Przyznaj {extra} faktur
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Force sync modal ──────────────────────────────────────────────────────────
+
+function ForceSyncModal({
+  target,
+  onClose,
+  onConfirm,
+  isPending,
+  error,
+}: {
+  target:    CompanyUser;
+  onClose:   () => void;
+  onConfirm: (reason: string) => Promise<void>;
+  isPending: boolean;
+  error:     string | null;
+}) {
+  const [reason, setReason] = useState('');
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-500" />
+            Wymuś synchronizację planu
+          </DialogTitle>
+          <DialogDescription>
+            Nadpisuje lokalny rekord subskrypcji na podstawie stanu firmy. Użyj, gdy plan jest niespójny.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                {(target.full_name ?? target.email)[0]?.toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                {target.full_name ?? target.email}
+              </p>
+              <p className="text-xs text-slate-500 truncate">{target.email}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Ta operacja nadpisze subskrypcję użytkownika, aby pasowała do planu firmy (product_type).
+              Zmiana zostanie zapisana w dzienniku audytu.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Powód (opcjonalnie)</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="np. niespójność po migracji"
+              className="text-sm resize-none h-20"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Anuluj
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void onConfirm(reason)}
+            disabled={isPending}
+            className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+            Wymuś synchronizację
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Reconciliation modal ──────────────────────────────────────────────────────
+
+interface ReconciliationEntry {
+  userId:        string;
+  email:         string;
+  companyId:     string | null;
+  localPlan:     string;
+  companyPlan:   string;
+  canonicalPlan: string;
+  mismatch:      boolean;
+  lastSyncedAt:  string | null;
+  recommendedAction: string;
+  reason:        string;
+}
+
+function ReconciliationModal({ onClose }: { onClose: () => void }) {
+  const [isPending, start] = useTransition();
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'report' | 'applying' | 'done'>('idle');
+  const [report, setReport] = useState<{ totalUsers: number; mismatched: number; matched: number; entries: ReconciliationEntry[] } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ totalFixed: number; totalNoop: number; totalErrors: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showOnlyMismatches, setShowOnlyMismatches] = useState(true);
+
+  function loadReport() {
+    setError(null);
+    setPhase('loading');
+    start(async () => {
+      try {
+        const res = await fetch('/api/owner/reconciliation');
+        if (!res.ok) { setError('Błąd ładowania raportu.'); setPhase('idle'); return; }
+        const data = await res.json();
+        setReport(data.report);
+        setPhase('report');
+      } catch {
+        setError('Błąd połączenia.');
+        setPhase('idle');
+      }
+    });
+  }
+
+  function runBulkReconcile(dryRun: boolean) {
+    setError(null);
+    setPhase('applying');
+    start(async () => {
+      try {
+        const res = await fetch('/api/owner/reconciliation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dryRun }),
+        });
+        if (!res.ok) { setError('Błąd uzgadniania.'); setPhase('report'); return; }
+        const data = await res.json();
+        setBulkResult({ totalFixed: data.totalFixed, totalNoop: data.totalNoop, totalErrors: data.totalErrors });
+        setPhase('done');
+      } catch {
+        setError('Błąd połączenia.');
+        setPhase('report');
+      }
+    });
+  }
+
+  const entries = report ? (showOnlyMismatches ? report.entries.filter((e) => e.mismatch) : report.entries) : [];
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowLeftRight className="w-4 h-4 text-blue-600" />
+            Uzgodnianie planów
+          </DialogTitle>
+          <DialogDescription>
+            Wykrywa i naprawia niezgodności między subskrypcjami a stanem firm.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Idle */}
+          {phase === 'idle' && (
+            <div className="text-center py-6">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                Kliknij &quot;Skanuj&quot;, aby sprawdzić spójność planów wszystkich użytkowników.
+              </p>
+              <Button size="sm" onClick={loadReport} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Skanuj
+              </Button>
+            </div>
+          )}
+
+          {/* Loading */}
+          {phase === 'loading' && (
+            <div className="flex items-center justify-center py-12">
+              <Loader className="w-6 h-6 text-slate-300 animate-spin" />
+            </div>
+          )}
+
+          {/* Report */}
+          {phase === 'report' && report && (
+            <>
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-center">
+                  <p className="text-xs text-slate-400">Wszyscy</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{report.totalUsers}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 p-3 text-center">
+                  <p className="text-xs text-slate-400">Spójne</p>
+                  <p className="text-lg font-bold text-emerald-600">{report.matched}</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-3 text-center">
+                  <p className="text-xs text-slate-400">Niezgodne</p>
+                  <p className="text-lg font-bold text-amber-600">{report.mismatched}</p>
+                </div>
+              </div>
+
+              {/* Filter toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showOnlyMismatches}
+                  onChange={(e) => setShowOnlyMismatches(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-xs text-slate-600 dark:text-slate-400">Pokaż tylko niezgodne</span>
+              </label>
+
+              {/* Entries */}
+              {entries.length > 0 ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {entries.map((e) => (
+                    <div key={e.userId} className={cn(
+                      'flex items-center gap-3 p-3 rounded-lg border text-sm',
+                      e.mismatch
+                        ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10'
+                        : 'border-slate-200 dark:border-slate-700'
+                    )}>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-700 dark:text-slate-300 truncate">{e.email}</p>
+                        <p className="text-xs text-slate-400">
+                          Sub: {e.localPlan} → Firma: {e.companyPlan}
+                        </p>
+                      </div>
+                      {e.mismatch ? (
+                        <Badge className="text-xs border bg-amber-50 text-amber-700 border-amber-200">Niezgodne</Badge>
+                      ) : (
+                        <Badge className="text-xs border bg-emerald-50 text-emerald-700 border-emerald-200">OK</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">Wszystkie plany są spójne.</p>
+                </div>
+              )}
+
+              {/* Bulk actions */}
+              {report.mismatched > 0 && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => runBulkReconcile(true)} disabled={isPending} className="gap-2">
+                    {isPending && <Loader className="w-3.5 h-3.5 animate-spin" />}
+                    Podgląd naprawy
+                  </Button>
+                  <Button size="sm" onClick={() => runBulkReconcile(false)} disabled={isPending} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                    Uzgodnij wszystkie
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Applying */}
+          {phase === 'applying' && (
+            <div className="flex items-center justify-center py-12">
+              <Loader className="w-6 h-6 text-slate-300 animate-spin" />
+            </div>
+          )}
+
+          {/* Done */}
+          {phase === 'done' && bulkResult && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <p className="text-sm text-emerald-700 dark:text-emerald-400">Uzgodnianie zakończone.</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-400">Naprawiono</p>
+                  <p className="text-lg font-bold text-emerald-600">{bulkResult.totalFixed}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-400">Bez zmian</p>
+                  <p className="text-lg font-bold text-slate-600">{bulkResult.totalNoop}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <p className="text-xs text-slate-400">Błędy</p>
+                  <p className="text-lg font-bold text-red-600">{bulkResult.totalErrors}</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadReport} className="gap-2 w-full">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Odśwież raport
+              </Button>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Zamknij</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

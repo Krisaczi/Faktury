@@ -6,6 +6,7 @@ import {
   checkUsageConflicts, computeProration, logPlanChange,
   logPlanNotification, cancelSubscription,
 } from '@/lib/plans/actions';
+import { syncSubscriptionFromCompany, getEffectivePlan } from '@/lib/plans/canonical-plan';
 
 const ChangePlanSchema = z.object({
   planId:         z.string().min(1),
@@ -151,21 +152,29 @@ export async function POST(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('billing_audit').insert({
       company_id: targetUser.company_id,
-      event_type: 'plan_changed',
-      from_plan:  fromPlan,
-      to_plan:    planId,
-      changed_by: user.id,
-      metadata:   { reason: reason ?? null, notes: notes ?? null, effective: 'now' },
+      actor_id:    user.id,
+      old_package: fromPlan,
+      new_package: planId,
+      provider:    'internal',
+      event_type:  'plan_changed',
+      from_plan:   fromPlan,
+      to_plan:     planId,
+      changed_by:  user.id,
+      metadata:    { reason: reason ?? null, notes: notes ?? null, effective: 'now' },
     });
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('billing_audit').insert({
       company_id: targetUser.company_id,
-      event_type: 'plan_scheduled',
-      from_plan:  fromPlan,
-      to_plan:    planId,
-      changed_by: user.id,
-      metadata:   { reason: reason ?? null, notes: notes ?? null, effective: 'period_end' },
+      actor_id:    user.id,
+      old_package: fromPlan,
+      new_package: planId,
+      provider:    'internal',
+      event_type:  'plan_scheduled',
+      from_plan:   fromPlan,
+      to_plan:     planId,
+      changed_by:  user.id,
+      metadata:    { reason: reason ?? null, notes: notes ?? null, effective: 'period_end' },
     });
   }
 
@@ -194,6 +203,9 @@ export async function POST(
       effective,
     });
   }
+
+  // Sync subscription record to match the new plan
+  await syncSubscriptionFromCompany(params.id, targetUser.company_id);
 
   return NextResponse.json({
     ok: true,

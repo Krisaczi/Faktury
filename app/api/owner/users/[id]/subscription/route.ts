@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyUsage, checkUsageConflicts, getPlanById } from '@/lib/plans/actions';
+import { getEffectivePlan, getPlanLabel } from '@/lib/plans/canonical-plan';
 
 export async function GET(
   _req: NextRequest,
@@ -44,17 +45,11 @@ export async function GET(
     return NextResponse.json({ error: 'User has no company' }, { status: 400 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: company } = await (supabase as any)
-    .from('companies')
-    .select('product_type, subscription_status, package_assigned_at')
-    .eq('id', targetUser.company_id)
-    .maybeSingle();
-
-  const currentPlanId = (company?.product_type ?? 'starter') as string;
-  const currentPlan = getPlanById(currentPlanId);
+  // Use canonical plan resolver — checks subscriptions table first, falls back to companies
+  const effectivePlan = await getEffectivePlan(params.id);
 
   const usage = await getCompanyUsage(targetUser.company_id);
+  const currentPlan = getPlanById(effectivePlan.planId);
   const conflicts = currentPlan ? checkUsageConflicts(usage, currentPlan) : [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,16 +63,19 @@ export async function GET(
   return NextResponse.json({
     user: targetUser,
     currentPlan: {
-      id:           currentPlanId,
-      name:         currentPlan?.name ?? currentPlanId,
+      id:           effectivePlan.planId,
+      name:         effectivePlan.planName,
+      label:        effectivePlan.planLabel,
       description:  currentPlan?.description ?? '',
-      monthlyPrice: currentPlan?.monthlyPrice ?? 0,
-      limits:       currentPlan?.limits ?? null,
+      monthlyPrice: effectivePlan.monthlyPrice,
+      limits:       effectivePlan.limits,
     },
     subscription: {
-      status:           company?.subscription_status ?? 'active',
-      assignedAt:       company?.package_assigned_at ?? null,
-      currentPeriodEnd: null,
+      status:           effectivePlan.subscriptionStatus,
+      assignedAt:       null,
+      currentPeriodEnd: effectivePlan.currentPeriodEnd,
+      lastSyncedAt:     effectivePlan.lastSyncedAt,
+      source:           effectivePlan.source,
     },
     usage,
     conflicts,
