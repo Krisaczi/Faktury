@@ -4,8 +4,8 @@
  *
  * Rules:
  *   - Owner: full invoicing regardless of package
- *   - Accountant on Professional/Pro package: full invoicing
- *   - Accountant on Starter package: read-only KSeF preview only — NO mutations
+ *   - Accountant on any plan: full invoicing (Starter is now limited by count, not by access)
+ *   - Invoice count limits are enforced separately by checkInvoiceLimit
  */
 
 export interface ReqUser {
@@ -23,7 +23,8 @@ export interface InvoicingCheckResult {
 
 /**
  * Returns true if the user is allowed to perform invoice mutations.
- * Role alone does NOT grant invoicing — package determines it (except owner).
+ * Both Starter and Professional plans now have full invoicing mode.
+ * Monthly count limits are enforced separately in the invoice issuance flow.
  */
 export function requireProForInvoicing(user: ReqUser): InvoicingCheckResult {
   // Owner bypasses package check
@@ -41,16 +42,8 @@ export function requireProForInvoicing(user: ReqUser): InvoicingCheckResult {
     };
   }
 
-  // Accountant: must be on Professional/Pro package
-  if (user.packageType !== 'professional') {
-    return {
-      allowed: false,
-      reason:  'Fakturowanie jest dostępne tylko w planie Professional. Twój plan Starter pozwala tylko na podgląd faktur z KSeF.',
-      code:    'INVOICING_NOT_AVAILABLE',
-      status:  403,
-    };
-  }
-
+  // Both Starter and Professional have full invoicing mode
+  // Monthly count limits are enforced by checkInvoiceLimit in the issuance flow
   return { allowed: true };
 }
 

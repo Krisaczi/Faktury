@@ -17,12 +17,13 @@ export type PackageType = 'starter' | 'professional';
 
 /**
  * Returns true if the user can access invoicing features.
- * Owner always can. Accountant can only if the company is on a Pro package.
+ * Owner always can. Accountants on both Starter and Professional can —
+ * Starter is limited by monthly count (10/month), not by access.
  */
 export function canAccessInvoicing(role: string | null | undefined, packageType: string | null | undefined): boolean {
   if (role === 'owner') return true;
   if (role !== 'accountant') return false;
-  return packageType === 'professional';
+  return packageType === 'professional' || packageType === 'starter';
 }
 
 export function canWriteInvoice(role: string | null | undefined, packageType: string | null | undefined): boolean {
@@ -70,5 +71,5 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<AppRole, string> = {
   owner:      'Pełny dostęp do wszystkich funkcji i zarządzania użytkownikami',
-  accountant: 'Dostęp zależny od pakietu: Starter (podgląd tylko), Pro (pełne fakturowanie)',
+  accountant: 'Dostęp zależny od pakietu: Starter (10 faktur/mies.), Professional (bez limitów)',
 };

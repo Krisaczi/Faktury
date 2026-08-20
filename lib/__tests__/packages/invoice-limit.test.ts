@@ -12,8 +12,8 @@ describe('Invoice limit: package features', () => {
     assert.equal(STARTER_INVOICE_LIMIT, 10);
   });
 
-  it('Starter invoicing is disabled by default', () => {
-    assert.equal(DEFAULT_STARTER_FEATURES.invoicing, false);
+  it('Starter invoicing is enabled (full mode, limited by count)', () => {
+    assert.equal(DEFAULT_STARTER_FEATURES.invoicing, true);
   });
 
   it('Starter features include invoices_per_month field', () => {

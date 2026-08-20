@@ -58,7 +58,7 @@ export async function getCompanyPackage(companyId: string): Promise<EffectivePac
   }
 
   if (!tier && packageType !== 'individual') {
-    const tierKey = packageType === 'professional' ? 'pro' : packageType;
+    const tierKey = packageType === 'professional' ? 'professional' : packageType;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: t } = await (supabase as any)
       .from('pricing_tiers')
@@ -186,7 +186,7 @@ export async function requireInvoicingEnabled(companyId: string): Promise<void> 
   const pkg = await getCompanyPackage(companyId);
   if (!pkg.features.invoicing) {
     throw Object.assign(
-      new Error('Fakturowanie jest dostępne tylko w planie Professional. Zaktualizuj plan, aby wystawiać faktury.'),
+      new Error('Fakturowanie nie jest dostępne w Twoim pakiecie.'),
       { code: 'INVOICING_NOT_AVAILABLE', status: 403 },
     );
   }

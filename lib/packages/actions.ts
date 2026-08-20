@@ -60,7 +60,7 @@ export async function getCompanyCard(
       productType === 'starter'      ? 1 :
       null;
 
-    const invoicingEnabled = productType === 'professional';
+    const invoicingEnabled = productType === 'professional' || productType === 'starter';
 
     return {
       ok: true,

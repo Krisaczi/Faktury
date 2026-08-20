@@ -20,7 +20,7 @@ export const DEFAULT_STARTER_FEATURES: PackageFeatures = {
   users_limit:        1,
   invoices_per_month: STARTER_INVOICE_LIMIT,
   file_uploads:       true,
-  invoicing:          false,
+  invoicing:          true,
   support:            'email',
 };
 
