@@ -21,15 +21,24 @@ export async function GET(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: targetUser } = await (supabase as any)
+  const { data: targetUser, error: targetErr } = await (supabase as any)
     .from('users')
-    .select('id, email, full_name, role, company_id')
+    .select('id, email, role, company_id')
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!targetUser) {
+  if (targetErr || !targetUser) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await (supabase as any)
+    .from('profiles')
+    .select('full_name')
+    .eq('id', params.id)
+    .maybeSingle();
+
+  targetUser.full_name = profile?.full_name ?? null;
 
   if (!targetUser.company_id) {
     return NextResponse.json({ error: 'User has no company' }, { status: 400 });
