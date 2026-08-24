@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/owner/invoices?entityId=&period=&status=
  *
  * Lists platform invoices with optional filters. Owner-only.
- * Supports pagination via ?page=&limit=.
+ * Uses service client for cross-company company name joins.
  */
 export async function GET(req: NextRequest) {
   const supabase = await getSupabaseServerClient();
@@ -24,21 +24,18 @@ export async function GET(req: NextRequest) {
   }
 
   const entityId = req.nextUrl.searchParams.get('entityId');
-  const period   = req.nextUrl.searchParams.get('period');   // YYYY-MM
-  const status   = req.nextUrl.searchParams.get('status');   // draft|issued|sent|paid|revoked
+  const period   = req.nextUrl.searchParams.get('period');
+  const status   = req.nextUrl.searchParams.get('status');
   const page     = Number(req.nextUrl.searchParams.get('page') ?? '1');
   const limit    = Math.min(Number(req.nextUrl.searchParams.get('limit') ?? '50'), 200);
   const offset   = (page - 1) * limit;
 
+  const svc = getSupabaseServiceClient();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
+  let query = (svc as any)
     .from('platform_invoices')
-    .select(`
-      id, invoice_number, entity_id, status, period_start, period_end,
-      subtotal_cents, tax_cents, total_cents, currency,
-      issued_at, due_date, sent_at, notes, internal_reference, created_at,
-      companies:entity_id ( name )
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -59,13 +56,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Błąd ładowania faktur.' }, { status: 500 });
   }
 
+  // Fetch company names separately (RLS blocks cross-company joins)
+  const companyIds = Array.from(new Set((invoices ?? []).map((inv: { entity_id: string }) => inv.entity_id)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: companies } = await (svc as any)
+    .from('companies')
+    .select('id, name')
+    .in('id', companyIds);
+
+  const companyMap = new Map((companies ?? []).map((c: { id: string; name: string }) => [c.id, c.name]));
+
   return NextResponse.json({
     invoices: (invoices ?? []).map((inv: {
       id: string; invoice_number: string | null; entity_id: string; status: string;
       period_start: string; period_end: string; subtotal_cents: number; tax_cents: number;
       total_cents: number; currency: string; issued_at: string | null; due_date: string | null;
       sent_at: string | null; notes: string | null; internal_reference: string | null;
-      created_at: string; companies: { name: string } | { name: string }[] | null;
+      created_at: string;
     }) => ({
       id:                inv.id,
       invoiceNumber:     inv.invoice_number,
@@ -83,8 +90,7 @@ export async function GET(req: NextRequest) {
       notes:             inv.notes,
       internalReference: inv.internal_reference,
       createdAt:         inv.created_at,
-      companyName:       Array.isArray(inv.companies) ? inv.companies[0]?.name : inv.companies?.name,
-      companyEmail:      null,
+      companyName:       companyMap.get(inv.entity_id) ?? null,
     })),
     total:   count ?? 0,
     page,

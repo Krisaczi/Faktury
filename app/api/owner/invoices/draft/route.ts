@@ -95,9 +95,9 @@ export async function POST(req: NextRequest) {
   const periodStart = new Date(periodYear, periodMonth - 1, 1);
   const periodEnd = new Date(periodYear, periodMonth, 0);
 
-  // Insert invoice (draft, no invoice_number yet)
+  // Insert invoice (draft, no invoice_number yet) — use service client for reliability
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoice, error: invErr } = await (supabase as any)
+  const { data: invoice, error: invErr } = await (svc as any)
     .from('platform_invoices')
     .insert({
       entity_id:          entityId,
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: itemsErr } = await (supabase as any)
+  const { error: itemsErr } = await (svc as any)
     .from('platform_invoice_line_items')
     .insert(itemsToInsert);
 
@@ -138,14 +138,14 @@ export async function POST(req: NextRequest) {
     console.error('[draft] line items error', itemsErr);
     // Clean up the invoice
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('platform_invoices').delete().eq('id', invoice.id);
+    await (svc as any).from('platform_invoices').delete().eq('id', invoice.id);
     return NextResponse.json({ error: 'Błąd pozycji faktury.' }, { status: 500 });
   }
 
   // Audit: created
   const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any).from('platform_invoice_audit').insert({
+  await (svc as any).from('platform_invoice_audit').insert({
     invoice_id: invoice.id,
     actor_id:   user.id,
     action:     'created',

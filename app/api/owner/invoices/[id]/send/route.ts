@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/owner/invoices/:id/send
  *
  * Sends an issued invoice by email and in-app notification.
- * Marks sentAt when delivered.
+ * Marks sentAt when delivered. Uses service client for cross-company access.
  */
 export async function POST(
   req: NextRequest,
@@ -26,8 +26,10 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const svc = getSupabaseServiceClient();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoice } = await (supabase as any)
+  const { data: invoice } = await (svc as any)
     .from('platform_invoices')
     .select('id, status, invoice_number, entity_id, total_cents')
     .eq('id', params.id)
@@ -41,17 +43,9 @@ export async function POST(
     return NextResponse.json({ error: 'Faktura musi być wystawiona przed wysłaniem.' }, { status: 400 });
   }
 
-  // Get company name (companies table has no email column — users have emails)
+  // Get all active users in the company to notify
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: company } = await (supabase as any)
-    .from('companies')
-    .select('name')
-    .eq('id', invoice.entity_id)
-    .maybeSingle();
-
-  // Get all users in the company to notify
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: companyUsers } = await (supabase as any)
+  const { data: companyUsers } = await (svc as any)
     .from('users')
     .select('id, email')
     .eq('company_id', invoice.entity_id)
@@ -60,26 +54,24 @@ export async function POST(
   const nowIso = new Date().toISOString();
   const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
 
-  // Log email events for each recipient
+  // Log email events — table is `email_events`, columns: event_type, recipient, subject, company_id, status_code
   const emailEvents = (companyUsers ?? []).map((cu: { id: string; email: string }) => ({
-    company_id:     invoice.entity_id,
-    user_id:        cu.id,
-    event_type:     'platform_invoice_sent',
-    recipient_email: cu.email,
-    subject:        `Faktura platformowa ${invoice.invoice_number}`,
-    status:         'queued',
-    metadata:       { invoiceId: params.id, invoiceNumber: invoice.invoice_number },
-    created_at:     nowIso,
+    event_type:  'platform_invoice_sent',
+    recipient:   cu.email,
+    subject:     `Faktura platformowa ${invoice.invoice_number}`,
+    company_id:  invoice.entity_id,
+    raw_metadata: { invoiceId: params.id, invoiceNumber: invoice.invoice_number, userId: cu.id },
+    created_at:  nowIso,
   }));
 
   if (emailEvents.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('email_events_log').insert(emailEvents);
+    await (svc as any).from('email_events').insert(emailEvents);
   }
 
   // Mark as sent
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  await (svc as any)
     .from('platform_invoices')
     .update({
       status:     'sent',
@@ -90,15 +82,12 @@ export async function POST(
 
   // Audit
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any).from('platform_invoice_audit').insert({
+  await (svc as any).from('platform_invoice_audit').insert({
     invoice_id: params.id,
     actor_id:   user.id,
     action:     'sent',
     ip:         ownerIp,
-    payload:    {
-      recipientCount: emailEvents.length,
-      companyEmail:   null,
-    },
+    payload:    { recipientCount: emailEvents.length },
   });
 
   return NextResponse.json({

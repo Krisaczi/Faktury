@@ -1,4 +1,4 @@
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import { PlatformInvoicesClient } from '@/components/admin/platform-invoices-client';
 
 export const dynamic = 'force-dynamic';
@@ -24,25 +24,32 @@ export default async function PlatformInvoicesPage() {
     return <PlatformInvoicesClient initialInvoices={[]} initialTotal={0} isOwner={false} />;
   }
 
-  // Fetch initial invoices
+  const svc = getSupabaseServiceClient();
+
+  // Fetch invoices — use service client since RLS on companies blocks cross-company joins
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoices, count } = await (supabase as any)
+  const { data: invoices, count } = await (svc as any)
     .from('platform_invoices')
-    .select(`
-      id, invoice_number, entity_id, status, period_start, period_end,
-      subtotal_cents, tax_cents, total_cents, currency,
-      issued_at, due_date, sent_at, notes, internal_reference, created_at,
-      companies:entity_id ( name )
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .limit(50);
+
+  // Fetch company names separately
+  const companyIds = Array.from(new Set((invoices ?? []).map((inv: { entity_id: string }) => inv.entity_id)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: companies } = await (svc as any)
+    .from('companies')
+    .select('id, name')
+    .in('id', companyIds);
+
+  const companyMap = new Map((companies ?? []).map((c: { id: string; name: string }) => [c.id, c.name]));
 
   const formatted = (invoices ?? []).map((inv: {
     id: string; invoice_number: string | null; entity_id: string; status: string;
     period_start: string; period_end: string; subtotal_cents: number; tax_cents: number;
     total_cents: number; currency: string; issued_at: string | null; due_date: string | null;
     sent_at: string | null; notes: string | null; internal_reference: string | null;
-    created_at: string; companies: { name: string } | { name: string }[] | null;
+    created_at: string;
   }) => ({
     id:                inv.id,
     invoiceNumber:     inv.invoice_number,
@@ -60,7 +67,7 @@ export default async function PlatformInvoicesPage() {
     notes:             inv.notes,
     internalReference: inv.internal_reference,
     createdAt:         inv.created_at,
-    companyName:       Array.isArray(inv.companies) ? inv.companies[0]?.name : inv.companies?.name ?? null,
+    companyName:       companyMap.get(inv.entity_id) ?? null,
     companyEmail:      null,
   }));
 
