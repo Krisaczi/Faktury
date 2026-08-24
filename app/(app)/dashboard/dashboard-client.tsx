@@ -432,8 +432,9 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
               { label: 'Wczytaj faktury',   href: '/upload',      icon: Upload },
               { label: 'Raport ryzyka', href: '/risk-report', icon: FileBarChart2 },
               { label: 'Dostawcy',   href: '/vendors',     icon: Building2 },
+              { label: 'Wystaw fakturę', href: '/admin/invoices/new',    icon: FileText },
               { label: 'Ustawienia', href: '/settings',    icon: Settings },
-      { label: 'Wystaw fakturę', href: '/admin/invoices/new',    icon: FileText },
+      
             ].map(({ label, href, icon: Icon }) => (
               <a
                 key={href}

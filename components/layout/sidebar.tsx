@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid, UserCog, Mail, MailCheck, UserPlus } from 'lucide-react';
+import { Shield, LogOut, ChevronLeft, ChevronRight, Bell, ReceiptText, Users, LayoutGrid, UserCog, Mail, MailCheck, UserPlus, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -281,7 +281,7 @@ export function Sidebar() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {(() => {
-                      const active = pathname.startsWith('/admin/users');
+                      const active = pathname.startsWith('/admin/users') && !pathname.startsWith('/admin/users/');
                       return (
                         <Link
                           href="/admin/users"
@@ -311,6 +311,46 @@ export function Sidebar() {
                   {collapsed && (
                     <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
                       Użytkownicy
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
+
+              {/* Faktury platformowe — owner only */}
+              {(effectiveRole === 'owner') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {(() => {
+                      const active = pathname.startsWith('/admin/platform-invoices');
+                      return (
+                        <Link
+                          href="/admin/platform-invoices"
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                            active
+                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                            collapsed && 'justify-center px-2'
+                          )}
+                        >
+                          <Receipt
+                            className={cn(
+                              'flex-shrink-0 transition-colors',
+                              collapsed ? 'w-5 h-5' : 'w-4 h-4',
+                              active ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                            )}
+                          />
+                          {!collapsed && <span>Faktury platformowe</span>}
+                          {!collapsed && active && (
+                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
+                          )}
+                        </Link>
+                      );
+                    })()}
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right" className="bg-slate-800 text-white border-slate-700">
+                      Faktury platformowe
                     </TooltipContent>
                   )}
                 </Tooltip>

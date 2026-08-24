@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard, FilePlus, ArrowLeftRight, Zap } from 'lucide-react';
+import { Users, Shield, ChevronDown, ChevronUp, Loader, Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, History, RefreshCw, Wrench, UserX, UserCheck, Clock, CreditCard, FilePlus, ArrowLeftRight, Zap, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { deactivateUser, reactivateUser } from '@/lib/auth/user-status-actions';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type AppRole } from '@/lib/permissions';
 import type { CompanyUser, RoleChangeLog } from '@/lib/auth/role-actions';
 import { ManagePlanModal } from '@/components/admin/manage-plan-modal';
+import { PlatformInvoiceModal } from '@/components/admin/platform-invoice-modal';
 
 // ─── Role colours ─────────────────────────────────────────────────────────────
 
@@ -308,7 +309,8 @@ type ModalAction =
   | { kind: 'managePlan'; user: CompanyUser }
   | { kind: 'allowance'; user: CompanyUser }
   | { kind: 'reconcile' }
-  | { kind: 'forceSync'; user: CompanyUser };
+  | { kind: 'forceSync'; user: CompanyUser }
+  | { kind: 'platformInvoice'; user: CompanyUser };
 
 export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs, fetchError }: UsersClientProps) {
   const router                           = useRouter();
@@ -509,6 +511,16 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
                         <FilePlus className="w-4 h-4" />
                       </Button>
 
+                      {/* Issue platform invoice */}
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => setModal({ kind: 'platformInvoice', user: u })}
+                        className="h-8 w-8 p-0 text-violet-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                        title="Wystaw fakturę za użytkowanie platformy"
+                      >
+                        <Receipt className="w-4 h-4" />
+                      </Button>
+
                       {/* Force sync plan */}
                       <Button
                         variant="ghost" size="sm"
@@ -679,6 +691,15 @@ export function UsersClient({ currentUserId, isOwner, initialUsers, initialLogs,
               refreshAndClose();
             });
           }}
+        />
+      )}
+
+      {modal?.kind === 'platformInvoice' && (
+        <PlatformInvoiceModal
+          user={modal.user}
+          open
+          onOpenChange={() => { setModal(null); }}
+          onSuccess={() => router.refresh()}
         />
       )}
     </div>
