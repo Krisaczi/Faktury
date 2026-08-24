@@ -40,19 +40,20 @@ interface SubscriptionData {
     monthlyPrice: number;
     limits:       PlanInfo['limits'] | null;
   };
-  subscription: {
-    status:           string;
-    assignedAt:       string | null;
-    currentPeriodEnd: string | null;
-    lastSyncedAt?:    string | null;
-    source?:          string;
-  };
   usage: {
     activeUsers:      number;
     vendorCount:      number;
     reportsThisMonth: number;
   };
   conflicts: Array<{ field: string; label: string; current: number; limit: number | null; over: boolean }>;
+  auditLogs?: Array<{
+    id:          string;
+    from_plan:   string;
+    to_plan:     string;
+    effective:   string;
+    reason:      string | null;
+    created_at:  string;
+  }>;
 }
 
 interface Props {
@@ -255,16 +256,11 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
                 </Badge>
               </div>
 
-              {/* Sync indicator */}
-              {subscription.subscription.lastSyncedAt && (
+              {/* Last plan change */}
+              {subscription.auditLogs && subscription.auditLogs.length > 0 && (
                 <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
                   <RefreshCwIcon className="w-3 h-3" />
-                  Ostatnia synchronizacja: {format(new Date(subscription.subscription.lastSyncedAt), 'dd.MM.yyyy HH:mm')}
-                  {subscription.subscription.source && (
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 ml-1">
-                      {subscription.subscription.source === 'subscription' ? 'subskrypcja' : 'firma'}
-                    </Badge>
-                  )}
+                  Ostatnia zmiana: {format(new Date(subscription.auditLogs[0].created_at), 'dd.MM.yyyy HH:mm')}
                 </div>
               )}
 
@@ -523,7 +519,7 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
                 className="gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 <Ban className="w-4 h-4" />
-                Anuluj subskrypcję
+                Resetuj do Starter
               </Button>
               <div className="flex-1" />
               <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
