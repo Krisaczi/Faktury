@@ -67,9 +67,12 @@ export interface BillingAuditEntry {
 
 export interface BillingStatusResponse {
   product_type: 'starter' | 'professional';
-  plan_source: string;
+  plan_source:  string;
+  plan_label?:  string;
+  assigned_at?: string | null;
+  updated_at?:  string | null;
   auditHistory?: BillingAuditEntry[];
-  canUpgrade?: boolean;
+  canUpgrade?:  boolean;
 }
 
 export interface CompanyUpdateInput {
@@ -100,7 +103,7 @@ export function useBillingStatus() {
   return useSWR<BillingStatusResponse>(
     'billing-status',
     () => apiGet<BillingStatusResponse>('/api/billing/status'),
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+    { revalidateOnFocus: true, dedupingInterval: 5_000 }
   );
 }
 

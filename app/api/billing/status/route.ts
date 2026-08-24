@@ -34,9 +34,12 @@ export async function GET() {
 
     return NextResponse.json({
       product_type: effectivePlan.planId as 'starter' | 'professional',
-      plan_source: effectivePlan.source,
+      plan_source:  effectivePlan.source,
+      plan_label:   effectivePlan.planLabel,
+      assigned_at:  effectivePlan.assignedAt,
+      updated_at:   effectivePlan.updatedAt,
       auditHistory: auditHistory ?? [],
-      canUpgrade: effectivePlan.planId === 'starter',
+      canUpgrade:   effectivePlan.planId === 'starter',
     });
   } catch (err) {
     console.error('[api/billing/status]', err);

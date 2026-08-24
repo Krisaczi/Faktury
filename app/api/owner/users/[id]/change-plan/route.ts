@@ -131,20 +131,36 @@ export async function POST(
 
   // Apply plan change
   if (effective === 'now') {
+    const nowIso = new Date().toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateErr } = await (supabase as any)
       .from('companies')
       .update({
         product_type:        planId,
         package_type:        planId,
-        package_assigned_at: new Date().toISOString(),
-        updated_at:          new Date().toISOString(),
+        package_assigned_at: nowIso,
+        updated_at:          nowIso,
       })
       .eq('id', targetUser.company_id);
 
     if (updateErr) {
       return NextResponse.json({ error: 'Błąd aktualizacji planu.' }, { status: 500 });
     }
+
+    // Upsert plan_assignments (canonical source)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('plan_assignments')
+      .upsert({
+        entity_id:      targetUser.company_id,
+        entity_type:    'company',
+        plan_id:        planId,
+        status:         'active',
+        effective_from: nowIso,
+        updated_at:     nowIso,
+        metadata:       { source: 'owner_change_plan', reason: reason ?? null },
+      }, { onConflict: 'entity_id,entity_type' })
+      .eq('status', 'active');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('billing_audit').insert({

@@ -352,8 +352,11 @@ function BillingCard({ role }: { role: string }) {
   const productType = data?.product_type ?? 'starter';
   const canUpgrade = data?.canUpgrade ?? false;
   const auditHistory = data?.auditHistory;
+  const planSource = data?.plan_source ?? 'default';
+  const updatedAt = data?.updated_at;
+  const isKnownPlan = productType === 'starter' || productType === 'professional';
   const statusCfg = planStatusConfig.active;
-  const planCfg = planConfig[productType] ?? planConfig.starter;
+  const planCfg = planConfig[productType] ?? null;
 
   async function handleUpgrade() {
     setUpgrading(true);
@@ -434,17 +437,23 @@ function BillingCard({ role }: { role: string }) {
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                       Obecny Pakiet
                     </p>
-                    <Badge className={cn('text-xs capitalize', planCfg.badgeClass)}>
-                      {planCfg.label}
+                    <Badge className={cn('text-xs capitalize', planCfg?.badgeClass ?? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400')}>
+                      {planCfg?.label ?? 'Nieznany — wymagana akcja właściciela'}
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500 mt-1.5">
-                    {productType === 'professional'
-                      ? 'Maks. 3 użytkowników, nielimitowana liczba dostawców i generowanych raportów, możliwość wystawiania faktur w KSeF.'
-                      : '1 użytkownik, 25 dostawców, 10 faktur miesięcznie, 10 raportów miesięcznie.'}
+                    {isKnownPlan
+                      ? (productType === 'professional'
+                        ? 'Maks. 3 użytkowników, nielimitowana liczba dostawców i generowanych raportów, możliwość wystawiania faktur w KSeF.'
+                        : '1 użytkownik, 25 dostawców, 10 faktur miesięcznie, 10 raportów miesięcznie.')
+                      : `Plan „${productType}” nie jest rozpoznawany. Skontaktuj się z właścicielem platformy.`}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {statusCfg.label}
+                    {planSource === 'plan_assignments' && ' · źródło: przypisanie planu'}
+                    {planSource === 'company' && ' · źródło: dane firmy'}
+                    {planSource === 'default' && ' · źródło: domyślne'}
+                    {updatedAt && ` · ostatnia aktualizacja: ${fmt(updatedAt)}`}
                   </p>
                 </div>
                 <Badge className={cn('text-xs', statusCfg.bg, statusCfg.color)}>

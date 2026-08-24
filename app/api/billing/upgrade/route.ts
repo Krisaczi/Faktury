@@ -41,7 +41,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Already on Professional', code: 'ALREADY_PROFESSIONAL' }, { status: 409 });
     }
 
-    // Upgrade: set product_type to professional
+    // Upgrade: set product_type to professional + upsert plan_assignments
     const now = new Date().toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateErr } = await (supabase as any)
@@ -58,6 +58,21 @@ export async function POST() {
       console.error('[api/billing/upgrade] update error', updateErr);
       return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
     }
+
+    // Upsert plan_assignments (canonical source)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('plan_assignments')
+      .upsert({
+        entity_id:      userRow.company_id,
+        entity_type:    'company',
+        plan_id:        'professional',
+        status:         'active',
+        effective_from: now,
+        updated_at:     now,
+        metadata:       { source: 'self_serve' },
+      }, { onConflict: 'entity_id,entity_type' })
+      .eq('status', 'active');
 
     // Audit log
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

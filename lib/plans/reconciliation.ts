@@ -342,7 +342,7 @@ export async function forceSetPlan(
   const fromPlan = normalizePlanId(company?.product_type ?? 'starter');
   const now = new Date().toISOString();
 
-  // Update companies table — sole source of truth
+  // Update companies table (derived field — kept in sync)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updateErr } = await (supabase as any)
     .from('companies')
@@ -357,6 +357,21 @@ export async function forceSetPlan(
   if (updateErr) {
     return { ok: false, userId: targetUserId, fromPlan, toPlan: normalizedPlanId, auditId: null, error: 'Błąd ustawiania planu.' };
   }
+
+  // Upsert plan_assignments (canonical source)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('plan_assignments')
+    .upsert({
+      entity_id:      user.company_id,
+      entity_type:    'company',
+      plan_id:        normalizedPlanId,
+      status:         'active',
+      effective_from: now,
+      updated_at:     now,
+      metadata:       { source: 'owner_force_set', reason: options.reason ?? 'Owner force-set plan' },
+    }, { onConflict: 'entity_id,entity_type' })
+    .eq('status', 'active');
 
   // Log to plan_change_audit
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

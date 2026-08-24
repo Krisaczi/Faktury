@@ -1,54 +1,52 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import useSWR from 'swr';
 import type { PackageType } from '@/lib/permissions';
 
 export interface UserPackageData {
   packageType: PackageType | null;
   companyId:   string | null;
   loading:     boolean;
+  source:      string | null;
+  isKnownPlan: boolean;
+}
+
+interface EffectivePlanResponse {
+  planId:       string;
+  planName:     string;
+  planLabel:    string;
+  monthlyPrice: number;
+  source:       string;
+  companyId:    string | null;
+  limits:       unknown;
+  assignedAt:   string | null;
+  updatedAt:    string | null;
+  isKnownPlan:  boolean;
 }
 
 /**
- * Fetches the current user's company package type from the database.
- * Used by frontend components to gate invoicing features (Starter = read-only,
- * Professional = full invoicing).
+ * Fetches the current user's effective plan from the canonical API.
+ * Uses SWR for caching with revalidation on focus.
  */
 export function useUserPackage(): UserPackageData {
-  const [packageType, setPackageType] = useState<PackageType | null>(null);
-  const [companyId,   setCompanyId]   = useState<string | null>(null);
-  const [loading,     setLoading]     = useState(true);
+  const { data, error, isLoading } = useSWR<EffectivePlanResponse>(
+    'plans-effective',
+    () => fetch('/api/plans/effective').then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json() as Promise<EffectivePlanResponse>;
+    }),
+    { revalidateOnFocus: true, dedupingInterval: 10_000 },
+  );
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
+  const packageType = (data?.planId as PackageType) ?? null;
+  const isKnownPlan = data?.isKnownPlan ?? true;
 
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
-
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!userRow?.company_id) { setLoading(false); return; }
-      setCompanyId(userRow.company_id);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: company } = await (supabase as any)
-        .from('companies')
-        .select('product_type')
-        .eq('id', userRow.company_id)
-        .maybeSingle();
-
-      setPackageType((company?.product_type ?? 'starter') as PackageType);
-      setLoading(false);
-    }
-
-    init();
-  }, []);
-
-  return { packageType, companyId, loading };
+  return {
+    packageType,
+    companyId:   data?.companyId ?? null,
+    loading:     isLoading && !error,
+    source:      data?.source ?? null,
+    isKnownPlan,
+  };
 }
