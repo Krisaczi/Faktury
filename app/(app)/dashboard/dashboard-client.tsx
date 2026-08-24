@@ -11,7 +11,7 @@ import {
   Settings,
   Clock,
   Flag,
-  RefreshCw,
+  RefreshCw
 } from 'lucide-react';
 import {
   Card,
@@ -433,6 +433,7 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
               { label: 'Raport ryzyka', href: '/risk-report', icon: FileBarChart2 },
               { label: 'Dostawcy',   href: '/vendors',     icon: Building2 },
               { label: 'Ustawienia', href: '/settings',    icon: Settings },
+      { label: 'Wystaw fakturę', href: '/admin/invoices/new',    icon: FileText },
             ].map(({ label, href, icon: Icon }) => (
               <a
                 key={href}

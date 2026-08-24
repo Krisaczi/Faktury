@@ -35,19 +35,14 @@ describe('requireProForInvoicing', () => {
     assert.equal(result.allowed, true);
   });
 
-  it('blocks accountant on starter package with 403', () => {
+  it('allows accountant on starter package (full invoicing mode)', () => {
     const result = requireProForInvoicing({ role: 'accountant', companyId: 'co-1', packageType: 'starter' });
-    assert.equal(result.allowed, false);
-    assert.equal(result.status, 403);
-    assert.equal(result.code, 'INVOICING_NOT_AVAILABLE');
-    assert.ok(result.reason?.includes('Professional'));
+    assert.equal(result.allowed, true);
   });
 
-  it('blocks accountant when packageType is null', () => {
+  it('allows accountant when packageType is null (defaults to allowed)', () => {
     const result = requireProForInvoicing({ role: 'accountant', companyId: 'co-1', packageType: null });
-    assert.equal(result.allowed, false);
-    assert.equal(result.status, 403);
-    assert.equal(result.code, 'INVOICING_NOT_AVAILABLE');
+    assert.equal(result.allowed, true);
   });
 
   it('blocks unknown role with 403', () => {
@@ -69,10 +64,10 @@ describe('requireProForInvoicing', () => {
     assert.equal(result.code, 'UNKNOWN_ROLE');
   });
 
-  it('starter-blocked error message is actionable', () => {
+  it('starter is now allowed (full invoicing, limited by count)', () => {
     const result = requireProForInvoicing({ role: 'accountant', companyId: 'co-1', packageType: 'starter' });
-    assert.ok(result.reason?.includes('Starter'));
-    assert.ok(result.reason?.includes('Professional'));
+    assert.equal(result.allowed, true);
+    assert.equal(result.reason, undefined);
   });
 
   it('does not include a reason when allowed', () => {

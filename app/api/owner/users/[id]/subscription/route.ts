@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyUsage, checkUsageConflicts, getPlanById } from '@/lib/plans/actions';
-import { getEffectivePlan, getPlanLabel } from '@/lib/plans/canonical-plan';
+import { getEffectivePlan } from '@/lib/plans/canonical-plan';
 
 export async function GET(
   _req: NextRequest,
@@ -45,7 +45,6 @@ export async function GET(
     return NextResponse.json({ error: 'User has no company' }, { status: 400 });
   }
 
-  // Use canonical plan resolver — checks subscriptions table first, falls back to companies
   const effectivePlan = await getEffectivePlan(params.id);
 
   const usage = await getCompanyUsage(targetUser.company_id);
@@ -69,13 +68,6 @@ export async function GET(
       description:  currentPlan?.description ?? '',
       monthlyPrice: effectivePlan.monthlyPrice,
       limits:       effectivePlan.limits,
-    },
-    subscription: {
-      status:           effectivePlan.subscriptionStatus,
-      assignedAt:       null,
-      currentPeriodEnd: effectivePlan.currentPeriodEnd,
-      lastSyncedAt:     effectivePlan.lastSyncedAt,
-      source:           effectivePlan.source,
     },
     usage,
     conflicts,

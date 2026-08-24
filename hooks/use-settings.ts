@@ -43,7 +43,6 @@ export interface CompanySettings {
   nip: string | null;
   currency: string;
   ingestion_email: string | null;
-  subscription_status: string;
   created_at: string;
   updated_at: string;
 }
@@ -60,15 +59,15 @@ export interface BillingAuditEntry {
   old_package: string;
   new_package: string;
   provider: string;
-  provider_tx_id: string | null;
-  amount_cents: number | null;
-  currency: string | null;
+  event_type: string;
+  from_plan: string;
+  to_plan: string;
   created_at: string;
 }
 
 export interface BillingStatusResponse {
   product_type: 'starter' | 'professional';
-  subscription_status: string;
+  plan_source: string;
   auditHistory?: BillingAuditEntry[];
   canUpgrade?: boolean;
 }

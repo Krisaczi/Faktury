@@ -53,7 +53,6 @@ export async function POST(
   const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
 
   const result = await forceSetPlan(user.id, params.id, planId, ownerIp, {
-    effectiveFrom,
     reason,
   });
 

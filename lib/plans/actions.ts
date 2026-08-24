@@ -19,14 +19,14 @@ export const PLANS: PlanInfo[] = [
   {
     id:          'starter',
     name:        'Starter',
-    description: 'Plan podstawowy — podgląd faktur z KSeF, raporty ryzyka (limit), 1 użytkownik.',
+    description: 'Plan podstawowy — fakturowanie (10/mies.), raporty ryzyka (limit), 1 użytkownik.',
     monthlyPrice: 0,
     limits: {
       vendors_limit:     25,
       reports_per_month: 10,
       users_limit:       1,
       file_uploads:      true,
-      invoicing:         false,
+      invoicing:         true,
     },
     active: true,
   },
@@ -207,11 +207,10 @@ export interface CancelResult {
   message:      string;
 }
 
-export async function cancelSubscription(params: {
+export async function resetToStarter(params: {
   ownerId:       string;
   targetUserId:  string;
   companyId:     string;
-  effective:     'now' | 'period_end';
   reason?:       string;
   notes?:        string;
   ownerIp?:      string;
@@ -228,22 +227,19 @@ export async function cancelSubscription(params: {
 
   const fromPlan = (company?.product_type ?? 'starter') as string;
 
-  if (params.effective === 'now') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('companies')
-      .update({
-        product_type:        'starter',
-        package_type:        'starter',
-        subscription_status: 'canceled',
-        package_assigned_at: new Date().toISOString(),
-        updated_at:          new Date().toISOString(),
-      })
-      .eq('id', params.companyId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('companies')
+    .update({
+      product_type:        'starter',
+      package_type:        'starter',
+      package_assigned_at: new Date().toISOString(),
+      updated_at:          new Date().toISOString(),
+    })
+    .eq('id', params.companyId);
 
-    if (error) {
-      return { ok: false, fromPlan, effective: params.effective, message: 'Błąd anulowania subskrypcji.' };
-    }
+  if (error) {
+    return { ok: false, fromPlan, effective: 'now', message: 'Błąd resetowania planu.' };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,12 +248,12 @@ export async function cancelSubscription(params: {
     actor_id:    params.ownerId,
     old_package: fromPlan,
     new_package: 'starter',
-    provider:    'internal',
-    event_type:  'subscription_canceled',
+    provider:    'local',
+    event_type:  'plan_changed',
     from_plan:   fromPlan,
     to_plan:     'starter',
     changed_by:  params.ownerId,
-    metadata:    { reason: params.reason ?? null, notes: params.notes ?? null, effective: params.effective },
+    metadata:    { reason: params.reason ?? null, notes: params.notes ?? null },
   });
 
   await logPlanChange({
@@ -266,15 +262,11 @@ export async function cancelSubscription(params: {
     companyId:     params.companyId,
     fromPlan,
     toPlan:        'starter',
-    effective: params.effective,
+    effective:     'now',
     reason:        params.reason,
     notes:         params.notes,
     ownerIp:       params.ownerIp,
   });
-
-  // Sync subscription record
-  const { syncSubscriptionFromCompany } = await import('./canonical-plan');
-  await syncSubscriptionFromCompany(params.targetUserId, params.companyId);
 
   if (params.notifyUser) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -288,10 +280,10 @@ export async function cancelSubscription(params: {
       await logPlanNotification({
         companyId:  params.companyId,
         userEmail:  targetUser.email,
-        eventType:  'subscription_canceled',
+        eventType:  'plan_changed',
         fromPlan,
         toPlan:     'starter',
-        effective:  params.effective,
+        effective:  'now',
       });
     }
   }
@@ -299,9 +291,7 @@ export async function cancelSubscription(params: {
   return {
     ok: true,
     fromPlan,
-    effective: params.effective,
-    message: params.effective === 'now'
-      ? 'Subskrypcja anulowana natychmiast.'
-      : 'Anulowanie subskrypcji zaplanowane na koniec okresu.',
+    effective: 'now',
+    message: 'Plan został zresetowany do Starter.',
   };
 }

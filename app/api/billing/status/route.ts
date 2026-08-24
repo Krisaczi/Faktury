@@ -23,7 +23,6 @@ export async function GET() {
       return NextResponse.json({ error: 'No company found' }, { status: 404 });
     }
 
-    // Use canonical plan resolver — reads from subscriptions table first
     const effectivePlan = await getEffectivePlan(user.id);
 
     const { data: auditHistory } = await supabase
@@ -35,9 +34,7 @@ export async function GET() {
 
     return NextResponse.json({
       product_type: effectivePlan.planId as 'starter' | 'professional',
-      subscription_status: effectivePlan.subscriptionStatus,
       plan_source: effectivePlan.source,
-      last_synced_at: effectivePlan.lastSyncedAt,
       auditHistory: auditHistory ?? [],
       canUpgrade: effectivePlan.planId === 'starter',
     });

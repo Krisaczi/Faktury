@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: recentLogs } = await (supabase as any)
-    .from('plan_reconciliation_log')
-    .select('id, target_user_id, company_id, local_plan, canonical_plan, source, action, reason, owner_ip, created_at')
+    .from('plan_change_audit')
+    .select('id, target_user_id, company_id, from_plan, to_plan, effective, reason, owner_ip, created_at')
     .order('created_at', { ascending: false })
     .limit(20);
 

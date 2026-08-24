@@ -104,15 +104,13 @@ describe('internal upgrade response', () => {
 // ─── 3 & 4. Invoicing guard ──────────────────────────────────────────────────
 
 describe('invoicing guard (requireProForInvoicing)', () => {
-  it('blocks accountants on the starter package', () => {
+  it('allows accountants on the starter package (full invoicing mode)', () => {
     const result = requireProForInvoicing({
       role: 'accountant',
       companyId: 'co-1',
       packageType: 'starter',
     });
-    assert.equal(result.allowed, false);
-    assert.equal(result.status, 403);
-    assert.equal(result.code, 'INVOICING_NOT_AVAILABLE');
+    assert.equal(result.allowed, true);
   });
 
   it('allows accountants on the professional package', () => {
@@ -126,13 +124,14 @@ describe('invoicing guard (requireProForInvoicing)', () => {
     assert.equal(result.status, undefined);
   });
 
-  it('starter-blocked reason is actionable (mentions Professional)', () => {
+  it('starter is now allowed (no blocked reason needed)', () => {
     const result = requireProForInvoicing({
       role: 'accountant',
       companyId: 'co-1',
       packageType: 'starter',
     });
-    assert.ok(result.reason?.includes('Professional'));
+    assert.equal(result.allowed, true);
+    assert.equal(result.code, undefined);
   });
 
   it('owner bypasses the package check entirely', () => {
@@ -147,7 +146,7 @@ describe('invoicing guard (requireProForInvoicing)', () => {
 
 // ─── 5. Package update is service_role only (RLS invariant) ──────────────────
 
-describe('package update is service_role only (RLS invariant)', () => {
+describe('package update via direct DB (no external provider)', () => {
   const projectRoot = join(
     dirname(fileURLToPath(import.meta.url)),
     '..',
@@ -156,20 +155,25 @@ describe('package update is service_role only (RLS invariant)', () => {
   );
   const migrationsDir = join(projectRoot, 'supabase', 'migrations');
 
-  it('the upgrade route calls the self_serve_upgrade SECURITY DEFINER function', async () => {
+  it('the upgrade route uses direct DB update (not self_serve_upgrade RPC)', async () => {
     const route = await readFile(
       join(projectRoot, 'app', 'api', 'billing', 'upgrade', 'route.ts'),
       'utf8',
     );
-    assert.match(
+    assert.doesNotMatch(
       route,
       /self_serve_upgrade/,
-      'upgrade route must call the self_serve_upgrade RPC function',
+      'self_serve_upgrade RPC has been removed — upgrade is now a direct DB update',
     );
     assert.doesNotMatch(
       route,
       /getSupabaseServiceClient/,
       'upgrade route must NOT use the service-role client directly',
+    );
+    assert.match(
+      route,
+      /product_type.*professional/,
+      'upgrade route must set product_type to professional',
     );
   });
 

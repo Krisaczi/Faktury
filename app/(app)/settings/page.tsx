@@ -59,12 +59,9 @@ const companySchema = z.object({
 
 type CompanyForm = z.infer<typeof companySchema>;
 
-// ─── Billing status colors ──────────────────────────────────────────────────────
-const billingStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+// ─── Plan status colors ──────────────────────────────────────────────────────────
+const planStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
   active:    { label: 'Aktywny',    color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-  past_due:  { label: 'Past Due',  color: 'text-amber-700 dark:text-amber-400',  bg: 'bg-amber-100 dark:bg-amber-900/30' },
-  cancelled: { label: 'Anulowany', color: 'text-red-700 dark:text-red-400',      bg: 'bg-red-100 dark:bg-red-900/30' },
-  paused:    { label: 'Wstrzymany',    color: 'text-slate-700 dark:text-slate-400',  bg: 'bg-slate-100 dark:bg-slate-800' },
 };
 
 function fmt(date: string | null | undefined) {
@@ -353,10 +350,9 @@ function BillingCard({ role }: { role: string }) {
   const [billingError, setBillingError] = useState('');
 
   const productType = data?.product_type ?? 'starter';
-  const subscriptionStatus = data?.subscription_status ?? 'active';
   const canUpgrade = data?.canUpgrade ?? false;
   const auditHistory = data?.auditHistory;
-  const statusCfg = billingStatusConfig[subscriptionStatus] ?? billingStatusConfig.active;
+  const statusCfg = planStatusConfig.active;
   const planCfg = planConfig[productType] ?? planConfig.starter;
 
   async function handleUpgrade() {
@@ -445,7 +441,7 @@ function BillingCard({ role }: { role: string }) {
                   <p className="text-xs text-slate-500 mt-1.5">
                     {productType === 'professional'
                       ? 'Maks. 3 użytkowników, nielimitowana liczba dostawców i generowanych raportów, możliwość wystawiania faktur w KSeF.'
-                      : '1 użytkownik, 25 dostawców, 10 raportów miesięcznie.'}
+                      : '1 użytkownik, 25 dostawców, 10 faktur miesięcznie, 10 raportów miesięcznie.'}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {statusCfg.label}
@@ -472,9 +468,6 @@ function BillingCard({ role }: { role: string }) {
                         <ArrowUpCircle className="w-3 h-3 text-slate-400" />
                         <span className="capitalize font-medium text-slate-700 dark:text-slate-300">{entry.new_package}</span>
                       </span>
-                      {entry.provider_tx_id && (
-                        <span className="font-mono text-slate-400 text-[10px]">{entry.provider_tx_id}</span>
-                      )}
                     </li>
                   ))}
                 </ul>
@@ -515,7 +508,7 @@ function BillingCard({ role }: { role: string }) {
                       <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />1 użytkownik</li>
                       <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />25 dostawców</li>
                       <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />10 raportów miesięcznie</li>
-                      <li className="flex items-start gap-1.5"><X className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />Podgląd faktur z KSeF (tylko do odczytu)</li>
+                      <li className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />Fakturowanie KSeF (10 faktur/mies.)</li>
                     </ul>
                   </div>
                   <div className="rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">

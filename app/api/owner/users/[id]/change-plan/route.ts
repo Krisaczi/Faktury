@@ -4,9 +4,9 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getPlanById, isDowngrade, getCompanyUsage,
   checkUsageConflicts, computeProration, logPlanChange,
-  logPlanNotification, cancelSubscription,
+  logPlanNotification, resetToStarter,
 } from '@/lib/plans/actions';
-import { syncSubscriptionFromCompany, getEffectivePlan } from '@/lib/plans/canonical-plan';
+import { getEffectivePlan } from '@/lib/plans/canonical-plan';
 
 const ChangePlanSchema = z.object({
   planId:         z.string().min(1),
@@ -17,9 +17,8 @@ const ChangePlanSchema = z.object({
   forceDowngrade: z.boolean().optional().default(false),
 });
 
-const CancelSchema = z.object({
-  cancel:         z.boolean().optional().default(false),
-  effective:      z.enum(['now', 'period_end']).optional().default('period_end'),
+const ResetSchema = z.object({
+  reset:          z.boolean().optional().default(false),
   reason:         z.string().max(500).optional(),
   notes:          z.string().max(2000).optional(),
   notifyUser:     z.boolean().optional().default(true),
@@ -45,9 +44,9 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
 
-  // ── Cancel subscription path ────────────────────────────────────────────────
-  if (body.cancel === true) {
-    const parsed = CancelSchema.safeParse(body);
+  // ── Reset to Starter path ───────────────────────────────────────────────────
+  if (body.reset === true) {
+    const parsed = ResetSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: 'Błąd walidacji', fieldErrors: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
@@ -63,11 +62,10 @@ export async function POST(
     if (!targetUser.company_id) return NextResponse.json({ error: 'Użytkownik nie ma firmy.' }, { status: 400 });
 
     const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
-    const result = await cancelSubscription({
+    const result = await resetToStarter({
       ownerId:      user.id,
       targetUserId: params.id,
       companyId:    targetUser.company_id,
-      effective:    parsed.data.effective ?? 'period_end',
       reason:       parsed.data.reason,
       notes:        parsed.data.notes,
       ownerIp,
@@ -75,7 +73,7 @@ export async function POST(
     });
 
     if (!result.ok) return NextResponse.json({ error: result.message }, { status: 500 });
-    return NextResponse.json({ ok: true, fromPlan: result.fromPlan, effective: result.effective, message: result.message });
+    return NextResponse.json({ ok: true, fromPlan: result.fromPlan, message: result.message });
   }
 
   // ── Change plan path ────────────────────────────────────────────────────────
@@ -139,7 +137,6 @@ export async function POST(
       .update({
         product_type:        planId,
         package_type:        planId,
-        subscription_status: 'active',
         package_assigned_at: new Date().toISOString(),
         updated_at:          new Date().toISOString(),
       })
@@ -155,7 +152,7 @@ export async function POST(
       actor_id:    user.id,
       old_package: fromPlan,
       new_package: planId,
-      provider:    'internal',
+      provider:    'local',
       event_type:  'plan_changed',
       from_plan:   fromPlan,
       to_plan:     planId,
@@ -169,7 +166,7 @@ export async function POST(
       actor_id:    user.id,
       old_package: fromPlan,
       new_package: planId,
-      provider:    'internal',
+      provider:    'local',
       event_type:  'plan_scheduled',
       from_plan:   fromPlan,
       to_plan:     planId,
@@ -203,9 +200,6 @@ export async function POST(
       effective,
     });
   }
-
-  // Sync subscription record to match the new plan
-  await syncSubscriptionFromCompany(params.id, targetUser.company_id);
 
   return NextResponse.json({
     ok: true,
