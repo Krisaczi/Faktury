@@ -176,8 +176,7 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          cancel:     true,
-          effective:  'period_end',
+          reset:      true,
           reason:     reason || undefined,
           notes:      notes || undefined,
           notifyUser,
@@ -185,7 +184,7 @@ export function ManagePlanModal({ open, onOpenChange, user, onSuccess }: Props) 
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? 'Błąd anulowania subskrypcji.');
+        setError(data.error ?? 'Błąd resetowania planu.');
         setIsSubmitting(false);
         return;
       }
