@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       id, invoice_number, entity_id, status, period_start, period_end,
       subtotal_cents, tax_cents, total_cents, currency,
       issued_at, due_date, sent_at, notes, internal_reference, created_at,
-      companies:entity_id ( name, email )
+      companies:entity_id ( name )
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       period_start: string; period_end: string; subtotal_cents: number; tax_cents: number;
       total_cents: number; currency: string; issued_at: string | null; due_date: string | null;
       sent_at: string | null; notes: string | null; internal_reference: string | null;
-      created_at: string; companies: { name: string; email: string } | { name: string; email: string }[] | null;
+      created_at: string; companies: { name: string } | { name: string }[] | null;
     }) => ({
       id:                inv.id,
       invoiceNumber:     inv.invoice_number,
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       internalReference: inv.internal_reference,
       createdAt:         inv.created_at,
       companyName:       Array.isArray(inv.companies) ? inv.companies[0]?.name : inv.companies?.name,
-      companyEmail:      Array.isArray(inv.companies) ? inv.companies[0]?.email : inv.companies?.email,
+      companyEmail:      null,
     })),
     total:   count ?? 0,
     page,

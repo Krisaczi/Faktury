@@ -20,7 +20,7 @@ interface LineItem {
 }
 
 interface UsageData {
-  company: { id: string; name: string; email: string; nip: string; city: string; street: string; postalCode: string; productType: string };
+  company: { id: string; name: string; nip: string; city: string; street: string; postalCode: string; productType: string; isActive: boolean };
   plan:    { key: string; name: string; monthlyPriceCents: number; limits: Record<string, number | null> | null };
   usage:   { activeUsers: number; vendorCount: number; invoiceCount: number; reportCount: number; issuedInvoiceCount: number };
   period:  { year: number; month: number; start: string; end: string; label: string };

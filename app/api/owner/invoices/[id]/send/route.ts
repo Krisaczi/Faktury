@@ -41,11 +41,11 @@ export async function POST(
     return NextResponse.json({ error: 'Faktura musi być wystawiona przed wysłaniem.' }, { status: 400 });
   }
 
-  // Get company email
+  // Get company name (companies table has no email column — users have emails)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (supabase as any)
     .from('companies')
-    .select('name, email')
+    .select('name')
     .eq('id', invoice.entity_id)
     .maybeSingle();
 
@@ -97,7 +97,7 @@ export async function POST(
     ip:         ownerIp,
     payload:    {
       recipientCount: emailEvents.length,
-      companyEmail:   company?.email ?? null,
+      companyEmail:   null,
     },
   });
 

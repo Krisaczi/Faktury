@@ -46,7 +46,7 @@ export async function GET(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (supabase as any)
     .from('companies')
-    .select('id, name, email, nip, address_city, address_street, address_postal_code')
+    .select('id, name, nip, city, street, zip')
     .eq('id', invoice.entity_id)
     .maybeSingle();
 

@@ -37,22 +37,21 @@ export async function GET(
     periodYear = Number(y);
     periodMonth = Number(m);
   } else {
-    // Default to previous calendar month
     const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     periodYear = prevMonth.getFullYear();
     periodMonth = prevMonth.getMonth() + 1;
   }
 
   const periodStart = new Date(periodYear, periodMonth - 1, 1);
-  const periodEnd = new Date(periodYear, periodMonth, 0); // last day of month
+  const periodEnd = new Date(periodYear, periodMonth, 0);
   const periodStartIso = periodStart.toISOString();
   const periodEndIso = new Date(periodYear, periodMonth, 0, 23, 59, 59).toISOString();
 
-  // Get target user + company
+  // Get target user (full_name lives in profiles, not users)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: targetUser } = await (supabase as any)
     .from('users')
-    .select('id, email, full_name, company_id')
+    .select('id, email, company_id')
     .eq('id', params.id)
     .maybeSingle();
 
@@ -63,10 +62,19 @@ export async function GET(
     return NextResponse.json({ error: 'Użytkownik nie ma firmy.' }, { status: 400 });
   }
 
+  // Get profile for full_name
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await (supabase as any)
+    .from('profiles')
+    .select('full_name')
+    .eq('id', params.id)
+    .maybeSingle();
+
+  // Get company — column names: city, street, zip, is_active (not address_*, active, email)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (supabase as any)
     .from('companies')
-    .select('id, name, email, product_type, nip, address_city, address_street, address_postal_code')
+    .select('id, name, nip, city, street, zip, product_type, is_active')
     .eq('id', targetUser.company_id)
     .maybeSingle();
 
@@ -106,15 +114,6 @@ export async function GET(
     .gte('created_at', periodStartIso)
     .lte('created_at', periodEndIso);
 
-  // Count risk reports in period
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count: reportCount } = await (supabase as any)
-    .from('risk_reports')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', targetUser.company_id)
-    .gte('created_at', periodStartIso)
-    .lte('created_at', periodEndIso);
-
   // Count issued invoices in period
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { count: issuedInvoiceCount } = await (supabase as any)
@@ -124,27 +123,46 @@ export async function GET(
     .gte('created_at', periodStartIso)
     .lte('created_at', periodEndIso);
 
+  // risk_reports uses user_id, not company_id — count via users in this company
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: companyUserIds } = await (supabase as any)
+    .from('users')
+    .select('id')
+    .eq('company_id', targetUser.company_id);
+
+  let reportCount = 0;
+  if (companyUserIds && companyUserIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count } = await (supabase as any)
+      .from('risk_reports')
+      .select('*', { count: 'exact', head: true })
+      .in('user_id', companyUserIds.map((cu: { id: string }) => cu.id))
+      .gte('created_at', periodStartIso)
+      .lte('created_at', periodEndIso);
+    reportCount = count ?? 0;
+  }
+
   return NextResponse.json({
     user: {
       id:       targetUser.id,
       email:    targetUser.email,
-      fullName: targetUser.full_name,
+      fullName: profile?.full_name ?? null,
     },
     company: {
       id:           company.id,
       name:         company.name,
-      email:        company.email,
       nip:          company.nip,
-      city:         company.address_city,
-      street:       company.address_street,
-      postalCode:   company.address_postal_code,
+      city:         company.city,
+      street:       company.street,
+      postalCode:   company.zip,
       productType:  company.product_type ?? 'starter',
+      isActive:     company.is_active ?? true,
     },
     plan: {
-      key:             tier?.key ?? company.product_type ?? 'starter',
-      name:            tier?.name ?? 'Starter',
+      key:               tier?.key ?? company.product_type ?? 'starter',
+      name:              tier?.name ?? 'Starter',
       monthlyPriceCents: tier?.monthly_price_cents ?? 0,
-      limits:          tier?.limits ?? null,
+      limits:            tier?.limits ?? null,
     },
     usage: {
       activeUsers,

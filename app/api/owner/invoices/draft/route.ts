@@ -60,14 +60,14 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (svc as any)
     .from('companies')
-    .select('id, name, email, active')
+    .select('id, name, product_type, is_active')
     .eq('id', entityId)
     .maybeSingle();
 
   if (!company) {
     return NextResponse.json({ error: 'Firma nie istnieje.' }, { status: 404 });
   }
-  if (company.active === false) {
+  if (company.is_active === false) {
     return NextResponse.json({ error: 'Firma jest nieaktywna.' }, { status: 400 });
   }
 
