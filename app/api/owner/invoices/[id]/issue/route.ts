@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/owner/invoices/:id/issue
  *
  * Finalizes a draft invoice: assigns invoice number, sets status=issued,
  * records issuedBy/issuedAt/dueDate, creates audit entry.
- * Uses service client for cross-company platform invoice access.
  */
 export async function POST(
   req: NextRequest,
@@ -27,10 +26,8 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const svc = getSupabaseServiceClient();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoice } = await (svc as any)
+  const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
     .select('id, status, entity_id')
     .eq('id', params.id)
@@ -46,7 +43,7 @@ export async function POST(
 
   // Generate invoice number via RPC
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoiceNumber, error: numErr } = await (svc as any)
+  const { data: invoiceNumber, error: numErr } = await (supabase as any)
     .rpc('generate_platform_invoice_number');
 
   if (numErr || !invoiceNumber) {
@@ -59,7 +56,7 @@ export async function POST(
   const nowIso = now.toISOString();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateErr } = await (svc as any)
+  const { error: updateErr } = await (supabase as any)
     .from('platform_invoices')
     .update({
       invoice_number: invoiceNumber,
@@ -78,7 +75,7 @@ export async function POST(
 
   const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (svc as any).from('platform_invoice_audit').insert({
+  await (supabase as any).from('platform_invoice_audit').insert({
     invoice_id: params.id,
     actor_id:   user.id,
     action:     'issued',

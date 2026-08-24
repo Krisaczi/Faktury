@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/owner/invoices?entityId=&period=&status=
  *
  * Lists platform invoices with optional filters. Owner-only.
- * Uses service client for cross-company company name joins.
  */
 export async function GET(req: NextRequest) {
   const supabase = await getSupabaseServerClient();
@@ -30,10 +29,8 @@ export async function GET(req: NextRequest) {
   const limit    = Math.min(Number(req.nextUrl.searchParams.get('limit') ?? '50'), 200);
   const offset   = (page - 1) * limit;
 
-  const svc = getSupabaseServiceClient();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (svc as any)
+  let query = (supabase as any)
     .from('platform_invoices')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
@@ -56,10 +53,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Błąd ładowania faktur.' }, { status: 500 });
   }
 
-  // Fetch company names separately (RLS blocks cross-company joins)
+  // Fetch company names separately
   const companyIds = Array.from(new Set((invoices ?? []).map((inv: { entity_id: string }) => inv.entity_id)));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: companies } = await (svc as any)
+  const { data: companies } = await (supabase as any)
     .from('companies')
     .select('id, name')
     .in('id', companyIds);

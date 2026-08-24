@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/owner/invoices/:id/preview
  *
  * Returns invoice metadata + line items + company info for HTML preview rendering.
- * Uses service client for cross-company reads.
  */
 export async function GET(
   _req: NextRequest,
@@ -26,10 +25,8 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const svc = getSupabaseServiceClient();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoice } = await (svc as any)
+  const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
     .select('*')
     .eq('id', params.id)
@@ -40,21 +37,21 @@ export async function GET(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: lineItems } = await (svc as any)
+  const { data: lineItems } = await (supabase as any)
     .from('platform_invoice_line_items')
     .select('*')
     .eq('invoice_id', params.id)
     .order('created_at');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: company } = await (svc as any)
+  const { data: company } = await (supabase as any)
     .from('companies')
     .select('id, name, nip, city, street, zip')
     .eq('id', invoice.entity_id)
     .maybeSingle();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: audit } = await (svc as any)
+  const { data: audit } = await (supabase as any)
     .from('platform_invoice_audit')
     .select('*')
     .eq('invoice_id', params.id)

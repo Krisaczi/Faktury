@@ -1,4 +1,4 @@
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PlatformInvoicesClient } from '@/components/admin/platform-invoices-client';
 
 export const dynamic = 'force-dynamic';
@@ -24,20 +24,17 @@ export default async function PlatformInvoicesPage() {
     return <PlatformInvoicesClient initialInvoices={[]} initialTotal={0} isOwner={false} />;
   }
 
-  const svc = getSupabaseServiceClient();
-
-  // Fetch invoices — use service client since RLS on companies blocks cross-company joins
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoices, count } = await (svc as any)
+  const { data: invoices, count } = await (supabase as any)
     .from('platform_invoices')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .limit(50);
 
-  // Fetch company names separately
+  // Fetch company names — owner RLS policy allows cross-company reads
   const companyIds = Array.from(new Set((invoices ?? []).map((inv: { entity_id: string }) => inv.entity_id)));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: companies } = await (svc as any)
+  const { data: companies } = await (supabase as any)
     .from('companies')
     .select('id, name')
     .in('id', companyIds);
