@@ -457,29 +457,30 @@ export function PlatformInvoiceModal({
 
             {/* Invoice preview */}
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-4">
-              <div className="flex justify-between items-start">
-                <div>
-                   <p className="text-xs text-slate-400 mb-1">Wystawca:</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-200">KrisAczi - Krzysztof Mrozowski</p>
-                 
-                <p className="text-xs text-slate-500">NIP: 5213256335</p>
-                <p className="text-xs text-slate-500">ul. Kluczborska 4/77</p> 
-                <p className="text-xs text-slate-500">01-461 Warszawa</p>
-                  <p className="text-xs text-slate-500">IBAN PL02105010251000009083947912</p>
-                  <p className="text-xs text-slate-500">Termin płatności - 14 dni</p>
+              {/* Header row: seller + period/status */}
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Wystawca</p>
+                  <p className="text-base font-bold text-slate-800 dark:text-slate-200">KrisAczi — Krzysztof Mrozowski</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">NIP: 5213256335</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">ul. Kluczborska 4/77</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">01-461 Warszawa</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">IBAN PL02105010251000009083947912</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Termin płatności: 14 dni</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-slate-400">Okres: {usage.period.label}</p>
-                  <Badge className="mt-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400">Szkic</Badge>
+                <div className="text-right space-y-1 flex-shrink-0">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Okres: {usage.period.label}</p>
+                  <Badge className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400">Szkic</Badge>
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
-                <p className="text-xs text-slate-400 mb-1">Nabywca:</p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{usage.company.name}</p>
-                <p className="text-xs text-slate-500">NIP: {usage.company.nip || '—'}</p>
-                <p className="text-xs text-slate-500">{usage.company.street || '—'}</p> 
-                <p className="text-xs text-slate-500">{usage.company.postalCode || '—'} {usage.company.city || '—'}</p>
+              {/* Buyer section */}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-0.5">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Nabywca</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{usage.company.name}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">NIP: {usage.company.nip || '—'}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">{usage.company.street || '—'}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">{usage.company.postalCode || '—'} {usage.company.city || '—'}</p>
               </div>
 
               <table className="w-full text-sm">
@@ -606,3 +607,6 @@ export function PlatformInvoiceModal({
     </Dialog>
   );
 }
+
+
+export { PlatformInvoiceModal }
