@@ -20,6 +20,17 @@ export type Database = {
           product_type: 'starter' | 'professional';
           package_type: string | null;
           package_changed_at: string | null;
+          street: string | null;
+          address_line2: string | null;
+          city: string | null;
+          zip: string | null;
+          state_region: string | null;
+          country: string | null;
+          address_edit_policy: string | null;
+          address_locked: boolean | null;
+          is_active: boolean | null;
+          registered_at: string | null;
+          onboarding_step: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -33,6 +44,17 @@ export type Database = {
           product_type?: 'starter' | 'professional';
           package_type?: string | null;
           package_changed_at?: string | null;
+          street?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          zip?: string | null;
+          state_region?: string | null;
+          country?: string | null;
+          address_edit_policy?: string | null;
+          address_locked?: boolean | null;
+          is_active?: boolean | null;
+          registered_at?: string | null;
+          onboarding_step?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -45,6 +67,17 @@ export type Database = {
           product_type?: 'starter' | 'professional';
           package_type?: string | null;
           package_changed_at?: string | null;
+          street?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          zip?: string | null;
+          state_region?: string | null;
+          country?: string | null;
+          address_edit_policy?: string | null;
+          address_locked?: boolean | null;
+          is_active?: boolean | null;
+          registered_at?: string | null;
+          onboarding_step?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1041,6 +1074,38 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      company_address_audit: {
+        Row: {
+          id: string;
+          company_id: string;
+          changed_by: string;
+          change_type: string;
+          before: Json | null;
+          after: Json | null;
+          reason: string | null;
+          ip: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          changed_by: string;
+          change_type?: string;
+          before?: Json | null;
+          after?: Json | null;
+          reason?: string | null;
+          ip?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          change_type?: string;
+          before?: Json | null;
+          after?: Json | null;
+          reason?: string | null;
+          ip?: string | null;
+        };
+        Relationships: [];
       };
       billing_audit: {
         Row: {

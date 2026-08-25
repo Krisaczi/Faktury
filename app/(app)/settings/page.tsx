@@ -48,6 +48,7 @@ import {
 import { DemoGuard, DemoTooltip } from '@/components/layout/demo-banner';
 import { useDemoMode } from '@/components/providers/demo-provider';
 import { BankAccountsCard } from '@/components/settings/bank-accounts-card';
+import { CompanyAddressCard } from '@/components/settings/company-address-card';
 import { ChangePasswordModal } from '@/components/settings/change-password-modal';
 
 // ─── Zod schema ────────────────────────────────────────────────────────────────
@@ -803,6 +804,9 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* Company Info */}
             <CompanyInfoCard isAdmin={isAdmin} />
+
+            {/* Company Address */}
+            <CompanyAddressCard role={role} />
 
             {/* Ingestion Email */}
              {/* <IngestionEmailCard />*/}
