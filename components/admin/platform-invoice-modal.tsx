@@ -607,6 +607,3 @@ export function PlatformInvoiceModal({
     </Dialog>
   );
 }
-
-
-export { PlatformInvoiceModal }
