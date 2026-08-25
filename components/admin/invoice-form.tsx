@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info } from 'lucide-react';
+import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info, MapPin, AlertTriangle, RefreshCw, Settings as SettingsIcon, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,7 @@ import { BankAccountSelector } from '@/components/invoice/bank-account-selector'
 import { CustomerPicker, type Customer } from '@/components/invoice/customer-picker';
 import { useInvoiceUsage } from '@/hooks/use-invoice-usage';
 import { CircleAlert as LimitIcon, TrendingUp } from 'lucide-react';
+import { BillingAddressSchema, validateBillingAddress, type BillingAddress } from '@/lib/invoice-address';
 
 // ─── Local form schema (mirrors InvoiceFormValues) ────────────────────────────
 
@@ -88,6 +90,12 @@ interface Props {
     buyer_company_id?:   string;
   };
   initialCustomer?: Customer | null;
+  sellerAddressDetails?: BillingAddress;
+  sellerAddressMeta?: {
+    updatedAt: string | null;
+    updatedByName: string | null;
+  };
+  sellerRole?: string;
 }
 
 const VAT_LABELS: Record<VatRate, string> = {
@@ -104,13 +112,24 @@ const PAYMENT_LABELS = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults, initialCustomer }: Props) {
+export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults, initialCustomer, sellerAddressDetails, sellerAddressMeta, sellerRole }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
   const [buyerTouched, setBuyerTouched] = useState(false);
   const usage = useInvoiceUsage();
+  const isOwner = sellerRole === 'owner';
+  const [useOverride, setUseOverride] = useState(false);
+  const [overrideAddress, setOverrideAddress] = useState<BillingAddress>({
+    addressLine1: '', addressLine2: '', city: '', postalCode: '', stateRegion: '', country: 'PL', vatId: '',
+  });
+
+  const sellerAddress: BillingAddress = sellerAddressDetails ?? {
+    addressLine1: '', addressLine2: '', city: '', postalCode: '', stateRegion: '', country: 'PL', vatId: '',
+  };
+  const addressCheck = validateBillingAddress(useOverride ? overrideAddress : sellerAddress);
+  const addressMissing = !addressCheck.valid;
 
   const {
     register,
@@ -159,7 +178,10 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
   const onSubmit = useCallback(
     (intentValue: 'draft' | 'issue') =>
       handleSubmit(async (data: LocalFormValues) => {
-        const payload = data as unknown as InvoiceFormValues;
+        const payload = {
+          ...data,
+          overrideAddress: useOverride && isOwner ? overrideAddress : null,
+        } as unknown as InvoiceFormValues;
 
         startTransition(async () => {
           const result =
@@ -215,6 +237,133 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
           <AlertCircle className="w-3 h-3" />
           Dane sprzedawcy są pobierane z ustawień firmy. Zmień je w Ustawieniach.
         </p>
+
+        {/* ── Adres firmy block ─────────────────────────────────────────── */}
+        <div className="mt-5 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Adres firmy (Adres firmy)</h3>
+            </div>
+            {!useOverride && (
+              <Link
+                href="/admin/settings"
+                target="_blank"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                <SettingsIcon className="w-3 h-3" />
+                Edytuj Adres firmy
+              </Link>
+            )}
+          </div>
+
+          {!useOverride ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Adres</p>
+                  <p className="text-slate-700 dark:text-slate-300">{sellerAddress.addressLine1 || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Miasto</p>
+                  <p className="text-slate-700 dark:text-slate-300">{sellerAddress.city || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Kod pocztowy</p>
+                  <p className="text-slate-700 dark:text-slate-300 font-mono">{sellerAddress.postalCode || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Kraj</p>
+                  <p className="text-slate-700 dark:text-slate-300">{sellerAddress.country || '—'}</p>
+                </div>
+              </div>
+              {sellerAddressMeta?.updatedAt && (
+                <p className="text-xs text-slate-400 mt-2">
+                  Ostatnia aktualizacja: {sellerAddressMeta.updatedByName ?? 'nieznany'} ({new Date(sellerAddressMeta.updatedAt).toLocaleString('pl-PL')})
+                </p>
+              )}
+
+              {addressMissing && (
+                <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-amber-700 dark:text-amber-400">
+                    <p className="font-medium">Adres firmy jest niekompletny</p>
+                    <p className="text-xs mt-0.5">Brakujące pola: {addressCheck.missingFields.join(', ')}. Uzupełnij „Adres firmy" w Ustawieniach, aby wystawić fakturę.</p>
+                    <Link href="/admin/settings" target="_blank" className="text-xs font-medium text-amber-700 dark:text-amber-400 underline flex items-center gap-1 mt-1">
+                      <SettingsIcon className="w-3 h-3" />
+                      Przejdź do Ustawień
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Adres" required className="sm:col-span-2">
+                <Input
+                  value={overrideAddress.addressLine1}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, addressLine1: e.target.value })}
+                  placeholder="ul. Prosta 12"
+                />
+              </Field>
+              <Field label="Adres cd." className="sm:col-span-2">
+                <Input
+                  value={overrideAddress.addressLine2}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, addressLine2: e.target.value })}
+                  placeholder="Lok. 5"
+                />
+              </Field>
+              <Field label="Miasto" required>
+                <Input
+                  value={overrideAddress.city}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, city: e.target.value })}
+                  placeholder="Warszawa"
+                />
+              </Field>
+              <Field label="Kod pocztowy" required>
+                <Input
+                  value={overrideAddress.postalCode}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, postalCode: e.target.value })}
+                  placeholder="00-850"
+                  className="font-mono"
+                />
+              </Field>
+              <Field label="Województwo / region">
+                <Input
+                  value={overrideAddress.stateRegion}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, stateRegion: e.target.value })}
+                  placeholder="mazowieckie"
+                />
+              </Field>
+              <Field label="Kraj" required>
+                <Input
+                  value={overrideAddress.country}
+                  onChange={(e) => setOverrideAddress({ ...overrideAddress, country: e.target.value })}
+                  placeholder="PL"
+                />
+              </Field>
+              <p className="text-xs text-slate-400 sm:col-span-2 flex items-center gap-1.5">
+                <Lock className="w-3 h-3" />
+                Niestandardowy adres zostanie zapisany na tej fakturze i nie zmieni ustawień firmy.
+              </p>
+            </div>
+          )}
+
+          {/* Owner-only override checkbox */}
+          {isOwner && (
+            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={useOverride}
+                onChange={(e) => setUseOverride(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-600 dark:text-slate-400">
+                Użyj niestandardowego adresu rozliczeniowego dla tej faktury
+              </span>
+            </label>
+          )}
+        </div>
       </Section>
 
       {/* ── Buyer ─────────────────────────────────────────────────────── */}

@@ -22,6 +22,14 @@ import {
 } from '@/lib/permissions';
 import { requireInvoicingEnabled } from '@/lib/packages/get-company-package';
 import { checkInvoiceLimit, consumeOverride } from '@/lib/packages/invoice-limit';
+import {
+  BillingAddressSchema,
+  companyAddressToBilling,
+  billingAddressToString,
+  validateBillingAddress,
+  type BillingAddress,
+  type CompanyAddressRow,
+} from '@/lib/invoice-address';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +86,13 @@ const FormSchema = IssuedInvoiceSchema
     items: z.array(FormItemSchema).min(1, 'Dodaj co najmniej jedną pozycję'),
   });
 
-export type InvoiceFormValues = z.infer<typeof FormSchema>;
+const OverrideAddressSchema = BillingAddressSchema;
+
+const FormSchemaWithOverride = FormSchema.extend({
+  overrideAddress: OverrideAddressSchema.nullable().optional(),
+});
+
+export type InvoiceFormValues = z.infer<typeof FormSchemaWithOverride>;
 
 // ─── Compute & strip items ────────────────────────────────────────────────────
 
@@ -116,7 +130,7 @@ export async function createInvoice(
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do tworzenia faktur.' };
     if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
-    const parsed = FormSchema.safeParse(values);
+    const parsed = FormSchemaWithOverride.safeParse(values);
     if (!parsed.success) {
       return {
         ok: false,
@@ -144,6 +158,51 @@ export async function createInvoice(
 
     const supabase = await getSupabaseServerClient();
 
+    // ── Resolve billing address snapshot from company settings or owner override ─
+    let billingSnapshot: BillingAddress;
+    let billingSource: 'company_settings' | 'override';
+
+    if (data.overrideAddress && role === 'owner') {
+      billingSnapshot = data.overrideAddress;
+      billingSource = 'override';
+    } else {
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('street, address_line2, city, zip, state_region, country, nip')
+        .eq('id', companyId)
+        .maybeSingle();
+
+      billingSnapshot = companyAddressToBilling(companyRow as CompanyAddressRow);
+      billingSource = 'company_settings';
+    }
+
+    // Validate required address fields before issue (drafts allowed with incomplete address)
+    if (intent === 'issue') {
+      const { valid, missingFields } = validateBillingAddress(billingSnapshot);
+      if (!valid) {
+        // Audit the blocked attempt
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('invoice_audit').insert({
+          invoice_id: null as any,
+          company_id: companyId,
+          actor_id: user.id,
+          actor_role: role,
+          event: 'address_missing_blocked_issue',
+          source: billingSource,
+          after: billingSnapshot as any,
+          reason: `Missing fields: ${missingFields.join(', ')}`,
+        });
+        return {
+          ok: false,
+          error: `Brak adresu firmy — uzupełnij „Adres firmy" w Ustawieniach przed wystawieniem faktury. Brakujące pola: ${missingFields.join(', ')}`,
+          fieldErrors: { seller_address: ['Adres firmy jest niekompletny'] },
+        };
+      }
+    }
+
+    const sellerAddressString = billingAddressToString(billingSnapshot);
+    const nowIso = new Date().toISOString();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: invoice, error: insertErr } = await (supabase as any)
       .from('issued_invoices')
@@ -158,7 +217,7 @@ export async function createInvoice(
         payment_method:      data.payment_method ?? 'transfer',
         seller_name:         data.seller_name,
         seller_nip:          data.seller_nip,
-        seller_address:      data.seller_address,
+        seller_address:      sellerAddressString,
         seller_bank_account: data.seller_bank_account ?? null,
         company_bank_account_id: data.company_bank_account_id ?? null,
         buyer_company_id:    data.buyer_company_id ?? null,
@@ -171,6 +230,9 @@ export async function createInvoice(
         gross_total:         totals.gross_total,
         notes:               data.notes ?? null,
         created_by:          user.id,
+        billing_address_snapshot:     billingSnapshot as any,
+        billing_address_source:       billingSource,
+        billing_address_last_synced_at: nowIso,
       })
       .select('id')
       .single();
@@ -187,6 +249,18 @@ export async function createInvoice(
     if (itemsErr) {
       return { ok: false, error: itemsErr.message };
     }
+
+    // Audit: address snapshot created
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('invoice_audit').insert({
+      invoice_id:  invoice.id,
+      company_id:  companyId,
+      actor_id:    user.id,
+      actor_role:  role,
+      event:       billingSource === 'override' ? 'address_override_used' : 'address_snapshot_created',
+      source:      billingSource,
+      after:       billingSnapshot as any,
+    });
 
     // Consume an override slot if the company has active allowances
     if (intent === 'issue') {
@@ -208,11 +282,11 @@ export async function updateInvoice(
   intent: 'draft' | 'issue',
 ): Promise<ActionResult> {
   try {
-    const { companyId, role, packageType } = await requireInvoicingUser();
+    const { user, companyId, role, packageType } = await requireInvoicingUser();
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do edycji faktur.' };
     if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
-    const parsed = FormSchema.safeParse(values);
+    const parsed = FormSchemaWithOverride.safeParse(values);
     if (!parsed.success) {
       return {
         ok: false,
@@ -249,6 +323,50 @@ export async function updateInvoice(
     const items = buildItems(data.items);
     const totals = computeInvoiceTotals(items);
 
+    // ── Resolve billing address snapshot from company settings or owner override ─
+    let billingSnapshot: BillingAddress;
+    let billingSource: 'company_settings' | 'override';
+
+    if (data.overrideAddress && role === 'owner') {
+      billingSnapshot = data.overrideAddress;
+      billingSource = 'override';
+    } else {
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('street, address_line2, city, zip, state_region, country, nip')
+        .eq('id', companyId)
+        .maybeSingle();
+
+      billingSnapshot = companyAddressToBilling(companyRow as CompanyAddressRow);
+      billingSource = 'company_settings';
+    }
+
+    // Validate required address fields before issue
+    if (intent === 'issue') {
+      const { valid, missingFields } = validateBillingAddress(billingSnapshot);
+      if (!valid) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('invoice_audit').insert({
+          invoice_id: id,
+          company_id: companyId,
+          actor_id: user.id,
+          actor_role: role,
+          event: 'address_missing_blocked_issue',
+          source: billingSource,
+          after: billingSnapshot as any,
+          reason: `Missing fields: ${missingFields.join(', ')}`,
+        });
+        return {
+          ok: false,
+          error: `Brak adresu firmy — uzupełnij „Adres firmy" w Ustawieniach przed wystawieniem faktury. Brakujące pola: ${missingFields.join(', ')}`,
+          fieldErrors: { seller_address: ['Adres firmy jest niekompletny'] },
+        };
+      }
+    }
+
+    const sellerAddressString = billingAddressToString(billingSnapshot);
+    const nowIso = new Date().toISOString();
+
     const newNumber =
       intent === 'issue' && existing.status === 'draft'
         ? await generateInvoiceNumber(companyId)
@@ -267,7 +385,7 @@ export async function updateInvoice(
         payment_method:      data.payment_method ?? 'transfer',
         seller_name:         data.seller_name,
         seller_nip:          data.seller_nip,
-        seller_address:      data.seller_address,
+        seller_address:      sellerAddressString,
         seller_bank_account: data.seller_bank_account ?? null,
         company_bank_account_id: data.company_bank_account_id ?? null,
         buyer_company_id:    data.buyer_company_id ?? null,
@@ -279,6 +397,9 @@ export async function updateInvoice(
         vat_total:           totals.vat_total,
         gross_total:         totals.gross_total,
         notes:               data.notes ?? null,
+        billing_address_snapshot:     billingSnapshot as any,
+        billing_address_source:       billingSource,
+        billing_address_last_synced_at: nowIso,
         updated_at:          new Date().toISOString(),
       })
       .eq('id', id);
@@ -298,6 +419,18 @@ export async function updateInvoice(
       .insert(items.map((it) => ({ ...it, invoice_id: id })));
 
     if (itemsErr) return { ok: false, error: itemsErr.message };
+
+    // Audit: address snapshot created/refreshed on update
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('invoice_audit').insert({
+      invoice_id:  id,
+      company_id:  companyId,
+      actor_id:    user.id,
+      actor_role:  role,
+      event:       billingSource === 'override' ? 'address_override_used' : 'address_snapshot_refreshed',
+      source:      billingSource,
+      after:       billingSnapshot as any,
+    });
 
     // Consume an override slot if we just issued the invoice
     if (intent === 'issue' && existing.status === 'draft') {

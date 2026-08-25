@@ -25,11 +25,37 @@ async function getSellerDefaults(buyerCompanyId?: string) {
 
   const { data: company } = await supabase
     .from('companies')
-    .select('name, nip, product_type')
+    .select('name, nip, product_type, street, address_line2, city, zip, state_region, country')
     .eq('id', userRecord.company_id)
     .maybeSingle();
 
   if (!company) return undefined;
+
+  const addressParts = [
+    company.street,
+    [company.zip, company.city].filter(Boolean).join(' '),
+    company.country,
+  ].filter(Boolean);
+  const sellerAddress = addressParts.join(', ');
+
+  // Fetch last-updated metadata from company_address_audit
+  const { data: lastAudit } = await supabase
+    .from('company_address_audit')
+    .select('changed_by, created_at')
+    .eq('company_id', userRecord.company_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let updatedByName: string | null = null;
+  if (lastAudit?.changed_by) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', lastAudit.changed_by)
+      .maybeSingle();
+    updatedByName = profile?.full_name ?? null;
+  }
 
   // Prefill buyer if a buyer_company_id was provided
   let buyerDefaults: {
@@ -73,7 +99,20 @@ async function getSellerDefaults(buyerCompanyId?: string) {
   return {
     name:          company.name,
     nip:           company.nip ?? '',
-    address:       '',
+    address:       sellerAddress,
+    addressDetails: {
+      addressLine1:  company.street ?? '',
+      addressLine2:  company.address_line2 ?? '',
+      city:          company.city ?? '',
+      postalCode:    company.zip ?? '',
+      stateRegion:   company.state_region ?? '',
+      country:       company.country ?? 'PL',
+      vatId:         company.nip ?? '',
+    },
+    addressMeta: {
+      updatedAt:      lastAudit?.created_at ?? null,
+      updatedByName,
+    },
     role:          (userRecord.role ?? 'accountant') as AppRole,
     productType:   company.product_type ?? null,
     buyerDefaults,
@@ -115,6 +154,9 @@ export default async function NewInvoicePage({
         sellerDefaults={sellerDefaults}
         buyerDefaults={defaults?.buyerDefaults}
         initialCustomer={defaults?.initialCustomer ?? null}
+        sellerAddressDetails={defaults?.addressDetails}
+        sellerAddressMeta={defaults?.addressMeta}
+        sellerRole={defaults?.role}
       />
     </Stack>
   );

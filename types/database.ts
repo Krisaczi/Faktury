@@ -688,6 +688,9 @@ export type Database = {
           ksef_accepted_at: string | null;
           buyer_company_id: string | null;
           created_by: string | null;
+          billing_address_snapshot: Json | null;
+          billing_address_source: 'company_settings' | 'override' | null;
+          billing_address_last_synced_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -721,6 +724,9 @@ export type Database = {
           ksef_sent_at?: string | null;
           ksef_accepted_at?: string | null;
           created_by?: string | null;
+          billing_address_snapshot?: Json | null;
+          billing_address_source?: 'company_settings' | 'override' | null;
+          billing_address_last_synced_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -759,6 +765,9 @@ export type Database = {
           ksef_sent_at?: string | null;
           ksef_accepted_at?: string | null;
           buyer_company_id?: string | null;
+          billing_address_snapshot?: Json | null;
+          billing_address_source?: 'company_settings' | 'override' | null;
+          billing_address_last_synced_at?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -943,6 +952,58 @@ export type Database = {
             foreignKeyName: 'issued_invoice_items_invoice_id_fkey';
             columns: ['invoice_id'];
             referencedRelation: 'issued_invoices';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      invoice_audit: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          company_id: string;
+          actor_id: string | null;
+          actor_role: string;
+          event: string;
+          source: string | null;
+          before: Json | null;
+          after: Json | null;
+          reason: string | null;
+          ip: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          company_id: string;
+          actor_id?: string | null;
+          actor_role?: string;
+          event: string;
+          source?: string | null;
+          before?: Json | null;
+          after?: Json | null;
+          reason?: string | null;
+          ip?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          event?: string;
+          source?: string | null;
+          before?: Json | null;
+          after?: Json | null;
+          reason?: string | null;
+          ip?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'invoice_audit_invoice_id_fkey';
+            columns: ['invoice_id'];
+            referencedRelation: 'issued_invoices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'invoice_audit_company_id_fkey';
+            columns: ['company_id'];
+            referencedRelation: 'companies';
             referencedColumns: ['id'];
           }
         ];

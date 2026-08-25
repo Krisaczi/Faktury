@@ -8,6 +8,7 @@ import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import type { VatRate } from '@/types/issued-invoice';
 import type { Customer } from '@/components/invoice/customer-picker';
+import type { BillingAddress } from '@/lib/invoice-address';
 
 export const metadata = { title: 'Admin — Edytuj fakturę' };
 
@@ -47,13 +48,49 @@ export default async function EditInvoicePage({
   const role = (userRecord?.role ?? 'accountant') as AppRole;
 
   let packageType: string | null = null;
+  let sellerAddressDetails: BillingAddress | undefined;
+  let sellerAddressMeta: { updatedAt: string | null; updatedByName: string | null } | undefined;
+
   if (userRecord?.company_id) {
     const { data: company } = await supabase
       .from('companies')
-      .select('product_type')
+      .select('product_type, street, address_line2, city, zip, state_region, country, nip')
       .eq('id', userRecord.company_id)
       .maybeSingle();
     packageType = company?.product_type ?? null;
+    if (company) {
+      sellerAddressDetails = {
+        addressLine1: company.street ?? '',
+        addressLine2: company.address_line2 ?? '',
+        city: company.city ?? '',
+        postalCode: company.zip ?? '',
+        stateRegion: company.state_region ?? '',
+        country: company.country ?? 'PL',
+        vatId: company.nip ?? '',
+      };
+    }
+
+    const { data: lastAudit } = await supabase
+      .from('company_address_audit')
+      .select('changed_by, created_at')
+      .eq('company_id', userRecord.company_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let updatedByName: string | null = null;
+    if (lastAudit?.changed_by) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', lastAudit.changed_by)
+        .maybeSingle();
+      updatedByName = profile?.full_name ?? null;
+    }
+    sellerAddressMeta = {
+      updatedAt: lastAudit?.created_at ?? null,
+      updatedByName,
+    };
   }
 
   if (!canWriteInvoice(role, packageType)) redirect(`/admin/invoices/${params.id}`);
@@ -126,6 +163,9 @@ export default async function EditInvoicePage({
         invoiceId={params.id}
         defaultValues={defaultValues}
         initialCustomer={initialCustomer}
+        sellerAddressDetails={sellerAddressDetails}
+        sellerAddressMeta={sellerAddressMeta}
+        sellerRole={role}
       />
     </Stack>
   );
