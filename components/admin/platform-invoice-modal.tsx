@@ -452,8 +452,14 @@ export function PlatformInvoiceModal({
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-4">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-200">BezpieczneFaktury.pl</p>
-                  <p className="text-xs text-slate-400">Faktura za użytkowanie platformy</p>
+                   <p className="text-xs text-slate-400 mb-1">Wystawca:</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-200">KrisAczi - Krzysztof Mrozowski</p>
+                 
+                <p className="text-xs text-slate-500">NIP: 5213256335</p>
+                <p className="text-xs text-slate-500">ul. Kluczborska 4/77</p> 
+                <p className="text-xs text-slate-500">01-461 Warszawa</p>
+                  <p className="text-xs text-slate-500">IBAN PL02105010251000009083947912</p>
+                  <p className="text-xs text-slate-500">Termin płatności - 14 dni</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-400">Okres: {usage.period.label}</p>
@@ -465,7 +471,8 @@ export function PlatformInvoiceModal({
                 <p className="text-xs text-slate-400 mb-1">Nabywca:</p>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{usage.company.name}</p>
                 <p className="text-xs text-slate-500">NIP: {usage.company.nip || '—'}</p>
-                <p className="text-xs text-slate-500">{usage.company.street || '—'}, {usage.company.postalCode || '—'} {usage.company.city || '—'}</p>
+                <p className="text-xs text-slate-500">{usage.company.street || '—'}</p> 
+                <p className="text-xs text-slate-500">{usage.company.postalCode || '—'} {usage.company.city || '—'}</p>
               </div>
 
               <table className="w-full text-sm">
