@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
  * POST /api/owner/invoices/:id/issue
  *
  * Finalizes a draft invoice: assigns invoice number, sets status=issued,
- * records issuedBy/issuedAt/dueDate, creates audit entry.
+ * persists immutable tax snapshot, records issuedBy/issuedAt/dueDate.
  */
 export async function POST(
   req: NextRequest,
@@ -29,7 +29,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
-    .select('id, status, entity_id')
+    .select('id, status, entity_id, vat_rate_percent, tax_breakdown, tax_total_cents, price_includes_tax')
     .eq('id', params.id)
     .maybeSingle();
 
@@ -55,16 +55,18 @@ export async function POST(
   const dueDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const nowIso = now.toISOString();
 
+  // Persist immutable tax snapshot
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updateErr } = await (supabase as any)
     .from('platform_invoices')
     .update({
-      invoice_number: invoiceNumber,
-      status:         'issued',
-      issued_by:      user.id,
-      issued_at:      nowIso,
-      due_date:       dueDate.toISOString().split('T')[0],
-      updated_at:     nowIso,
+      invoice_number:         invoiceNumber,
+      status:                 'issued',
+      issued_by:              user.id,
+      issued_at:              nowIso,
+      due_date:               dueDate.toISOString().split('T')[0],
+      updated_at:             nowIso,
+      tax_snapshot_taken_at:  nowIso,
     })
     .eq('id', params.id);
 
@@ -80,7 +82,31 @@ export async function POST(
     actor_id:   user.id,
     action:     'issued',
     ip:         ownerIp,
-    payload:    { invoiceNumber, dueDate: dueDate.toISOString().split('T')[0] },
+    payload:    {
+      invoiceNumber,
+      dueDate: dueDate.toISOString().split('T')[0],
+      taxSnapshot: {
+        vatRatePercent:  invoice.vat_rate_percent,
+        taxTotalCents:   invoice.tax_total_cents,
+        taxBreakdown:    invoice.tax_breakdown,
+        priceIncludesTax: invoice.price_includes_tax,
+      },
+    },
+  });
+
+  // Audit: tax_snapshot_created
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from('platform_invoice_audit').insert({
+    invoice_id: params.id,
+    actor_id:   user.id,
+    action:     'tax_snapshot_created',
+    ip:         ownerIp,
+    payload:    {
+      vatRatePercent:   invoice.vat_rate_percent,
+      taxTotalCents:    invoice.tax_total_cents,
+      taxBreakdown:     invoice.tax_breakdown,
+      priceIncludesTax: invoice.price_includes_tax,
+    },
   });
 
   return NextResponse.json({
@@ -89,5 +115,10 @@ export async function POST(
     status:        'issued',
     issuedAt:      nowIso,
     dueDate:       dueDate.toISOString().split('T')[0],
+    taxSnapshot: {
+      vatRatePercent:   invoice.vat_rate_percent,
+      taxTotalCents:    invoice.tax_total_cents,
+      taxBreakdown:     invoice.tax_breakdown,
+    },
   });
 }

@@ -69,6 +69,12 @@ export async function GET(
       discountCents:     invoice.discount_cents,
       totalCents:        invoice.total_cents,
       currency:          invoice.currency,
+      vatRatePercent:    invoice.vat_rate_percent,
+      vatNumber:         invoice.vat_number,
+      priceIncludesTax:  invoice.price_includes_tax,
+      taxTotalCents:     invoice.tax_total_cents,
+      taxBreakdown:      invoice.tax_breakdown,
+      taxSnapshotTakenAt: invoice.tax_snapshot_taken_at,
       issuedAt:          invoice.issued_at,
       dueDate:           invoice.due_date,
       sentAt:            invoice.sent_at,
@@ -76,13 +82,14 @@ export async function GET(
       internalReference: invoice.internal_reference,
       createdAt:         invoice.created_at,
     },
-    lineItems: (lineItems ?? []).map((li: { id: string; description: string; quantity: number; unit_price_cents: number; amount_cents: number; taxable: boolean }) => ({
+    lineItems: (lineItems ?? []).map((li: { id: string; description: string; quantity: number; unit_price_cents: number; amount_cents: number; taxable: boolean; vat_rate_percent: number | null }) => ({
       id:             li.id,
       description:    li.description,
       quantity:       li.quantity,
       unitPriceCents: li.unit_price_cents,
       amountCents:    li.amount_cents,
       taxable:        li.taxable,
+      vatRatePercent: li.vat_rate_percent,
     })),
     company: company ?? null,
     audit: (audit ?? []).map((a: { id: string; actor_id: string; action: string; reason: string | null; ip: string | null; created_at: string }) => ({
