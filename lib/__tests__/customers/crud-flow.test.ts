@@ -41,9 +41,7 @@ function resetStore() {
 function validateInput(input: { name?: string; nip?: string; address?: string; email?: string }) {
   const errors: Record<string, string[]> = {};
   if (!input.name || !input.name.trim()) errors.name = ['Nazwa firmy jest wymagana'];
-  if (!input.nip || !input.nip.trim()) {
-    errors.nip = ['NIP jest wymagany'];
-  } else if (!/^\d{10}$/.test(input.nip.trim())) {
+  if (input.nip && input.nip.trim() && !/^\d{10}$/.test(input.nip.trim())) {
     errors.nip = ['NIP musi zawierać 10 cyfr'];
   }
   if (!input.address || !input.address.trim()) {
@@ -57,23 +55,25 @@ function validateInput(input: { name?: string; nip?: string; address?: string; e
   return Object.keys(errors).length === 0 ? null : errors;
 }
 
-function createCustomer(companyId: string, input: { name: string; nip: string; address: string; email?: string; phone?: string }): { status: number; body: Record<string, unknown> } {
+function createCustomer(companyId: string, input: { name: string; nip?: string; address: string; email?: string; phone?: string }): { status: number; body: Record<string, unknown> } {
   const validationErrors = validateInput(input);
   if (validationErrors) {
     return { status: 400, body: { error: 'Błąd walidacji', fieldErrors: validationErrors } };
   }
 
-  // Check duplicate NIP
-  const existing = store.find((c) => c.companyId === companyId && c.nip === input.nip && !c.deletedAt);
-  if (existing) {
-    return { status: 409, body: { error: 'Klient z tym numerem NIP już istnieje w bazie.' } };
+  // Check duplicate NIP (only when NIP is provided)
+  if (input.nip) {
+    const existing = store.find((c) => c.companyId === companyId && c.nip === input.nip && !c.deletedAt);
+    if (existing) {
+      return { status: 409, body: { error: 'Klient z tym numerem NIP już istnieje w bazie.' } };
+    }
   }
 
   const record: CustomerRecord = {
     id:         `cust-${store.length + 1}`,
     companyId,
     name:       input.name,
-    nip:        input.nip,
+    nip:        input.nip || null,
     street:     input.address.split(',')[0]?.trim() ?? input.address,
     postalCode: input.address.match(/(\d{2}-\d{3})/)?.[1] ?? null,
     city:       input.address.split(',').slice(1).join(',').trim() || null,
@@ -104,14 +104,14 @@ function searchCustomers(companyId: string, query: string): CustomerRecord[] {
   });
 }
 
-function updateCustomer(companyId: string, id: string, input: { name: string; nip: string; address: string; email?: string; phone?: string }): { status: number; body: Record<string, unknown> } {
+function updateCustomer(companyId: string, id: string, input: { name: string; nip?: string; address: string; email?: string; phone?: string }): { status: number; body: Record<string, unknown> } {
   const validationErrors = validateInput(input);
   if (validationErrors) {
     return { status: 400, body: { error: 'Błąd walidacji', fieldErrors: validationErrors } };
   }
 
   const dup = store.find((c) => c.companyId === companyId && c.nip === input.nip && c.id !== id && !c.deletedAt);
-  if (dup) {
+  if (input.nip && dup) {
     return { status: 409, body: { error: 'Inny klient z tym numerem NIP już istnieje.' } };
   }
 
@@ -121,7 +121,7 @@ function updateCustomer(companyId: string, id: string, input: { name: string; ni
   }
 
   record.name  = input.name;
-  record.nip   = input.nip;
+  record.nip   = input.nip || null;
   record.email = input.email || null;
   record.phone = input.phone || null;
   return { status: 200, body: { customer: record } };
@@ -173,7 +173,6 @@ describe('Customer CRUD flow', () => {
     assert.equal(res.status, 400);
     const fe = res.body.fieldErrors as Record<string, string[]>;
     assert.ok(fe.name);
-    assert.ok(fe.nip);
     assert.ok(fe.address);
   });
 

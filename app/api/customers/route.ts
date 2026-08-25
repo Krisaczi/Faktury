@@ -88,7 +88,7 @@ const ZIP_REGEX = /^\d{2}-\d{3}$/;
 
 const CreateCustomerSchema = z.object({
   name:    z.string().min(1, 'Nazwa firmy jest wymagana').max(200),
-  nip:     z.string().regex(/^\d{10}$/, 'NIP musi zawierać 10 cyfr'),
+  nip:     z.string().regex(/^\d{10}$/, 'NIP musi zawierać 10 cyfr').optional().or(z.literal('')),
   address: z.string().min(3, 'Adres jest wymagany (min. 3 znaki)').max(500),
   zip:     z.string().regex(ZIP_REGEX, 'Kod pocztowy musi mieć format XX-XXX'),
   email:   z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
@@ -146,36 +146,39 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, nip, address, zip, email, phone } = parsed.data;
+  const nipValue = nip || null;
 
   // Parse address into street / city (ZIP is now a separate field)
   const addressParts = address.split(',').map((s) => s.trim());
   const street = addressParts[0] || address;
   const city = addressParts.slice(1).join(', ').trim() || null;
 
-  // Check for duplicate NIP
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await (supabase as any)
-    .from('buyer_companies')
-    .select('id')
-    .eq('company_id', companyId)
-    .eq('nip', nip)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (existing) {
+  // Check for duplicate NIP (only when NIP is provided)
+  if (nipValue) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('customer_audit_log').insert({
-      company_id:    companyId,
-      user_id:       user.id,
-      event_type:    'duplicate_blocked',
-      customer_name: name,
-      customer_nip:  nip,
-      error_detail:  'Klient z tym numerem NIP już istnieje.',
-    });
+    const { data: existing } = await (supabase as any)
+      .from('buyer_companies')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('nip', nipValue)
+      .is('deleted_at', null)
+      .maybeSingle();
 
-    return NextResponse.json({
-      error: 'Klient z tym numerem NIP już istnieje w bazie.',
-    }, { status: 409 });
+    if (existing) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('customer_audit_log').insert({
+        company_id:    companyId,
+        user_id:       user.id,
+        event_type:    'duplicate_blocked',
+        customer_name: name,
+        customer_nip:  nipValue,
+        error_detail:  'Klient z tym numerem NIP już istnieje.',
+      });
+
+      return NextResponse.json({
+        error: 'Klient z tym numerem NIP już istnieje w bazie.',
+      }, { status: 409 });
+    }
   }
 
   const newId = crypto.randomUUID();
@@ -188,7 +191,7 @@ export async function POST(req: NextRequest) {
       company_id: companyId,
       owner_id:   user.id,
       name,
-      nip,
+      nip:        nipValue,
       street,
       postal_code: zip,
       city,
@@ -207,7 +210,7 @@ export async function POST(req: NextRequest) {
         user_id:       user.id,
         event_type:    'duplicate_blocked',
         customer_name: name,
-        customer_nip:  nip,
+        customer_nip:  nipValue,
         error_detail:  'Klient z tym numerem NIP już istnieje (DB constraint).',
       });
 
@@ -225,7 +228,7 @@ export async function POST(req: NextRequest) {
     user_id:       user.id,
     event_type:    'created',
     customer_name: name,
-    customer_nip:  nip,
+    customer_nip:  nipValue,
   });
 
   return NextResponse.json({ customer: created }, { status: 201 });

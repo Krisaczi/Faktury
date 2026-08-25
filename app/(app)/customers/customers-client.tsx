@@ -513,9 +513,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Nazwa firmy jest wymagana';
-    if (!nip.trim()) {
-      e.nip = 'NIP jest wymagany';
-    } else if (!/^\d{10}$/.test(nip.trim())) {
+    if (nip.trim() && !/^\d{10}$/.test(nip.trim())) {
       e.nip = 'NIP musi zawierać 10 cyfr';
     }
     if (!address.trim()) {
@@ -608,7 +606,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-              NIP <span className="text-red-500">*</span>
+              NIP
             </Label>
             <Input
               value={nip}
