@@ -64,6 +64,7 @@ export function PlatformInvoiceModal({
   const [notes, setNotes]             = useState('');
   const [internalRef, setInternalRef] = useState('');
   const [draftId, setDraftId]         = useState<string | null>(null);
+  const [serverTotals, setServerTotals] = useState<{ subtotalCents: number; taxCents: number; totalCents: number; taxBreakdown: { vatRatePercent: number; taxBaseCents: number; taxAmountCents: number }[] } | null>(null);
   const [isPending, start]            = useTransition();
   const monthOptions                  = generateMonthOptions();
 
@@ -139,7 +140,7 @@ export function PlatformInvoiceModal({
       fetchUsage(defaultPeriod);
     }
     if (!open) {
-      setStep('loading'); setUsage(null); setError(null); setDraftId(null);
+      setStep('loading'); setUsage(null); setError(null); setDraftId(null); setServerTotals(null);
       setLineItems([]); setVatRate(0); setCustomVatRate(''); setVatNumber('');
       setVatMode('invoice'); setPriceIncludesTax(false); setVatConfirmed(false);
       setDefaultVatRate(null);
@@ -208,8 +209,14 @@ export function PlatformInvoiceModal({
           setError(err.error ?? 'Błąd tworzenia szkicu.');
           return;
         }
-        const data = await res.json() as { id: string };
+        const data = await res.json() as { id: string; subtotalCents: number; taxCents: number; totalCents: number; taxBreakdown: { vatRatePercent: number; taxBaseCents: number; taxAmountCents: number }[] };
         setDraftId(data.id);
+        setServerTotals({
+          subtotalCents: data.subtotalCents,
+          taxCents:      data.taxCents,
+          totalCents:    data.totalCents,
+          taxBreakdown:  data.taxBreakdown ?? [],
+        });
         setStep('preview');
       } catch {
         setError('Błąd połączenia.');
@@ -480,9 +487,9 @@ export function PlatformInvoiceModal({
                   <tr className="border-b border-slate-200 dark:border-slate-700 text-xs text-slate-400">
                     <th className="text-left py-2">Opis</th>
                     <th className="text-right py-2 w-16">Ilość</th>
-                    <th className="text-right py-2 w-24">Cena</th>
+                    <th className="text-right py-2 w-24">Cena {priceIncludesTax ? '(brutto)' : '(netto)'}</th>
                     <th className="text-right py-2 w-20">VAT</th>
-                    <th className="text-right py-2 w-24">Wartość</th>
+                    <th className="text-right py-2 w-24">Wartość {priceIncludesTax ? '(brutto)' : '(netto)'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,7 +501,7 @@ export function PlatformInvoiceModal({
                         <td className="text-right text-slate-600 dark:text-slate-400">{li.quantity}</td>
                         <td className="text-right text-slate-600 dark:text-slate-400">{formatCents(li.unitPriceCents)}</td>
                         <td className="text-right text-slate-600 dark:text-slate-400">{lineResult?.taxable ? `${lineResult.vatRatePercent}%` : '—'}</td>
-                        <td className="text-right font-medium text-slate-700 dark:text-slate-300">{formatCents(Math.round(li.quantity * li.unitPriceCents))}</td>
+                        <td className="text-right font-medium text-slate-700 dark:text-slate-300">{formatCents(lineResult?.amountCents ?? Math.round(li.quantity * li.unitPriceCents))}</td>
                       </tr>
                     );
                   })}
@@ -502,25 +509,25 @@ export function PlatformInvoiceModal({
               </table>
 
               <div className="flex justify-end space-y-1 flex-col items-end">
-                <div className="flex justify-between w-48 text-sm">
-                  <span className="text-slate-500">Netto:</span>
-                  <span className="text-slate-700 dark:text-slate-300">{formatCents(totals.subtotalCents)}</span>
+                <div className="flex justify-between w-56 text-sm">
+                  <span className="text-slate-500">Wartość netto (podstawa VAT):</span>
+                  <span className="text-slate-700 dark:text-slate-300">{formatCents(serverTotals?.subtotalCents ?? totals.subtotalCents)}</span>
                 </div>
-                {totals.breakdown.map((b, i) => (
-                  <div key={i} className="flex justify-between w-48 text-sm">
+                {(serverTotals?.taxBreakdown ?? totals.breakdown).map((b, i) => (
+                  <div key={i} className="flex justify-between w-56 text-sm">
                     <span className="text-slate-500">VAT ({b.vatRatePercent}%):</span>
                     <span className="text-slate-700 dark:text-slate-300">{formatCents(b.taxAmountCents)}</span>
                   </div>
                 ))}
                 {vatNumber && (
-                  <div className="flex justify-between w-48 text-xs text-slate-400">
+                  <div className="flex justify-between w-56 text-xs text-slate-400">
                     <span>Numer VAT:</span>
                     <span>{vatNumber}</span>
                   </div>
                 )}
-                <div className="flex justify-between w-48 text-base font-bold border-t border-slate-200 dark:border-slate-700 pt-1">
-                  <span className="text-slate-800 dark:text-slate-200">Brutto:</span>
-                  <span className="text-blue-600 dark:text-blue-400">{formatCents(totals.totalCents)}</span>
+                <div className="flex justify-between w-56 text-base font-bold border-t border-slate-200 dark:border-slate-700 pt-1">
+                  <span className="text-slate-800 dark:text-slate-200">Razem brutto:</span>
+                  <span className="text-blue-600 dark:text-blue-400">{formatCents(serverTotals?.totalCents ?? totals.totalCents)}</span>
                 </div>
               </div>
 
