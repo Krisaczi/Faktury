@@ -28,6 +28,8 @@ import { useUpload, useJobStatus } from '@/hooks/use-upload';
 import { useUserPackage } from '@/hooks/use-user-package';
 import { canAccessInvoicing } from '@/lib/permissions';
 import { StarterUpgradeBanner } from '@/components/invoice/starter-upgrade-banner';
+import { KsefResultModal } from '@/components/invoice/ksef-result-modal';
+import { toast } from 'sonner';
 
 const today     = new Date().toISOString().slice(0, 10);
 const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -74,6 +76,7 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
   const [endDate,   setEndDate]   = useState(today);
   const [dateError, setDateError] = useState<string | null>(null);
   const [done,      setDone]      = useState(false);
+  const [modalVariant, setModalVariant] = useState<'no_new' | 'error' | null>(null);
 
   const isCompleted = jobStatus?.status === 'completed';
   const isFailed    = jobStatus?.status === 'failed';
@@ -89,18 +92,35 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
     if (startDate > endDate)    { setDateError('Data początkowa musi być wcześniejsza lub równa końcowej.'); return; }
     const diff = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
     if (diff > 89) { setDateError('Zakres dat nie może przekraczać 89 dni (limit KSeF).'); return; }
+    toast('Sprawdzanie nowych faktur w KSeF…');
     fetchFromKSeF({ startDate, endDate });
   }, [startDate, endDate, fetchFromKSeF, isJobRunning]);
 
-  // Refresh invoice list when job completes
+  // Handle job completion — show modal or toast based on result
   if (isCompleted && !done) {
     setDone(true);
+    const result = jobStatus?.result;
+    if (result?.error) {
+      setModalVariant('error');
+    } else if (result?.hasNew === false || (result?.invoicesCreated === 0 && !result?.error)) {
+      setModalVariant('no_new');
+    } else if (result?.invoicesCreated && result.invoicesCreated > 0) {
+      toast.success(`Pobrano ${result.invoicesCreated} nowych faktur z KSeF`);
+    }
     onDone();
     setOpen(false);
   }
 
+  // Handle job failure
+  if (isFailed && !done) {
+    setDone(true);
+    setModalVariant('error');
+  }
+
   const summary = isCompleted && jobStatus?.result
-    ? `Pobrano ${jobStatus.result.invoicesCreated ?? 0} faktur`
+    ? jobStatus.result.hasNew === false
+      ? 'Brak nowych faktur'
+      : `Pobrano ${jobStatus.result.invoicesCreated ?? 0} faktur`
     : null;
 
   return (
@@ -194,6 +214,13 @@ function KsefFetchBar({ onDone }: { onDone: () => void }) {
           </Button>
         </div>
       )}
+
+      <KsefResultModal
+        variant={modalVariant ?? 'no_new'}
+        open={modalVariant !== null}
+        onOpenChange={(v) => { if (!v) setModalVariant(null); }}
+        errorMessage={isFailed ? (jobStatus?.result?.error ?? ksefError ?? undefined) : undefined}
+      />
     </div>
   );
 }

@@ -28,6 +28,8 @@ import { useUpload, useJobStatus, type UploadFile } from '@/hooks/use-upload';
 import { InlineLoader } from '@/components/ui/skeleton-loaders';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
 import { DemoGuard } from '@/components/layout/demo-banner';
+import { KsefResultModal } from '@/components/invoice/ksef-result-modal';
+import { toast } from 'sonner';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -187,13 +189,39 @@ export default function UploadPage() {
     addFiles, removeFile, clearAll, uploadAll, fetchFromKSeF,
   } = useUpload();
 
+  const { data: ksefJobStatus } = useJobStatus(globalJobId);
+
   const [dragging, setDragging]       = useState(false);
   const [ksefStartDate, setKsefStart] = useState(thirtyAgo);
   const [ksefEndDate, setKsefEnd]     = useState(today);
   const [dateError, setDateError]     = useState<string | null>(null);
+  const [ksefModalVariant, setKsefModalVariant] = useState<'no_new' | 'error' | null>(null);
+  const [ksefDone, setKsefDone]       = useState(false);
+
+  const ksefIsCompleted = ksefJobStatus?.status === 'completed';
+  const ksefIsFailed    = ksefJobStatus?.status === 'failed';
+
+  // Handle KSeF job completion on the upload page
+  if (ksefIsCompleted && !ksefDone) {
+    setKsefDone(true);
+    const result = ksefJobStatus?.result;
+    if (result?.error) {
+      setKsefModalVariant('error');
+    } else if (result?.hasNew === false || (result?.invoicesCreated === 0 && !result?.error)) {
+      setKsefModalVariant('no_new');
+    } else if (result?.invoicesCreated && result.invoicesCreated > 0) {
+      toast.success(`Pobrano ${result.invoicesCreated} nowych faktur z KSeF`);
+    }
+  }
+
+  if (ksefIsFailed && !ksefDone) {
+    setKsefDone(true);
+    setKsefModalVariant('error');
+  }
 
   const handleKsefFetch = useCallback(() => {
     setDateError(null);
+    setKsefDone(false);
     if (!ksefStartDate || !ksefEndDate) {
       setDateError('Proszę wybrać zarówno datę rozpoczęcia, jak i zakończenia.');
       return;
@@ -207,6 +235,7 @@ export default function UploadPage() {
       setDateError('Zakres dat nie może przekraczać 89 dni (limit KSeF).');
       return;
     }
+    toast('Sprawdzanie nowych faktur w KSeF…');
     fetchFromKSeF({ startDate: ksefStartDate, endDate: ksefEndDate });
   }, [ksefStartDate, ksefEndDate, fetchFromKSeF]);
 
@@ -514,6 +543,13 @@ export default function UploadPage() {
           </div>
         ))}
       </div>
+
+      <KsefResultModal
+        variant={ksefModalVariant ?? 'no_new'}
+        open={ksefModalVariant !== null}
+        onOpenChange={(v) => { if (!v) setKsefModalVariant(null); }}
+        errorMessage={ksefIsFailed ? (ksefJobStatus?.result?.error ?? ksefError ?? undefined) : undefined}
+      />
     </Stack>
   );
 }

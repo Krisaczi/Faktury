@@ -376,13 +376,63 @@ async function runKsefFetch({
 
     await supabase.from('parse_jobs').update({ progress: 40 }).eq('id', jobId);
 
+    // ─── Dedup: query existing ksef_reference_numbers for this company ────────
+    // This prevents re-downloading and re-inserting invoices that already exist.
+    const ksefNumbersFromApi = allInvoices.map((inv) => inv.ksefNumber);
+    const existingKsefNumbers = new Set<string>();
+
+    if (ksefNumbersFromApi.length > 0) {
+      const { data: existingRows } = await supabase
+        .from('invoices')
+        .select('ksef_reference_number')
+        .eq('company_id', companyId)
+        .in('ksef_reference_number', ksefNumbersFromApi);
+
+      if (existingRows) {
+        for (const row of existingRows) {
+          if (row.ksef_reference_number) {
+            existingKsefNumbers.add(row.ksef_reference_number);
+          }
+        }
+      }
+    }
+
+    const newInvoices = allInvoices.filter((inv) => !existingKsefNumbers.has(inv.ksefNumber));
+    const skippedCount = allInvoices.length - newInvoices.length;
+
     let invoicesCreated = 0;
     let flagsCreated = 0;
     let errorCount = 0;
     const errors: { message: string; context?: string }[] = [];
 
-    for (let i = 0; i < allInvoices.length; i++) {
-      const meta = allInvoices[i];
+    // If all invoices already exist, short-circuit with hasNew=false
+    if (newInvoices.length === 0) {
+      await supabase.from('upload_sessions').update({
+        status: 'completed',
+        invoices_created: 0,
+        flags_created: 0,
+        error_count: 0,
+        file_count: allInvoices.length,
+      }).eq('id', sessionId);
+
+      await supabase.from('parse_jobs').update({
+        status: 'completed',
+        progress: 100,
+        result: {
+          invoicesCreated: 0,
+          flagsCreated: 0,
+          errorCount: 0,
+          errors: [],
+          total: allInvoices.length,
+          hasNew: false,
+          skippedCount,
+        } as unknown as never,
+      }).eq('id', jobId);
+      return;
+    }
+
+    for (let i = 0; i < newInvoices.length; i++) {
+      const meta = newInvoices[i];
       const ksefId = meta.ksefNumber;
 
       try {
@@ -555,7 +605,7 @@ async function runKsefFetch({
         errors.push({ message: err instanceof Error ? err.message : 'Unknown error', context: ksefId });
       }
 
-      const progress = 40 + Math.round(((i + 1) / allInvoices.length) * 55);
+      const progress = 40 + Math.round(((i + 1) / newInvoices.length) * 55);
       await supabase.from('parse_jobs').update({ progress }).eq('id', jobId);
     }
 
@@ -571,7 +621,16 @@ async function runKsefFetch({
     await supabase.from('parse_jobs').update({
       status: 'completed',
       progress: 100,
-      result: { invoicesCreated, flagsCreated, errorCount, errors, total: allInvoices.length } as unknown as never,
+      result: {
+        invoicesCreated,
+        flagsCreated,
+        errorCount,
+        errors,
+        total: allInvoices.length,
+        hasNew: invoicesCreated > 0,
+        skippedCount,
+        newCount: newInvoices.length,
+      } as unknown as never,
     }).eq('id', jobId);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -29,6 +29,9 @@ export interface ParseSummary {
   flagsCreated: number;
   errorCount: number;
   errors: { message: string; context?: string }[];
+  hasNew?: boolean;
+  skippedCount?: number;
+  newCount?: number;
 }
 
 export interface JobStatusResult {
