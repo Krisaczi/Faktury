@@ -112,6 +112,33 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
     });
   }
 
+  async function bulkResubmitKsef(invoiceIds: string[]) {
+    setError(null);
+    start(async () => {
+      try {
+        const res = await fetch('/api/owner/invoices/bulk-send-to-ksef', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ invoiceIds }),
+        });
+        const data = await res.json().catch(() => ({ error: 'Błąd' }));
+        if (!res.ok) {
+          setError(data.error ?? 'Błąd zbiorczej wysyłki KSeF.');
+          return;
+        }
+        const summary = data.summary as { succeeded: number; failed: number; queued: number };
+        if (summary.failed > 0 && summary.succeeded === 0) {
+          setError(`Wszystkie ${summary.failed} faktur nie zostały wysłane do KSeF.`);
+        } else if (summary.failed > 0) {
+          setError(`${summary.succeeded} wysłano, ${summary.failed} nie udało się, ${summary.queued} w kolejce.`);
+        }
+        loadInvoices();
+      } catch {
+        setError('Błąd połączenia z KSeF.');
+      }
+    });
+  }
+
   const filtered = invoices.filter((inv) =>
     !search ||
     (inv.companyName?.toLowerCase().includes(search.toLowerCase())) ||

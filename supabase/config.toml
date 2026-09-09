@@ -1,0 +1,8 @@
+[functions.parseInvoice]
+verify_jwt = false
+
+[functions.runRiskEngine]
+verify_jwt = false
+
+[functions.ksefRetryWorker]
+verify_jwt = false

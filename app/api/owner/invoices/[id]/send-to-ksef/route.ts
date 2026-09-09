@@ -172,6 +172,18 @@ export async function POST(
     },
   });
 
+  // KSeF submission audit (dedicated audit table)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from('ksef_submission_audit').insert({
+    invoice_id:       params.id,
+    invoice_type:     'platform',
+    actor_id:         user.id,
+    attempt_result:   result.status,
+    response_payload: result.response,
+    error_message:    result.error ?? null,
+    ip:               ownerIp,
+  });
+
   if (result.transient) {
     return NextResponse.json({
       ok:           false,

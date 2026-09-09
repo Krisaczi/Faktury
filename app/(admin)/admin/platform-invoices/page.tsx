@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { PlatformInvoicesClient } from '@/components/admin/platform-invoices-client';
+import { KsefHealthWidget } from '@/components/admin/ksef-health-widget';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export default async function PlatformInvoicesPage() {
     period_start: string; period_end: string; subtotal_cents: number; tax_cents: number;
     total_cents: number; currency: string; issued_at: string | null; due_date: string | null;
     sent_at: string | null; notes: string | null; internal_reference: string | null;
-    created_at: string;
+    created_at: string; ksef_status: string | null; ksef_number: string | null;
   }) => ({
     id:                inv.id,
     invoiceNumber:     inv.invoice_number,
@@ -66,6 +67,8 @@ export default async function PlatformInvoicesPage() {
     createdAt:         inv.created_at,
     companyName:       companyMap.get(inv.entity_id) ?? null,
     companyEmail:      null,
+    ksefStatus:        inv.ksef_status ?? null,
+    ksefNumber:        inv.ksef_number ?? null,
   }));
 
   return (
@@ -74,6 +77,7 @@ export default async function PlatformInvoicesPage() {
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Faktury platformowe</h1>
         <p className="text-sm text-slate-500 mt-1">Wystawione faktury za użytkowanie platformy.</p>
       </div>
+      <KsefHealthWidget />
       <PlatformInvoicesClient initialInvoices={formatted} initialTotal={count ?? 0} isOwner />
     </div>
   );

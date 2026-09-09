@@ -226,7 +226,7 @@ export async function POST(
           .eq('invoice_id', params.id)
           .eq('status', 'pending');
 
-        // KSeF audit entry
+        // KSeF audit entry (platform_invoice_audit)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('platform_invoice_audit').insert({
           invoice_id: params.id,
@@ -240,6 +240,18 @@ export async function POST(
             error:      submitResult.error ?? null,
             transient:  submitResult.transient,
           },
+        });
+
+        // KSeF submission audit (dedicated audit table)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('ksef_submission_audit').insert({
+          invoice_id:       params.id,
+          invoice_type:     'platform',
+          actor_id:         user.id,
+          attempt_result:   submitResult.status,
+          response_payload: submitResult.response,
+          error_message:    submitResult.error ?? null,
+          ip:               ownerIp,
         });
 
         ksefResult = {
