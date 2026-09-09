@@ -239,13 +239,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Load KSeF credentials
-    const { data: creds } = await supabase
+    const { data: credsRows } = await supabase
       .from("ksef_credentials")
       .select("token, environment")
       .eq("company_id", invoice.entity_id)
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    const creds = Array.isArray(credsRows) && credsRows.length > 0 ? credsRows[0] : null;
 
     if (!creds?.token) {
       await supabase.from("ksef_submission_jobs").update({ status: "failed", last_error: "No KSeF credentials", updated_at: nowIso }).eq("id", job.id);
