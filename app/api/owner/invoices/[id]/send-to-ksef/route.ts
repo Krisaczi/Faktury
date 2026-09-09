@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef, type KsefStatus } from '@/lib/ksef/submit';
-import { buildKsefPayload } from '@/lib/ksef';
+import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 
 /**
  * POST /api/owner/invoices/[id]/send-to-ksef
@@ -75,7 +75,7 @@ export async function POST(
   // Build the KSeF XML payload
   let signedXml: string;
   try {
-    const payload = await buildKsefPayload(params.id);
+    const payload = await buildPlatformKsefPayload(params.id);
     signedXml = payload.signedXml;
   } catch (err) {
     return NextResponse.json({

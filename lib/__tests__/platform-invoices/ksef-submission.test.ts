@@ -82,7 +82,7 @@ describe('KSeF submission: issue endpoint integration', () => {
   it('attempts KSeF submission after invoice is issued', async () => {
     const src = await readSrc('app/api/owner/invoices/[id]/issue/route.ts');
     assert.match(src, /submitToKsef/, 'must call submitToKsef');
-    assert.match(src, /buildKsefPayload/, 'must build KSeF payload');
+    assert.match(src, /buildPlatformKsefPayload/, 'must build KSeF payload');
   });
 
   it('creates a ksef_submission_jobs record', async () => {

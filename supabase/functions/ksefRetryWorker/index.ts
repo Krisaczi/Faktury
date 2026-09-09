@@ -257,17 +257,38 @@ Deno.serve(async (req: Request) => {
     const newAttemptCount = job.attempt_count + 1;
     await supabase.from("ksef_submission_jobs").update({ attempt_count: newAttemptCount, updated_at: nowIso }).eq("id", job.id);
 
-    // Attempt submission
-    const idempotencyKey = await hashId(job.invoice_id);
-    const result = await submitToKsef(
-      job.invoice_id,
-      "", // signedXml would be rebuilt from invoice data
-      idempotencyKey,
-      creds.token,
-      creds.environment as "test" | "prod",
-      company.nip,
-      invoice.ksef_number,
-    );
+    // Call the app's send-to-ksef endpoint which handles XML building + submission
+    // The Edge Function can't import Node.js modules, so it delegates to the API.
+    const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:3000";
+    let result: KsefSubmissionResult;
+    try {
+      const apiRes = await fetch(`${appUrl}/api/owner/invoices/${job.invoice_id}/send-to-ksef`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+      });
+      const apiData = await apiRes.json().catch(() => ({})) as Record<string, unknown>;
+      const ksefStatus = (apiData.ksefStatus ?? "queued") as string;
+      result = {
+        success: apiRes.ok || apiRes.status === 202,
+        ksefNumber: apiData.ksefNumber as string | undefined,
+        submissionId: apiData.submissionId as string | undefined,
+        status: ksefStatus,
+        response: apiData.ksefResponse as Record<string, unknown> ?? { apiResponse: apiData },
+        error: apiData.error as string | undefined,
+        transient: !apiRes.ok && (apiRes.status === 202 || apiRes.status >= 500),
+      };
+    } catch (fetchErr) {
+      result = {
+        success: false,
+        status: "queued",
+        response: { error: (fetchErr as Error).message },
+        error: `Worker API call failed: ${(fetchErr as Error).message}`,
+        transient: true,
+      };
+    }
 
     // Update invoice
     const updateFields: Record<string, unknown> = {

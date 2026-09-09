@@ -172,13 +172,13 @@ export async function POST(
 
     if (company?.nip && creds?.token) {
       const { generateIdempotencyKey, submitToKsef } = await import('@/lib/ksef/submit');
-      const { buildKsefPayload } = await import('@/lib/ksef');
+      const { buildPlatformKsefPayload } = await import('@/lib/ksef/platform-submit');
       const idempotencyKey = generateIdempotencyKey(params.id);
 
       // Build XML payload
       let signedXml: string | null = null;
       try {
-        const ksefPayload = await buildKsefPayload(params.id);
+        const ksefPayload = await buildPlatformKsefPayload(params.id);
         signedXml = ksefPayload.signedXml;
       } catch (xmlErr) {
         console.error('[issue] KSeF XML build error', xmlErr);

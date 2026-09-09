@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef } from '@/lib/ksef/submit';
-import { buildKsefPayload } from '@/lib/ksef';
+import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 
 /**
  * POST /api/owner/invoices/bulk-send-to-ksef
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       // Build XML
       let signedXml: string;
       try {
-        const payload = await buildKsefPayload(invoiceId);
+        const payload = await buildPlatformKsefPayload(invoiceId);
         signedXml = payload.signedXml;
       } catch (xmlErr) {
         results.push({ invoiceId, success: false, error: `Błąd XML: ${(xmlErr as Error).message}` });
