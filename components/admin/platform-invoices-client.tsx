@@ -259,7 +259,7 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                       <Badge className={cn('text-xs border gap-1', cfg.className)}>
                         {cfg.icon} {cfg.label}
                       </Badge>
-                      {inv.ksefStatus && inv.ksefStatus !== 'pending' && (
+                      {inv.status !== 'draft' && (
                         <Badge className={cn('text-xs border gap-1',
                           inv.ksefStatus === 'accepted' || inv.ksefStatus === 'submitted'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400'
@@ -269,11 +269,9 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                         )}>
                           {inv.ksefStatus === 'accepted' && <CheckCircle className="w-3 h-3" />}
                           {inv.ksefStatus === 'submitted' && <CheckCircle className="w-3 h-3" />}
-                          {inv.ksefStatus === 'rejected' && <AlertTriangle className="w-3 h-3" />}
-                          {inv.ksefStatus === 'failed' && <AlertTriangle className="w-3 h-3" />}
-                          {inv.ksefStatus === 'queued' && <Clock className="w-3 h-3" />}
-                          {inv.ksefStatus === 'pending' && <Clock className="w-3 h-3" />}
-                          KSeF: {inv.ksefStatus === 'accepted' ? 'Zaakceptowano' : inv.ksefStatus === 'submitted' ? 'Przesłano' : inv.ksefStatus === 'rejected' ? 'Odrzucono' : inv.ksefStatus === 'failed' ? 'Błąd' : inv.ksefStatus === 'queued' ? 'W kolejce' : 'Oczekuje'}
+                          {inv.ksefStatus === 'rejected' || inv.ksefStatus === 'failed' ? <AlertTriangle className="w-3 h-3" /> : null}
+                          {!inv.ksefStatus || inv.ksefStatus === 'queued' || inv.ksefStatus === 'pending' ? <Clock className="w-3 h-3" /> : null}
+                          KSeF: {inv.ksefStatus === 'accepted' ? 'Zaakceptowano' : inv.ksefStatus === 'submitted' ? 'Przesłano' : inv.ksefStatus === 'rejected' ? 'Odrzucono' : inv.ksefStatus === 'failed' ? 'Błąd' : inv.ksefStatus === 'queued' ? 'W kolejce' : 'Nie wysłano'}
                         </Badge>
                       )}
                     </div>
@@ -297,15 +295,16 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                         <Send className="w-4 h-4" />
                       </Button>
                     )}
-                    {inv.ksefStatus && (inv.ksefStatus === 'rejected' || inv.ksefStatus === 'failed' || inv.ksefStatus === 'queued') && inv.status !== 'draft' && (
+                    {inv.status !== 'draft' && inv.ksefStatus !== 'accepted' && (
                       <Button
-                        variant="ghost" size="sm"
+                        variant="outline" size="sm"
                         onClick={() => resubmitKsef(inv.id)}
                         disabled={isPending}
-                        className="h-8 w-8 p-0 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        title="Wyślij ponownie do KSeF"
+                        className="h-8 gap-1.5 px-2.5 text-blue-600 border-blue-200 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-900/20"
+                        title={inv.ksefStatus ? 'Wyślij ponownie do KSeF' : 'Wyślij do KSeF'}
                       >
-                        <RefreshCw className="w-4 h-4" />
+                        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        <span className="hidden sm:inline">{inv.ksefStatus ? 'Wyślij ponownie' : 'Wyślij do KSeF'}</span>
                       </Button>
                     )}
                     {(inv.status === 'issued' || inv.status === 'sent') && (

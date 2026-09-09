@@ -50,6 +50,7 @@ export function KsefHealthWidget({ onResubmit }: { onResubmit?: (invoiceIds: str
   const [data, setData] = useState<KsefHealthData | null>(null);
   const [isPending, start] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   function loadHealth() {
     start(async () => {
@@ -91,8 +92,38 @@ export function KsefHealthWidget({ onResubmit }: { onResubmit?: (invoiceIds: str
 
   function handleBulkResubmit() {
     if (selectedIds.size === 0) return;
-    onResubmit?.(Array.from(selectedIds));
-    setSelectedIds(new Set());
+    const invoiceIds = Array.from(selectedIds);
+    setActionMessage(null);
+
+    if (onResubmit) {
+      onResubmit(invoiceIds);
+      setSelectedIds(new Set());
+      return;
+    }
+
+    start(async () => {
+      try {
+        const res = await fetch('/api/owner/invoices/bulk-send-to-ksef', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceIds }),
+        });
+        const result = await res.json().catch(() => ({ error: 'Błąd wysyłki.' })) as {
+          error?: string;
+          summary?: { succeeded: number; failed: number; queued: number };
+        };
+        if (!res.ok || !result.summary) {
+          setActionMessage(result.error ?? 'Błąd zbiorczej wysyłki KSeF.');
+          return;
+        }
+        const { succeeded, failed, queued } = result.summary;
+        setActionMessage(`Wysłano: ${succeeded}, w kolejce: ${queued}, błędy: ${failed}.`);
+        setSelectedIds(new Set());
+        loadHealth();
+      } catch {
+        setActionMessage('Błąd połączenia z KSeF.');
+      }
+    });
   }
 
   return (
@@ -114,6 +145,12 @@ export function KsefHealthWidget({ onResubmit }: { onResubmit?: (invoiceIds: str
           Odśwież
         </Button>
       </div>
+
+      {actionMessage && (
+        <div className="px-4 py-2 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-900">
+          {actionMessage}
+        </div>
+      )}
 
       {/* Status summary cards */}
       <div className="grid grid-cols-5 gap-2 p-4">
