@@ -122,7 +122,11 @@ export async function getCompanyUsage(companyId: string): Promise<CompanyUsage> 
 export function checkVendorLimit(
   features: PackageFeatures,
   usage: CompanyUsage,
+  opts?: { isOwner?: boolean },
 ): EnforcementResult {
+  // Owner bypass: skip vendor limit checks
+  if (opts?.isOwner) return { allowed: true };
+
   if (features.vendors_limit === null) return { allowed: true };
   if (usage.vendors_count < features.vendors_limit) return { allowed: true };
   return {

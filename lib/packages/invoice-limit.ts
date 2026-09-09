@@ -55,7 +55,25 @@ export interface InvoiceLimitResult {
  * Returns { allowed: true } if under the limit or on an unlimited plan.
  * Returns { allowed: false, reason } if the monthly limit is reached.
  */
-export async function checkInvoiceLimit(companyId: string): Promise<InvoiceLimitResult> {
+export async function checkInvoiceLimit(
+  companyId: string,
+  opts?: { userId?: string; isOwner?: boolean },
+): Promise<InvoiceLimitResult> {
+  // Owner bypass: skip all invoice limit checks
+  if (opts?.isOwner) {
+    if (opts.userId) {
+      const { logLimitBypass } = await import('@/lib/auth/is-owner');
+      await logLimitBypass({
+        userId:        opts.userId,
+        action:        'create_invoice',
+        bypassedLimit: 'invoices_per_month',
+        reason:        'owner_exempt',
+        payload:       { companyId },
+      });
+    }
+    return { allowed: true };
+  }
+
   const usage = await getMonthlyInvoiceUsage(companyId);
 
   if (usage.limit === null) return { allowed: true, usage };
@@ -111,8 +129,11 @@ export async function consumeOverride(companyId: string): Promise<void> {
  * monthly invoice limit (including overrides). Used by the createInvoice
  * action to block issuance.
  */
-export async function isInvoiceLimitReached(companyId: string): Promise<{ reached: boolean; usage?: InvoiceUsage; reason?: string }> {
-  const result = await checkInvoiceLimit(companyId);
+export async function isInvoiceLimitReached(
+  companyId: string,
+  opts?: { userId?: string; isOwner?: boolean },
+): Promise<{ reached: boolean; usage?: InvoiceUsage; reason?: string }> {
+  const result = await checkInvoiceLimit(companyId, opts);
   return { reached: !result.allowed, usage: result.usage, reason: result.reason };
 }
 

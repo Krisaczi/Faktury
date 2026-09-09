@@ -114,6 +114,7 @@ export type Database = {
           email: string;
           company_id: string | null;
           role: 'owner' | 'accountant';
+          is_owner: boolean | null;
           created_at: string;
           updated_at: string;
         };
@@ -122,12 +123,14 @@ export type Database = {
           email: string;
           company_id?: string | null;
           role?: 'owner' | 'accountant';
+          is_owner?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           company_id?: string | null;
           role?: 'owner' | 'accountant';
+          is_owner?: boolean | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -955,6 +958,36 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      limit_bypass_audit: {
+        Row: {
+          id: string;
+          user_id: string;
+          action: string;
+          bypassed_limit: string;
+          reason: string;
+          payload: Json | null;
+          ip: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          action: string;
+          bypassed_limit: string;
+          reason?: string;
+          payload?: Json | null;
+          ip?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          action?: string;
+          bypassed_limit?: string;
+          reason?: string;
+          payload?: Json | null;
+          ip?: string | null;
+        };
+        Relationships: [];
       };
       invoice_audit: {
         Row: {

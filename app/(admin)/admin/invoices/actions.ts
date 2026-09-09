@@ -22,6 +22,7 @@ import {
 } from '@/lib/permissions';
 import { requireInvoicingEnabled } from '@/lib/packages/get-company-package';
 import { checkInvoiceLimit, consumeOverride } from '@/lib/packages/invoice-limit';
+import { isOwner as isOwnerUser } from '@/lib/auth/is-owner';
 import {
   BillingAddressSchema,
   companyAddressToBilling,
@@ -46,7 +47,7 @@ async function requireInvoicingUser() {
 
   const { data: u } = await supabase
     .from('users')
-    .select('role, company_id')
+    .select('role, company_id, is_owner, email')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -63,10 +64,13 @@ async function requireInvoicingUser() {
 
   if (!canAccessInvoicing(role, packageType)) throw new Error('Brak dostępu do modułu fakturowania.');
 
-  // Package-level enforcement: invoicing requires Professional plan
-  await requireInvoicingEnabled(u.company_id as string);
+  // Owner bypass: skip package-level enforcement for owner
+  const ownerFlag = isOwnerUser({ id: user.id, email: user.email ?? '', is_owner: (u as { is_owner?: boolean | null }).is_owner, role });
+  if (!ownerFlag) {
+    await requireInvoicingEnabled(u.company_id as string);
+  }
 
-  return { user, companyId: u.company_id as string, role, packageType };
+  return { user, companyId: u.company_id as string, role, packageType, isOwner: ownerFlag };
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -126,7 +130,7 @@ export async function createInvoice(
   intent: 'draft' | 'issue',
 ): Promise<ActionResult> {
   try {
-    const { user, companyId, role, packageType } = await requireInvoicingUser();
+    const { user, companyId, role, packageType, isOwner: ownerFlag } = await requireInvoicingUser();
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do tworzenia faktur.' };
     if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
@@ -145,7 +149,7 @@ export async function createInvoice(
 
     // Monthly invoice limit check (only for 'issue' intent, not drafts)
     if (intent === 'issue') {
-      const limitCheck = await checkInvoiceLimit(companyId);
+      const limitCheck = await checkInvoiceLimit(companyId, { userId: user.id, isOwner: ownerFlag });
       if (!limitCheck.allowed) {
         return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
       }
@@ -282,7 +286,7 @@ export async function updateInvoice(
   intent: 'draft' | 'issue',
 ): Promise<ActionResult> {
   try {
-    const { user, companyId, role, packageType } = await requireInvoicingUser();
+    const { user, companyId, role, packageType, isOwner: ownerFlag } = await requireInvoicingUser();
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do edycji faktur.' };
     if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
@@ -314,7 +318,7 @@ export async function updateInvoice(
 
     // Monthly invoice limit check (only when transitioning draft → issued)
     if (intent === 'issue' && existing.status === 'draft') {
-      const limitCheck = await checkInvoiceLimit(companyId);
+      const limitCheck = await checkInvoiceLimit(companyId, { userId: user.id, isOwner: ownerFlag });
       if (!limitCheck.allowed) {
         return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
       }

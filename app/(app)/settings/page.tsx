@@ -35,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X, Eye, EyeOff } from 'lucide-react';
+import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X, Eye, EyeOff, ScrollText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import {
@@ -752,6 +752,67 @@ function KsefCredentialsCard({ role }: { role: string }) {
   );
 }
 
+function OwnerExemptCard() {
+  return (
+    <Card className="border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-900/10">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-blue-500" />
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Konto Właściciela</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-blue-700 dark:text-blue-400 flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          Owner accounts are exempt from plan UI and vendor/invoicing limits
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OwnerBypassAuditCard() {
+  const [entries, setEntries] = useState<Array<{
+    id: string; action: string; bypassed_limit: string; reason: string;
+    payload: Record<string, unknown> | null; ip: string | null; created_at: string;
+  }> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/owner/limit-bypass-audit')
+      .then((r) => r.ok ? r.json() : { entries: [] })
+      .then((d) => setEntries(d.entries ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!entries || entries.length === 0) return null;
+
+  return (
+    <Card className="border-slate-200 dark:border-slate-800">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <ScrollText className="w-4 h-4 text-slate-500" />
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Historia pominięć limitów</CardTitle>
+        </div>
+        <CardDescription>Ostatnie działania z pominięciem limitów planu.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {entries.slice(0, 20).map((e) => (
+            <div key={e.id} className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+              <span className="font-medium">{e.bypassed_limit}</span>
+              <span className="text-slate-400">{e.action}</span>
+              <span className="text-slate-400">{fmt(e.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Settings Page ────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user, profile } = useAuth();
@@ -871,8 +932,12 @@ export default function SettingsPage() {
             {/* Bank Accounts */}
             <BankAccountsCard role={role} />
 
-            {/* Billing */}
-            <BillingCard role={role} />
+            {/* Billing — hidden for owner (exempt from plan UI) */}
+            {role !== 'owner' && <BillingCard role={role} />}
+
+            {/* Owner exempt notice — shown only for owner */}
+            {role === 'owner' && <OwnerExemptCard />}
+            {role === 'owner' && <OwnerBypassAuditCard />}
 
             {/* KSeF */}
             <KsefCredentialsCard role={role} />
