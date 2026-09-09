@@ -83,6 +83,9 @@ export function PlatformInvoiceModal({
   const [invoiceDate, setInvoiceDate]       = useState(() => new Date().toISOString().split('T')[0]);
   const [numberError, setNumberError]       = useState<string | null>(null);
 
+  // KSeF submission result
+  const [ksefResult, setKsefResult] = useState<{ ksefStatus?: string; ksefNumber?: string; error?: string; transient?: boolean } | null>(null);
+
   const effectiveVatRate = customVatRate !== '' ? Number(customVatRate) : vatRate;
 
   const fetchUsage = useCallback((periodValue: string) => {
@@ -152,6 +155,7 @@ export function PlatformInvoiceModal({
       setDefaultVatRate(null);
       setAutoGenNumber(true); setManualInvoiceNumber(''); setNumberError(null);
       setInvoiceDate(new Date().toISOString().split('T')[0]);
+      setKsefResult(null);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -286,7 +290,10 @@ export function PlatformInvoiceModal({
           setError(err.error ?? 'Błąd wystawiania.');
           return;
         }
+        const data = await res.json() as { ksef?: { ksefStatus?: string; ksefNumber?: string; error?: string; transient?: boolean } };
+        setKsefResult(data.ksef ?? null);
         setStep('success');
+        // Send email (non-blocking, independent of KSeF outcome)
         await fetch(`/api/owner/invoices/${draftId}/send`, { method: 'POST' });
       } catch {
         setError('Błąd połączenia.');
@@ -687,6 +694,47 @@ export function PlatformInvoiceModal({
             <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto" />
             <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Faktura wystawiona i wysłana</p>
             <p className="text-xs text-slate-400">Faktura została wystawiona i wysłana e-mailem do firmy.</p>
+
+            {/* KSeF submission status */}
+            {ksefResult && (
+              <div className={
+                ksefResult.ksefStatus === 'submitted' || ksefResult.ksefStatus === 'accepted'
+                  ? 'mt-4 mx-auto max-w-sm p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-left'
+                  : ksefResult.ksefStatus === 'rejected'
+                    ? 'mt-4 mx-auto max-w-sm p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-left'
+                    : 'mt-4 mx-auto max-w-sm p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-left'
+              }>
+                <div className="flex items-center gap-2 mb-1">
+                  {ksefResult.ksefStatus === 'submitted' || ksefResult.ksefStatus === 'accepted' ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : ksefResult.ksefStatus === 'rejected' ? (
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 text-amber-500" />
+                  )}
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    KSeF: {ksefResult.ksefStatus === 'submitted' || ksefResult.ksefStatus === 'accepted'
+                      ? 'Przesłano do KSeF'
+                      : ksefResult.ksefStatus === 'rejected'
+                        ? 'KSeF odrzucił fakturę'
+                        : ksefResult.ksefStatus === 'queued'
+                          ? 'Dodano do kolejki KSeF'
+                          : ksefResult.ksefStatus ?? 'Brak statusu'}
+                  </p>
+                </div>
+                {ksefResult.ksefNumber && (
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Numer KSeF: {ksefResult.ksefNumber}</p>
+                )}
+                {ksefResult.error && (
+                  <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{ksefResult.error}</p>
+                )}
+                {ksefResult.transient && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    Faktura zostanie automatycznie ponownie wysłana do KSeF.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

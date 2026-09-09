@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
       period_start: string; period_end: string; subtotal_cents: number; tax_cents: number;
       total_cents: number; currency: string; issued_at: string | null; due_date: string | null;
       sent_at: string | null; notes: string | null; internal_reference: string | null;
-      created_at: string;
+      created_at: string; ksef_status: string | null; ksef_number: string | null;
     }) => ({
       id:                inv.id,
       invoiceNumber:     inv.invoice_number,
@@ -88,6 +88,8 @@ export async function GET(req: NextRequest) {
       internalReference: inv.internal_reference,
       createdAt:         inv.created_at,
       companyName:       companyMap.get(inv.entity_id) ?? null,
+      ksefStatus:        inv.ksef_status ?? null,
+      ksefNumber:        inv.ksef_number ?? null,
     })),
     total:   count ?? 0,
     page,

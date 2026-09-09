@@ -145,6 +145,116 @@ export async function POST(
     },
   });
 
+  // ─── KSeF submission (best-effort, non-blocking) ──────────────────────────
+  // After issuance, attempt to submit to KSeF. If KSeF credentials exist
+  // for the company, we try synchronous submission. If it fails transiently,
+  // we queue it for retry. Email delivery (send endpoint) is called separately
+  // by the frontend and is NOT blocked by KSeF outcome.
+  let ksefResult: { ksefStatus?: string; ksefNumber?: string; error?: string; transient?: boolean } | null = null;
+
+  try {
+    // Load company NIP
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: company } = await (supabase as any)
+      .from('companies')
+      .select('nip')
+      .eq('id', invoice.entity_id)
+      .maybeSingle();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: creds } = await (supabase as any)
+      .from('ksef_credentials')
+      .select('token, environment')
+      .eq('company_id', invoice.entity_id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (company?.nip && creds?.token) {
+      const { generateIdempotencyKey, submitToKsef } = await import('@/lib/ksef/submit');
+      const { buildKsefPayload } = await import('@/lib/ksef');
+      const idempotencyKey = generateIdempotencyKey(params.id);
+
+      // Build XML payload
+      let signedXml: string | null = null;
+      try {
+        const ksefPayload = await buildKsefPayload(params.id);
+        signedXml = ksefPayload.signedXml;
+      } catch (xmlErr) {
+        console.error('[issue] KSeF XML build error', xmlErr);
+      }
+
+      if (signedXml) {
+        // Create submission job
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('ksef_submission_jobs').insert({
+          invoice_id:      params.id,
+          invoice_type:    'platform',
+          attempt_count:   1,
+          max_attempts:    5,
+          status:          'pending',
+          idempotency_key: idempotencyKey,
+        });
+
+        const submitResult = await submitToKsef({
+          invoiceId:       params.id,
+          signedXml,
+          idempotencyKey,
+          credentials:     { token: creds.token, environment: creds.environment as 'test' | 'prod' },
+          companyNip:      company.nip,
+        });
+
+        // Update invoice with KSeF result
+        const ksefUpdate: Record<string, unknown> = {
+          ksef_status:         submitResult.status,
+          ksef_response:       submitResult.response,
+          ksef_last_attempt_at: nowIso,
+        };
+        if (submitResult.ksefNumber) ksefUpdate.ksef_number = submitResult.ksefNumber;
+        if (submitResult.submissionId) ksefUpdate.ksef_submission_id = submitResult.submissionId;
+        if (submitResult.status === 'submitted' || submitResult.status === 'accepted') {
+          ksefUpdate.ksef_submitted_at = nowIso;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('platform_invoices').update(ksefUpdate).eq('id', params.id);
+
+        // Update job status
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('ksef_submission_jobs')
+          .update({ status: submitResult.status, last_error: submitResult.error ?? null, updated_at: nowIso })
+          .eq('invoice_id', params.id)
+          .eq('status', 'pending');
+
+        // KSeF audit entry
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('platform_invoice_audit').insert({
+          invoice_id: params.id,
+          actor_id:   user.id,
+          action:     'ksef_submission',
+          ip:         ownerIp,
+          payload:    {
+            ksefStatus: submitResult.status,
+            ksefNumber: submitResult.ksefNumber ?? null,
+            success:    submitResult.success,
+            error:      submitResult.error ?? null,
+            transient:  submitResult.transient,
+          },
+        });
+
+        ksefResult = {
+          ksefStatus: submitResult.status,
+          ksefNumber: submitResult.ksefNumber,
+          error:      submitResult.error,
+          transient:  submitResult.transient,
+        };
+      }
+    }
+  } catch (ksefErr) {
+    console.error('[issue] KSeF submission error (non-blocking)', ksefErr);
+    ksefResult = { ksefStatus: 'queued', error: 'Błąd wysyłki KSeF — dodano do kolejki.', transient: true };
+  }
+
   return NextResponse.json({
     ok:            true,
     invoiceNumber,
@@ -152,6 +262,7 @@ export async function POST(
     status:        'issued',
     issuedAt:      nowIso,
     dueDate:       dueDate.toISOString().split('T')[0],
+    ksef:          ksefResult,
     taxSnapshot: {
       vatRatePercent:   invoice.vat_rate_percent,
       taxTotalCents:    invoice.tax_total_cents,

@@ -82,6 +82,12 @@ export async function GET(
       notes:             invoice.notes,
       internalReference: invoice.internal_reference,
       createdAt:         invoice.created_at,
+      ksefStatus:        invoice.ksef_status,
+      ksefNumber:        invoice.ksef_number,
+      ksefSubmissionId:  invoice.ksef_submission_id,
+      ksefResponse:      invoice.ksef_response,
+      ksefSubmittedAt:   invoice.ksef_submitted_at,
+      ksefLastAttemptAt: invoice.ksef_last_attempt_at,
     },
     lineItems: (lineItems ?? []).map((li: { id: string; description: string; quantity: number; unit_price_cents: number; amount_cents: number; taxable: boolean; vat_rate_percent: number | null }) => ({
       id:             li.id,

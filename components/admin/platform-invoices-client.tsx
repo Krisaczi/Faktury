@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Receipt, Loader as Loader2, Search, Ban, CircleCheck as CheckCircle, Send, FileText, Clock } from 'lucide-react';
+import { Receipt, Loader as Loader2, Search, Ban, CircleCheck as CheckCircle, Send, FileText, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,8 @@ interface PlatformInvoice {
   createdAt:         string;
   companyName:       string | null;
   companyEmail:      string | null;
+  ksefStatus:        string | null;
+  ksefNumber:        string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
@@ -90,6 +92,23 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
       const res = await fetch(`/api/owner/invoices/${id}/send`, { method: 'POST' });
       if (!res.ok) { setError('Błąd wysyłania faktury.'); return; }
       loadInvoices();
+    });
+  }
+
+  async function resubmitKsef(id: string) {
+    setError(null);
+    start(async () => {
+      try {
+        const res = await fetch(`/api/owner/invoices/${id}/send-to-ksef`, { method: 'POST' });
+        const data = await res.json().catch(() => ({ error: 'Błąd' }));
+        if (!res.ok && res.status !== 202) {
+          setError(data.error ?? 'Błąd wysyłania do KSeF.');
+          return;
+        }
+        loadInvoices();
+      } catch {
+        setError('Błąd połączenia z KSeF.');
+      }
     });
   }
 
@@ -213,9 +232,27 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                       <Badge className={cn('text-xs border gap-1', cfg.className)}>
                         {cfg.icon} {cfg.label}
                       </Badge>
+                      {inv.ksefStatus && inv.ksefStatus !== 'pending' && (
+                        <Badge className={cn('text-xs border gap-1',
+                          inv.ksefStatus === 'accepted' || inv.ksefStatus === 'submitted'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400'
+                            : inv.ksefStatus === 'rejected' || inv.ksefStatus === 'failed'
+                              ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400'
+                        )}>
+                          {inv.ksefStatus === 'accepted' && <CheckCircle className="w-3 h-3" />}
+                          {inv.ksefStatus === 'submitted' && <CheckCircle className="w-3 h-3" />}
+                          {inv.ksefStatus === 'rejected' && <AlertTriangle className="w-3 h-3" />}
+                          {inv.ksefStatus === 'failed' && <AlertTriangle className="w-3 h-3" />}
+                          {inv.ksefStatus === 'queued' && <Clock className="w-3 h-3" />}
+                          {inv.ksefStatus === 'pending' && <Clock className="w-3 h-3" />}
+                          KSeF: {inv.ksefStatus === 'accepted' ? 'Zaakceptowano' : inv.ksefStatus === 'submitted' ? 'Przesłano' : inv.ksefStatus === 'rejected' ? 'Odrzucono' : inv.ksefStatus === 'failed' ? 'Błąd' : inv.ksefStatus === 'queued' ? 'W kolejce' : 'Oczekuje'}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-slate-500 truncate mt-0.5">
                       {inv.companyName ?? '—'} · {inv.periodStart} → {inv.periodEnd}
+                      {inv.ksefNumber && <span className="text-slate-400"> · KSeF: {inv.ksefNumber}</span>}
                     </p>
                   </div>
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-shrink-0">
@@ -231,6 +268,17 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                         title="Wyślij"
                       >
                         <Send className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {inv.ksefStatus && (inv.ksefStatus === 'rejected' || inv.ksefStatus === 'failed' || inv.ksefStatus === 'queued') && inv.status !== 'draft' && (
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => resubmitKsef(inv.id)}
+                        disabled={isPending}
+                        className="h-8 w-8 p-0 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        title="Wyślij ponownie do KSeF"
+                      >
+                        <RefreshCw className="w-4 h-4" />
                       </Button>
                     )}
                     {(inv.status === 'issued' || inv.status === 'sent') && (
