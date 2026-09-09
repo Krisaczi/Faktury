@@ -578,9 +578,11 @@ function KsefCredentialsCard({ role }: { role: string }) {
         .from('ksef_credentials')
         .select('environment, updated_at')
         .eq('company_id', userRecord.company_id)
-        .maybeSingle();
-      setExisting(data ?? null);
-      if (data?.environment) setEnv(data.environment as 'test' | 'prod');
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      const latest = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      setExisting(latest);
+      if (latest?.environment) setEnv(latest.environment as 'test' | 'prod');
     });
   }, [supabase]);
 
