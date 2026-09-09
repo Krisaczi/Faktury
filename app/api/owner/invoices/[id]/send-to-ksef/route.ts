@@ -58,13 +58,13 @@ export async function POST(
 
   // Load KSeF credentials
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: creds } = await (supabase as any)
+  const { data: credsRows } = await (supabase as any)
     .from('ksef_credentials')
     .select('token, environment')
     .eq('company_id', invoice.entity_id)
     .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  const creds = Array.isArray(credsRows) && credsRows.length > 0 ? credsRows[0] : null;
 
   if (!creds?.token) {
     return NextResponse.json({

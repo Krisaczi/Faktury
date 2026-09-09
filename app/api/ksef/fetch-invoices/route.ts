@@ -74,9 +74,22 @@ async function encryptKsefToken(
   publicKey: crypto.KeyObject
 ): Promise<string> {
   const plaintext = `${ksefToken}|${timestampMs}`;
+  const plaintextBuf = Buffer.from(plaintext, 'utf8');
+
+  // RSA-OAEP with SHA-256 and a 2048-bit key can encrypt at most 190 bytes.
+  // If the token is too long (e.g. two tokens accidentally pasted together),
+  // throw a clear error instead of letting crypto.publicEncrypt fail with
+  // the cryptic "data too large for key size".
+  if (plaintextBuf.length > 190) {
+    throw new Error(
+      `KSeF token is too long (${plaintextBuf.length} bytes, max 190). ` +
+      'This usually means two tokens were pasted together. Please re-enter a single token in Settings.'
+    );
+  }
+
   const encrypted = crypto.publicEncrypt(
     { key: publicKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-    Buffer.from(plaintext, 'utf8')
+    plaintextBuf
   );
   return encrypted.toString('base64');
 }
@@ -266,12 +279,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Company NIP not found. Please set your NIP in Settings.' }, { status: 404 });
     }
 
-    const { data: creds, error: credsError } = await service
+    const { data: credsRows, error: credsError } = await service
       .from('ksef_credentials').select('token, environment')
       .eq('company_id', companyId)
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    const creds = Array.isArray(credsRows) && credsRows.length > 0 ? credsRows[0] : null;
     if (credsError) {
       console.error('[ksef/fetch-invoices] creds query error:', credsError);
       return NextResponse.json(

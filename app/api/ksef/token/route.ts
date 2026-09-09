@@ -50,6 +50,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Token is required', code: 'TOKEN_REQUIRED' }, { status: 400 });
     }
 
+    // Reject tokens that exceed RSA-OAEP plaintext limit (2048-bit key → ~190 bytes)
+    // or contain whitespace (likely two tokens pasted together)
+    if (token.length > 180) {
+      return NextResponse.json({ error: 'Token is too long. Make sure you pasted a single KSeF token, not multiple.', code: 'TOKEN_TOO_LONG' }, { status: 400 });
+    }
+    if (/\s/.test(token)) {
+      return NextResponse.json({ error: 'Token contains whitespace. Make sure you pasted a single KSeF token without spaces.', code: 'TOKEN_INVALID' }, { status: 400 });
+    }
+
     if (!envRaw || !ALLOWED_ENVS.includes(envRaw as KsefEnv)) {
       return NextResponse.json({ error: 'Environment must be "test" or "prod"', code: 'INVALID_ENV' }, { status: 400 });
     }
