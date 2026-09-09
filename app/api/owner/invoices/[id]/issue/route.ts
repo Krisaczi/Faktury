@@ -4,8 +4,13 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 /**
  * POST /api/owner/invoices/:id/issue
  *
- * Finalizes a draft invoice: assigns invoice number, sets status=issued,
- * persists immutable tax snapshot, records issuedBy/issuedAt/dueDate.
+ * Finalizes a draft invoice: assigns invoice number (auto-generated or manual),
+ * sets status=issued, persists immutable tax snapshot, records issuedBy/issuedAt/dueDate.
+ *
+ * Body (optional):
+ *   invoiceNumber: string — manual invoice number (required if autoGenerateNumber is false)
+ *   invoiceDate:   string — ISO date for the invoice issue date (defaults to today)
+ *   autoGenerateNumber: boolean — if true, generate number via RPC; if false, use invoiceNumber
  */
 export async function POST(
   req: NextRequest,
@@ -29,7 +34,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
-    .select('id, status, entity_id, vat_rate_percent, tax_breakdown, tax_total_cents, price_includes_tax')
+    .select('id, status, entity_id, vat_rate_percent, tax_breakdown, tax_total_cents, price_includes_tax, invoice_number, invoice_date, metadata')
     .eq('id', params.id)
     .maybeSingle();
 
@@ -41,17 +46,46 @@ export async function POST(
     return NextResponse.json({ error: 'Faktura nie jest szkicem.' }, { status: 400 });
   }
 
-  // Generate invoice number via RPC
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoiceNumber, error: numErr } = await (supabase as any)
-    .rpc('generate_platform_invoice_number');
+  // Parse request body for manual number/date override
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const autoGenerate = body.autoGenerateNumber !== false && invoice.metadata?.autoGenerateNumber !== false;
+  const manualNumber = typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() : (invoice.invoice_number ?? '');
+  const requestedDate = typeof body.invoiceDate === 'string' ? body.invoiceDate : (invoice.invoice_date ?? null);
 
-  if (numErr || !invoiceNumber) {
-    console.error('[issue] number generation error', numErr);
-    return NextResponse.json({ error: 'Błąd generowania numeru faktury.' }, { status: 500 });
+  let invoiceNumber: string;
+
+  if (autoGenerate) {
+    // Generate invoice number via RPC
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: generatedNumber, error: numErr } = await (supabase as any)
+      .rpc('generate_platform_invoice_number');
+
+    if (numErr || !generatedNumber) {
+      console.error('[issue] number generation error', numErr);
+      return NextResponse.json({ error: 'Błąd generowania numeru faktury.' }, { status: 500 });
+    }
+    invoiceNumber = generatedNumber;
+  } else {
+    // Manual invoice number — validate non-empty
+    if (!manualNumber) {
+      return NextResponse.json({ error: 'Numer faktury jest wymagany.' }, { status: 400 });
+    }
+    // Validate uniqueness (exclude self)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any)
+      .from('platform_invoices')
+      .select('id')
+      .eq('invoice_number', manualNumber)
+      .neq('id', params.id)
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json({ error: 'Numer faktury już istnieje.' }, { status: 409 });
+    }
+    invoiceNumber = manualNumber;
   }
 
   const now = new Date();
+  const invoiceDateValue = requestedDate || now.toISOString().split('T')[0];
   const dueDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const nowIso = now.toISOString();
 
@@ -61,6 +95,7 @@ export async function POST(
     .from('platform_invoices')
     .update({
       invoice_number:         invoiceNumber,
+      invoice_date:           invoiceDateValue,
       status:                 'issued',
       issued_by:              user.id,
       issued_at:              nowIso,
@@ -84,6 +119,7 @@ export async function POST(
     ip:         ownerIp,
     payload:    {
       invoiceNumber,
+      invoiceDate: invoiceDateValue,
       dueDate: dueDate.toISOString().split('T')[0],
       taxSnapshot: {
         vatRatePercent:  invoice.vat_rate_percent,
@@ -112,6 +148,7 @@ export async function POST(
   return NextResponse.json({
     ok:            true,
     invoiceNumber,
+    invoiceDate:   invoiceDateValue,
     status:        'issued',
     issuedAt:      nowIso,
     dueDate:       dueDate.toISOString().split('T')[0],

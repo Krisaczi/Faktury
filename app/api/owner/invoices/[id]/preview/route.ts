@@ -61,6 +61,7 @@ export async function GET(
     invoice: {
       id:                invoice.id,
       invoiceNumber:     invoice.invoice_number,
+      invoiceDate:       invoice.invoice_date,
       status:            invoice.status,
       periodStart:       invoice.period_start,
       periodEnd:         invoice.period_end,

@@ -77,6 +77,12 @@ export function PlatformInvoiceModal({
   const [defaultVatRate, setDefaultVatRate] = useState<number | null>(null);
   const [vatConfirmed, setVatConfirmed]     = useState(false);
 
+  // Invoice number + date state
+  const [autoGenNumber, setAutoGenNumber]   = useState(true);
+  const [manualInvoiceNumber, setManualInvoiceNumber] = useState('');
+  const [invoiceDate, setInvoiceDate]       = useState(() => new Date().toISOString().split('T')[0]);
+  const [numberError, setNumberError]       = useState<string | null>(null);
+
   const effectiveVatRate = customVatRate !== '' ? Number(customVatRate) : vatRate;
 
   const fetchUsage = useCallback((periodValue: string) => {
@@ -144,6 +150,8 @@ export function PlatformInvoiceModal({
       setLineItems([]); setVatRate(0); setCustomVatRate(''); setVatNumber('');
       setVatMode('invoice'); setPriceIncludesTax(false); setVatConfirmed(false);
       setDefaultVatRate(null);
+      setAutoGenNumber(true); setManualInvoiceNumber(''); setNumberError(null);
+      setInvoiceDate(new Date().toISOString().split('T')[0]);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -178,6 +186,20 @@ export function PlatformInvoiceModal({
 
   async function saveDraft() {
     setError(null);
+    setNumberError(null);
+
+    // Validate manual invoice number
+    if (!autoGenNumber && !manualInvoiceNumber.trim()) {
+      setNumberError('Numer faktury jest wymagany, gdy auto-generacja jest wyłączona.');
+      return;
+    }
+
+    // Validate invoice date
+    if (!invoiceDate) {
+      setError('Data wystawienia jest wymagana.');
+      return;
+    }
+
     start(async () => {
       try {
         const [y, m] = period.split('-');
@@ -202,10 +224,17 @@ export function PlatformInvoiceModal({
             vatMode,
             priceIncludesTax,
             vatNumber:        vatNumber || undefined,
+            invoiceNumber:    autoGenNumber ? undefined : manualInvoiceNumber.trim(),
+            invoiceDate,
+            autoGenerateNumber: autoGenNumber,
           }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Błąd' }));
+          if (res.status === 409) {
+            setNumberError('Numer faktury już istnieje.');
+            return;
+          }
           setError(err.error ?? 'Błąd tworzenia szkicu.');
           return;
         }
@@ -227,11 +256,33 @@ export function PlatformInvoiceModal({
   async function issueInvoice() {
     if (!draftId) return;
     setError(null);
+    setNumberError(null);
+
+    // Validate manual invoice number before issuing
+    if (!autoGenNumber && !manualInvoiceNumber.trim()) {
+      setNumberError('Numer faktury jest wymagany, gdy auto-generacja jest wyłączona.');
+      setStep('form');
+      return;
+    }
+
     start(async () => {
       try {
-        const res = await fetch(`/api/owner/invoices/${draftId}/issue`, { method: 'POST' });
+        const res = await fetch(`/api/owner/invoices/${draftId}/issue`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            invoiceNumber:      autoGenNumber ? undefined : manualInvoiceNumber.trim(),
+            invoiceDate,
+            autoGenerateNumber: autoGenNumber,
+          }),
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Błąd' }));
+          if (res.status === 409) {
+            setNumberError('Numer faktury już istnieje.');
+            setStep('form');
+            return;
+          }
           setError(err.error ?? 'Błąd wystawiania.');
           return;
         }
@@ -291,6 +342,63 @@ export function PlatformInvoiceModal({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Invoice number + date controls */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Numer i data faktury</p>
+              </div>
+
+              {/* Auto-generate toggle */}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoGenNumber}
+                  onChange={(e) => { setAutoGenNumber(e.target.checked); setNumberError(null); }}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                  Automatycznie wygeneruj numer faktury
+                  <span title="Możesz wpisać własny numer faktury lub pozwolić systemowi wygenerować go automatycznie.">
+                    <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+                  </span>
+                </span>
+              </label>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Invoice number */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Numer faktury</Label>
+                  {autoGenNumber ? (
+                    <div className="h-9 flex items-center px-3 rounded-md bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-sm text-slate-400">
+                      Numer zostanie wygenerowany automatycznie
+                    </div>
+                  ) : (
+                    <Input
+                      className="h-9 text-sm"
+                      value={manualInvoiceNumber}
+                      onChange={(e) => { setManualInvoiceNumber(e.target.value); setNumberError(null); }}
+                      placeholder="np. FV/09/2026/001"
+                    />
+                  )}
+                  {numberError && (
+                    <p className="text-xs text-red-600">{numberError}</p>
+                  )}
+                </div>
+
+                {/* Invoice date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Data wystawienia</Label>
+                  <Input
+                    type="date"
+                    className="h-9 text-sm"
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Usage metrics */}
@@ -452,7 +560,11 @@ export function PlatformInvoiceModal({
           <div className="space-y-4">
             <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
               <Eye className="w-4 h-4 text-blue-600" />
-              <p className="text-xs text-blue-700 dark:text-blue-400">Podgląd faktury — numer zostanie nadany po wystawieniu.</p>
+              <p className="text-xs text-blue-700 dark:text-blue-400">
+                {autoGenNumber
+                  ? 'Podgląd faktury — numer zostanie nadany po wystawieniu.'
+                  : `Podgląd faktury — numer: ${manualInvoiceNumber}`}
+              </p>
             </div>
 
             {/* Invoice preview */}
@@ -470,6 +582,12 @@ export function PlatformInvoiceModal({
                 </div>
                 <div className="text-right space-y-1 flex-shrink-0">
                   <p className="text-xs text-slate-500 dark:text-slate-400">Okres: {usage.period.label}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Data wystawienia: {invoiceDate}</p>
+                  {autoGenNumber ? (
+                    <p className="text-xs text-slate-400">Numer: automatyczny</p>
+                  ) : (
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-300">Numer: {manualInvoiceNumber}</p>
+                  )}
                   <Badge className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400">Szkic</Badge>
                 </div>
               </div>
@@ -553,7 +671,7 @@ export function PlatformInvoiceModal({
             <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
               <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700 dark:text-amber-400">
-                Wystawienie faktury jest nieodwracalne (można ją później cofnąć). Numer faktury zostanie wygenerowany automatycznie.
+                Wystawienie faktury jest nieodwracalne (można ją później cofnąć). {autoGenNumber ? 'Numer faktury zostanie wygenerowany automatycznie.' : `Numer faktury: ${manualInvoiceNumber}.`}
               </p>
             </div>
 

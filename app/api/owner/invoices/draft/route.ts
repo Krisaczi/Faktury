@@ -24,6 +24,9 @@ const DraftSchema = z.object({
   vatMode:          z.enum(['invoice', 'per_line']).optional().default('invoice'),
   priceIncludesTax: z.boolean().optional().default(false),
   vatNumber:        z.string().max(30).optional(),
+  invoiceNumber:    z.string().max(100).optional(),
+  invoiceDate:      z.string().optional(),
+  autoGenerateNumber: z.boolean().optional().default(true),
 });
 
 /**
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest) {
     entityId, entityType, periodYear, periodMonth, lineItems,
     notes, internalReference, dueDate,
     vatRate, vatMode, priceIncludesTax, vatNumber,
+    invoiceNumber, invoiceDate, autoGenerateNumber,
   } = parsed.data;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,6 +108,19 @@ export async function POST(req: NextRequest) {
     breakdown: taxResult.breakdown,
   };
 
+  // If a manual invoice number is provided, check uniqueness before insert
+  if (invoiceNumber && !autoGenerateNumber) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any)
+      .from('platform_invoices')
+      .select('id')
+      .eq('invoice_number', invoiceNumber)
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json({ error: 'Numer faktury już istnieje.' }, { status: 409 });
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invoice, error: invErr } = await (supabase as any)
     .from('platform_invoices')
@@ -121,12 +138,14 @@ export async function POST(req: NextRequest) {
       notes:                 notes ?? null,
       internal_reference:    internalReference ?? null,
       due_date:              dueDate ?? null,
-      metadata:              { plan: company.product_type ?? 'starter' },
+      metadata:              { plan: company.product_type ?? 'starter', autoGenerateNumber },
       vat_rate_percent:      invoiceVatRate,
       vat_number:            vatNumber ?? null,
       price_includes_tax:    priceIncludesTax,
       tax_total_cents:       taxResult.taxTotalCents,
       tax_breakdown:         taxBreakdown,
+      invoice_number:        autoGenerateNumber ? null : (invoiceNumber ?? null),
+      invoice_date:          invoiceDate ?? null,
     })
     .select('id')
     .single();
