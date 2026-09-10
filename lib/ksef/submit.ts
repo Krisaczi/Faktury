@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, publicEncrypt, constants } from 'node:crypto';
 
 /**
  * KSeF invoice submission service.
@@ -24,10 +24,6 @@ interface KsefCredentials {
   environment:  'test' | 'prod';
 }
 
-interface KsefCompanyInfo {
-  nip:     string;
-  companyId: string;
-}
 
 const KSEF_BASE_URLS = {
   test: 'https://api-test.ksef.mf.gov.pl/v2',
@@ -62,27 +58,32 @@ async function getKsefAccessToken(
     if (!challengeRes.ok) {
       return { error: `KSeF challenge failed: ${challengeRes.status}`, transient: true };
     }
-    const challenge = await challengeRes.json() as { challenge: string; timestamp: string; timestampMs: string };
+    const challenge = await challengeRes.json() as { challenge: string; timestamp: string; timestampMs: number };
 
     // 2. Get MF public key for token encryption
+    // KSeF returns a bare JSON array of certificate objects (not wrapped in { certificates: [...] }).
     const pubKeyRes = await fetch(`${baseUrl}/security/public-key-certificates`);
     if (!pubKeyRes.ok) {
       return { error: `KSeF public key fetch failed: ${pubKeyRes.status}`, transient: true };
     }
-    const pubKeyData = await pubKeyRes.json() as { certificates: { certificate: string; usage: string }[] };
-    const tokenCert = pubKeyData.certificates?.find(
-      (c) => c.usage?.includes('token') && !c.usage.includes('symmetric'),
-    );
-    if (!tokenCert) {
-      return { error: 'KSeF token encryption certificate not found', transient: false };
+    const pubKeyData = await pubKeyRes.json() as Array<{ certificate: string; usage?: string; publicKeyId?: string }>;
+    const certs = Array.isArray(pubKeyData) ? pubKeyData : [];
+    if (certs.length === 0) {
+      return { error: 'KSeF returned no public key certificates', transient: true };
     }
-    const pubKeyPem = `-----BEGIN CERTIFICATE-----\n${tokenCert.certificate}\n-----END CERTIFICATE-----`;
-    const pubKey = crypto.createPublicKey(pubKeyPem);
+    // Match the token encryption cert, with the same lenient fallback as the fetch-invoices route
+    const usageStr = (c: { usage?: string }) => JSON.stringify(c.usage ?? '').toLowerCase();
+    const tokenCert =
+      certs.find((c) => usageStr(c).includes('token')) ??
+      certs.find((c) => !usageStr(c).includes('symmetric')) ??
+      certs[0];
+    const pubKeyPem = `-----BEGIN CERTIFICATE-----\n${tokenCert.certificate.match(/.{1,64}/g)?.join('\n')}\n-----END CERTIFICATE-----`;
+    const pubKey = createPublicKey(pubKeyPem);
 
     // 3. Encrypt token
     const tokenPayload = `${credentials.token}|${challenge.timestampMs}`;
-    const encrypted = crypto.publicEncrypt(
-      { key: pubKey, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+    const encrypted = publicEncrypt(
+      { key: pubKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
       Buffer.from(tokenPayload, 'utf-8'),
     );
     const encryptedToken = encrypted.toString('base64');
@@ -90,31 +91,38 @@ async function getKsefAccessToken(
     // 4. Initiate token auth
     const initRes = await fetch(`${baseUrl}/auth/ksef-token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        challenge,
-        contextIdentifier: { type: 'nip', value: companyNip },
+        challenge: challenge.challenge,
+        contextIdentifier: { type: 'Nip', value: companyNip },
         encryptedToken,
+        publicKeyId: tokenCert.publicKeyId,
       }),
     });
     if (!initRes.ok) {
       const errBody = await initRes.text().catch(() => '');
       return { error: `KSeF auth init failed: ${initRes.status} ${errBody}`, transient: true };
     }
-    const initResult = await initRes.json() as { referenceNumber: string; authenticationToken: string };
+    const initResult = await initRes.json() as { referenceNumber: string; authenticationToken: { token: string; validUntil: string } };
 
     // 5. Poll auth status
     let authToken: string | null = null;
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1500));
       const statusRes = await fetch(`${baseUrl}/auth/${initResult.referenceNumber}`, {
-        headers: { Authorization: `Bearer ${initResult.authenticationToken}` },
+        headers: { Authorization: `Bearer ${initResult.authenticationToken.token}` },
       });
-      if (statusRes.status === 200) {
-        authToken = initResult.authenticationToken;
-        break;
-      }
-      if (statusRes.status !== 100 && !statusRes.ok) {
+      if (statusRes.ok) {
+        const statusData = await statusRes.json().catch(() => ({})) as { status?: { code?: number; description?: string } };
+        const code: number = statusData.status?.code ?? 0;
+        if (code === 200) {
+          authToken = initResult.authenticationToken.token;
+          break;
+        }
+        if (code !== 100) {
+          return { error: `KSeF authentication failed (status ${code}): ${statusData.status?.description ?? ''}`, transient: false };
+        }
+      } else if (statusRes.status !== 100) {
         return { error: `KSeF auth polling failed: ${statusRes.status}`, transient: true };
       }
     }
@@ -125,14 +133,14 @@ async function getKsefAccessToken(
     // 6. Redeem access token
     const redeemRes = await fetch(`${baseUrl}/auth/token/redeem`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${authToken}` },
     });
     if (!redeemRes.ok) {
       return { error: `KSeF token redeem failed: ${redeemRes.status}`, transient: true };
     }
-    const redeemResult = await redeemRes.json() as { accessToken: string };
+    const redeemResult = await redeemRes.json() as { accessToken: { token: string } };
 
-    return { accessToken: redeemResult.accessToken, baseUrl };
+    return { accessToken: redeemResult.accessToken.token, baseUrl };
   } catch (err) {
     return { error: `KSeF auth error: ${(err as Error).message}`, transient: true };
   }
@@ -324,5 +332,3 @@ export async function checkKsefStatus(params: {
   }
 }
 
-// Re-export for convenience
-import * as crypto from 'node:crypto';
