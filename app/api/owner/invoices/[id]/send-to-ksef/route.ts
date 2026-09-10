@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef, type KsefStatus } from '@/lib/ksef/submit';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 
@@ -56,12 +56,11 @@ export async function POST(
     return NextResponse.json({ error: 'Firma nie ma numeru NIP — wymagany do KSeF.' }, { status: 400 });
   }
 
-  // Load KSeF credentials using service client — the platform owner's company
-  // differs from the invoice's entity_id, so RLS on the user-scoped client
-  // would block the query. Owner authorization is already verified above.
-  const serviceClient = getSupabaseServiceClient();
+  // Load KSeF credentials. The "Owner can read all KSeF credentials" RLS policy
+  // allows the owner to read credentials for any company, so the authenticated
+  // client works here — no service client needed.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: credsRows } = await (serviceClient as any)
+  const { data: credsRows } = await (supabase as any)
     .from('ksef_credentials')
     .select('token, environment')
     .eq('company_id', invoice.entity_id)

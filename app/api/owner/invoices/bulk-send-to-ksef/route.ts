@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef } from '@/lib/ksef/submit';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 
@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Maksymalnie 50 faktur na raz.' }, { status: 400 });
   }
 
-  const serviceClient = getSupabaseServiceClient();
   const ownerIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const nowIso = new Date().toISOString();
   const correlationId = crypto.randomUUID();
@@ -98,10 +97,9 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Load credentials using service client — owner's company differs from
-      // the invoice's entity_id, so RLS on the user-scoped client blocks it.
+      // Owner RLS policy allows reading all companies' KSeF credentials.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: credsRows } = await (serviceClient as any)
+      const { data: credsRows } = await (supabase as any)
         .from('ksef_credentials')
         .select('token, environment')
         .eq('company_id', invoice.entity_id)
