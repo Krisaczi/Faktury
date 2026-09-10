@@ -1,10 +1,14 @@
-import { createHash, createPublicKey, publicEncrypt, constants } from 'node:crypto';
+import { createHash, createPublicKey, publicEncrypt, constants, randomBytes, createCipheriv } from 'node:crypto';
 
 /**
- * KSeF invoice submission service.
+ * KSeF 2.0 invoice submission service.
  *
- * Handles sending signed FA(2) XML to KSeF's /v2/invoices/send endpoint,
- * tracking submission status, and providing idempotent retry logic.
+ * Implements the session-based flow required by KSeF 2.0:
+ * 1. Authenticate via token-auth flow (challenge → encrypt → init → poll → redeem)
+ * 2. Open an interactive online session
+ * 3. Send the invoice within the session
+ * 4. Poll for invoice processing status
+ * 5. Close the session
  */
 
 export type KsefStatus = 'pending' | 'queued' | 'submitted' | 'accepted' | 'rejected' | 'failed';
@@ -24,25 +28,40 @@ interface KsefCredentials {
   environment:  'test' | 'prod';
 }
 
-
 const KSEF_BASE_URLS = {
   test: 'https://api-test.ksef.mf.gov.pl/v2',
   prod: 'https://api.ksef.mf.gov.pl/v2',
 } as const;
 
-/**
- * Generate a deterministic idempotency key from invoice ID.
- * This ensures retries for the same invoice don't create duplicate submissions.
- */
 export function generateIdempotencyKey(invoiceId: string): string {
   return createHash('sha256').update(`ksef-submit:${invoiceId}`).digest('hex');
 }
 
-/**
- * Fetch a KSeF access token using the token-auth flow.
- * Reuses the same challenge → encrypt → initiate → poll → redeem pattern
- * as the invoice fetch route.
- */
+// ─── Auth ──────────────────────────────────────────────────────────────────
+
+interface KsefPublicKeyCert {
+  certificateId: string;
+  publicKeyId: string;
+  certificate: string;
+  usage?: string;
+}
+
+async function getMfPublicKey(baseUrl: string): Promise<{ publicKeyId: string; publicKey: ReturnType<typeof createPublicKey> }> {
+  const res = await fetch(`${baseUrl}/security/public-key-certificates`);
+  if (!res.ok) throw new Error(`Failed to fetch MF public keys (${res.status})`);
+  const certs: KsefPublicKeyCert[] = await res.json();
+  if (!certs.length) throw new Error('No MF public key certificates returned');
+
+  const usageStr = (c: KsefPublicKeyCert) => JSON.stringify(c.usage ?? '').toLowerCase();
+  const tokenCert =
+    certs.find((c) => usageStr(c).includes('token')) ??
+    certs.find((c) => !usageStr(c).includes('symmetric')) ??
+    certs[0];
+
+  const pem = `-----BEGIN CERTIFICATE-----\n${tokenCert.certificate.match(/.{1,64}/g)?.join('\n')}\n-----END CERTIFICATE-----`;
+  return { publicKeyId: tokenCert.publicKeyId, publicKey: createPublicKey(pem) };
+}
+
 async function getKsefAccessToken(
   credentials: KsefCredentials,
   companyNip: string,
@@ -61,30 +80,20 @@ async function getKsefAccessToken(
     const challenge = await challengeRes.json() as { challenge: string; timestamp: string; timestampMs: number };
 
     // 2. Get MF public key for token encryption
-    // KSeF returns a bare JSON array of certificate objects (not wrapped in { certificates: [...] }).
-    const pubKeyRes = await fetch(`${baseUrl}/security/public-key-certificates`);
-    if (!pubKeyRes.ok) {
-      return { error: `KSeF public key fetch failed: ${pubKeyRes.status}`, transient: true };
-    }
-    const pubKeyData = await pubKeyRes.json() as Array<{ certificate: string; usage?: string; publicKeyId?: string }>;
-    const certs = Array.isArray(pubKeyData) ? pubKeyData : [];
-    if (certs.length === 0) {
-      return { error: 'KSeF returned no public key certificates', transient: true };
-    }
-    // Match the token encryption cert, with the same lenient fallback as the fetch-invoices route
-    const usageStr = (c: { usage?: string }) => JSON.stringify(c.usage ?? '').toLowerCase();
-    const tokenCert =
-      certs.find((c) => usageStr(c).includes('token')) ??
-      certs.find((c) => !usageStr(c).includes('symmetric')) ??
-      certs[0];
-    const pubKeyPem = `-----BEGIN CERTIFICATE-----\n${tokenCert.certificate.match(/.{1,64}/g)?.join('\n')}\n-----END CERTIFICATE-----`;
-    const pubKey = createPublicKey(pubKeyPem);
+    const { publicKeyId, publicKey } = await getMfPublicKey(baseUrl);
 
     // 3. Encrypt token
     const tokenPayload = `${credentials.token}|${challenge.timestampMs}`;
+    const plaintextBuf = Buffer.from(tokenPayload, 'utf-8');
+    if (plaintextBuf.length > 190) {
+      return {
+        error: `KSeF token too long (${plaintextBuf.length} bytes, max 190). Please re-enter a single token in Settings.`,
+        transient: false,
+      };
+    }
     const encrypted = publicEncrypt(
-      { key: pubKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-      Buffer.from(tokenPayload, 'utf-8'),
+      { key: publicKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+      plaintextBuf,
     );
     const encryptedToken = encrypted.toString('base64');
 
@@ -96,12 +105,12 @@ async function getKsefAccessToken(
         challenge: challenge.challenge,
         contextIdentifier: { type: 'Nip', value: companyNip },
         encryptedToken,
-        publicKeyId: tokenCert.publicKeyId,
+        publicKeyId,
       }),
     });
     if (!initRes.ok) {
       const errBody = await initRes.text().catch(() => '');
-      return { error: `KSeF auth init failed: ${initRes.status} ${errBody}`, transient: true };
+      return { error: `KSeF auth init failed: ${initRes.status} ${errBody.slice(0, 300)}`, transient: true };
     }
     const initResult = await initRes.json() as { referenceNumber: string; authenticationToken: { token: string; validUntil: string } };
 
@@ -146,17 +155,194 @@ async function getKsefAccessToken(
   }
 }
 
-/**
- * Submit a signed FA(2) XML invoice to KSeF.
- *
- * This is the main entry point for KSeF submission. It:
- * 1. Gets KSeF credentials for the company
- * 2. Authenticates with KSeF using the token-auth flow
- * 3. POSTs the signed XML to /v2/invoices/send
- * 4. Returns the result with KSeF number and status
- *
- * Idempotent: if the invoice already has a ksef_number, returns it without re-submitting.
- */
+// ─── Session-based invoice submission ──────────────────────────────────────
+
+async function getSymmetricKeyCert(baseUrl: string): Promise<{ publicKeyId: string; publicKey: ReturnType<typeof createPublicKey> }> {
+  const res = await fetch(`${baseUrl}/security/public-key-certificates`);
+  if (!res.ok) throw new Error(`Failed to fetch MF public keys (${res.status})`);
+  const certs: KsefPublicKeyCert[] = await res.json();
+  if (!certs.length) throw new Error('No MF public key certificates returned');
+
+  const usageStr = (c: KsefPublicKeyCert) => JSON.stringify(c.usage ?? '').toLowerCase();
+  const symCert =
+    certs.find((c) => usageStr(c).includes('symmetric')) ??
+    certs.find((c) => !usageStr(c).includes('token')) ??
+    certs[0];
+
+  const pem = `-----BEGIN CERTIFICATE-----\n${symCert.certificate.match(/.{1,64}/g)?.join('\n')}\n-----END CERTIFICATE-----`;
+  return { publicKeyId: symCert.publicKeyId, publicKey: createPublicKey(pem) };
+}
+
+async function openOnlineSession(
+  baseUrl: string,
+  accessToken: string,
+): Promise<{ sessionId: string; referenceNumber: string; aesKey: Buffer; initVector: Buffer } | { error: string; transient: boolean }> {
+  try {
+    // Generate AES-256 key and IV for session encryption
+    const aesKey = randomBytes(32);
+    const initVector = randomBytes(16);
+
+    // Encrypt the AES key with the KSeF SymmetricKeyEncryption public key
+    const { publicKey, publicKeyId } = await getSymmetricKeyCert(baseUrl);
+    const encryptedKey = publicEncrypt(
+      { key: publicKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+      aesKey,
+    ).toString('base64');
+
+    const res = await fetch(`${baseUrl}/sessions/online`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        invoiceVersion: 'v3',
+        encryptionInfo: {
+          encryptedKey,
+          initVector: initVector.toString('base64'),
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      return { error: `KSeF session open failed: ${res.status} ${errBody.slice(0, 300)}`, transient: res.status >= 500 };
+    }
+
+    const data = await res.json() as { referenceNumber: string; sessionId?: string; id?: string };
+    const sessionId = data.sessionId ?? data.id ?? data.referenceNumber;
+
+    return { sessionId, referenceNumber: data.referenceNumber, aesKey, initVector };
+  } catch (err) {
+    return { error: `KSeF session open error: ${(err as Error).message}`, transient: true };
+  }
+}
+
+async function closeOnlineSession(
+  baseUrl: string,
+  accessToken: string,
+  referenceNumber: string,
+): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/sessions/online/${referenceNumber}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    // Best-effort — don't fail the submission if close fails
+  }
+}
+
+async function sendInvoiceInSession(
+  baseUrl: string,
+  accessToken: string,
+  sessionRef: string,
+  signedXml: string,
+  aesKey: Buffer,
+  initVector: Buffer,
+): Promise<{ success: boolean; invoiceId?: string; status: KsefStatus; response: Record<string, unknown>; error?: string; transient: boolean }> {
+  try {
+    const xmlBuffer = Buffer.from(signedXml, 'utf-8');
+    const invoiceHash = createHash('sha256').update(xmlBuffer).digest('base64');
+    const invoiceSize = xmlBuffer.length;
+
+    // Encrypt the XML with AES-256-CBC
+    const cipher = createCipheriv('aes-256-cbc', aesKey, initVector);
+    const encrypted = Buffer.concat([cipher.update(xmlBuffer), cipher.final()]);
+    const encryptedInvoice = encrypted.toString('base64');
+
+    const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}/invoices`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        encrypted: {
+          encryptedInvoice,
+          invoiceHash,
+          invoiceSize,
+        },
+      }),
+    });
+
+    const responseBody = await res.json().catch(() => ({})) as Record<string, unknown>;
+
+    if (res.ok || res.status === 201) {
+      const invoiceId = (responseBody.id ?? responseBody.invoiceId) as string | undefined;
+      return {
+        success: true,
+        invoiceId,
+        status: 'submitted',
+        response: responseBody,
+        transient: false,
+      };
+    }
+
+    if (res.status === 400 || res.status === 422) {
+      return {
+        success: false,
+        status: 'rejected',
+        response: responseBody,
+        error: (responseBody.message ?? responseBody.error ?? 'KSeF rejected the invoice') as string,
+        transient: false,
+      };
+    }
+
+    return {
+      success: false,
+      status: 'queued',
+      response: responseBody,
+      error: `KSeF send failed: HTTP ${res.status}`,
+      transient: true,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      status: 'queued',
+      response: { error: (err as Error).message },
+      error: `KSeF send error: ${(err as Error).message}`,
+      transient: true,
+    };
+  }
+}
+
+async function checkInvoiceStatus(
+  baseUrl: string,
+  accessToken: string,
+  invoiceId: string,
+): Promise<{ ksefNumber?: string; status: KsefStatus; processingCode?: number }> {
+  try {
+    const res = await fetch(`${baseUrl}/invoices/${invoiceId}/status`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      return { status: 'submitted' };
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const statusObj = data.status as { code?: number } | undefined;
+    const processingCode = (data.processingCode ?? statusObj?.code ?? 0) as number;
+    const ksefNumber = (data.ksefReferenceNumber ?? data.ksefNumber ?? data.elementReferenceNumber) as string | undefined;
+
+    if (processingCode === 200 || ksefNumber) {
+      return { ksefNumber, status: 'accepted', processingCode };
+    }
+    if (processingCode === 400 || processingCode === 422) {
+      return { status: 'rejected', processingCode };
+    }
+
+    return { status: 'submitted', processingCode };
+  } catch {
+    return { status: 'submitted' };
+  }
+}
+
+// ─── Main entry point ──────────────────────────────────────────────────────
+
 export async function submitToKsef(params: {
   invoiceId:       string;
   signedXml:       string;
@@ -178,7 +364,7 @@ export async function submitToKsef(params: {
     };
   }
 
-  // Step 1: Get access token
+  // Step 1: Authenticate
   const authResult = await getKsefAccessToken(credentials, companyNip);
   if ('error' in authResult) {
     return {
@@ -192,69 +378,77 @@ export async function submitToKsef(params: {
 
   const { accessToken, baseUrl } = authResult;
 
-  // Step 2: Submit the invoice XML
-  try {
-    const sendRes = await fetch(`${baseUrl}/invoices/send`, {
-      method: 'POST',
-      headers: {
-        Authorization:   `Bearer ${accessToken}`,
-        'Content-Type':  'application/octet-stream',
-        'X-Idempotency-Key': idempotencyKey,
-      },
-      body: Buffer.from(signedXml, 'utf-8'),
-    });
-
-    const responseBody = await sendRes.json().catch(() => ({})) as Record<string, unknown>;
-
-    if (sendRes.ok || sendRes.status === 201) {
-      // Success — KSeF accepted the invoice
-      const ksefNumber = (responseBody.ksefReferenceNumber ?? responseBody.elementReferenceNumber ?? responseBody.ksefNumber) as string | undefined;
-      const submissionId = (responseBody.submissionId ?? responseBody.referenceNumber ?? responseBody.sessionId) as string | undefined;
-
-      return {
-        success:       true,
-        ksefNumber,
-        submissionId,
-        status:        'submitted',
-        response:      responseBody,
-        transient:     false,
-      };
-    }
-
-    // KSeF rejected the invoice (validation error)
-    if (sendRes.status === 400 || sendRes.status === 422) {
-      return {
-        success:   false,
-        status:    'rejected',
-        response:  responseBody,
-        error:     (responseBody.message ?? responseBody.error ?? 'KSeF rejected the invoice') as string,
-        transient: false,
-      };
-    }
-
-    // Transient error (5xx, 429, etc.) — can retry
+  // Step 2: Open an interactive session
+  const sessionResult = await openOnlineSession(baseUrl, accessToken);
+  if ('error' in sessionResult) {
     return {
       success:   false,
-      status:    'queued',
-      response:  responseBody,
-      error:     `KSeF send failed: HTTP ${sendRes.status}`,
-      transient: true,
-    };
-  } catch (err) {
-    return {
-      success:   false,
-      status:    'queued',
-      response:  { error: (err as Error).message },
-      error:     `KSeF send error: ${(err as Error).message}`,
-      transient: true,
+      status:    sessionResult.transient ? 'queued' : 'rejected',
+      response:  { error: sessionResult.error },
+      error:     sessionResult.error,
+      transient: sessionResult.transient,
     };
   }
+
+  const { referenceNumber: sessionRef, aesKey, initVector } = sessionResult;
+
+  // Step 3: Send the invoice within the session
+  const sendResult = await sendInvoiceInSession(baseUrl, accessToken, sessionRef, signedXml, aesKey, initVector);
+
+  // Step 4: If send succeeded, poll for processing status (a few attempts)
+  if (sendResult.success && sendResult.invoiceId) {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const statusResult = await checkInvoiceStatus(baseUrl, accessToken, sendResult.invoiceId);
+      if (statusResult.status === 'accepted' && statusResult.ksefNumber) {
+        // Step 5: Close the session
+        await closeOnlineSession(baseUrl, accessToken, sessionRef);
+        return {
+          success:       true,
+          ksefNumber:    statusResult.ksefNumber,
+          submissionId:  sendResult.invoiceId,
+          status:        'accepted',
+          response:      { ...sendResult.response, ksefNumber: statusResult.ksefNumber, processingCode: statusResult.processingCode },
+          transient:     false,
+        };
+      }
+      if (statusResult.status === 'rejected') {
+        await closeOnlineSession(baseUrl, accessToken, sessionRef);
+        return {
+          success:   false,
+          status:    'rejected',
+          response:  { ...sendResult.response, processingCode: statusResult.processingCode },
+          error:     'KSeF rejected the invoice during processing',
+          transient: false,
+        };
+      }
+    }
+
+    // Still processing after 3 polls — close session, return submitted status
+    await closeOnlineSession(baseUrl, accessToken, sessionRef);
+    return {
+      success:       true,
+      submissionId:  sendResult.invoiceId,
+      status:        'submitted',
+      response:      sendResult.response,
+      transient:     false,
+    };
+  }
+
+  // Send failed — close the session and return the error
+  await closeOnlineSession(baseUrl, accessToken, sessionRef);
+
+  return {
+    success:   sendResult.success,
+    status:    sendResult.status,
+    response:  sendResult.response,
+    error:     sendResult.error,
+    transient: sendResult.transient,
+  };
 }
 
-/**
- * Check KSeF submission status by querying KSeF.
- * Used when we have a submission ID but no final KSeF number yet.
- */
+// ─── Status check (for polling previously submitted invoices) ──────────────
+
 export async function checkKsefStatus(params: {
   submissionId:   string;
   credentials:    KsefCredentials;
@@ -272,63 +466,33 @@ export async function checkKsefStatus(params: {
   }
 
   const { accessToken, baseUrl } = authResult;
+  const statusResult = await checkInvoiceStatus(baseUrl, accessToken, params.submissionId);
 
-  try {
-    const statusRes = await fetch(`${baseUrl}/invoices/status/${params.submissionId}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    const responseBody = await statusRes.json().catch(() => ({})) as Record<string, unknown>;
-
-    if (statusRes.ok) {
-      const processingCode = (responseBody.processingCode ?? responseBody.status) as number | string | undefined;
-      const ksefNumber = (responseBody.ksefReferenceNumber ?? responseBody.ksefNumber) as string | undefined;
-
-      if (processingCode === 200 || processingCode === 'accepted' || ksefNumber) {
-        return {
-          success:     true,
-          ksefNumber,
-          submissionId: params.submissionId,
-          status:      'accepted',
-          response:    responseBody,
-          transient:   false,
-        };
-      }
-
-      if (processingCode === 400 || processingCode === 'rejected') {
-        return {
-          success:   false,
-          status:    'rejected',
-          response:  responseBody,
-          error:     (responseBody.message ?? 'KSeF rejected the invoice') as string,
-          transient: false,
-        };
-      }
-
-      // Still processing
-      return {
-        success:   false,
-        status:    'submitted',
-        response:  responseBody,
-        transient: true,
-      };
-    }
-
+  if (statusResult.status === 'accepted' && statusResult.ksefNumber) {
     return {
-      success:   false,
-      status:    'queued',
-      response:  responseBody,
-      error:     `Status check failed: HTTP ${statusRes.status}`,
-      transient: true,
-    };
-  } catch (err) {
-    return {
-      success:   false,
-      status:    'queued',
-      response:  { error: (err as Error).message },
-      error:     `Status check error: ${(err as Error).message}`,
-      transient: true,
+      success:     true,
+      ksefNumber:  statusResult.ksefNumber,
+      submissionId: params.submissionId,
+      status:      'accepted',
+      response:    { processingCode: statusResult.processingCode },
+      transient:   false,
     };
   }
-}
 
+  if (statusResult.status === 'rejected') {
+    return {
+      success:   false,
+      status:    'rejected',
+      response:  { processingCode: statusResult.processingCode },
+      error:     'KSeF rejected the invoice',
+      transient: false,
+    };
+  }
+
+  return {
+    success:   false,
+    status:    'submitted',
+    response:  { processingCode: statusResult.processingCode },
+    transient: true,
+  };
+}
