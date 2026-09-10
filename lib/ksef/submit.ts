@@ -197,8 +197,12 @@ async function openOnlineSession(
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        invoiceVersion: 'v3',
-        encryptionInfo: {
+        formCode: {
+          systemCode: 'FA (3)',
+          schemaVersion: '1-0E',
+          value: 'FA',
+        },
+        encryption: {
           encryptedKey,
           initVector: initVector.toString('base64'),
         },
