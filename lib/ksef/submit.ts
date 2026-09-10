@@ -203,8 +203,8 @@ async function openOnlineSession(
           value: 'FA',
         },
         encryption: {
-          encryptedKey,
-          initVector: initVector.toString('base64'),
+          encryptedSymmetricKey: encryptedKey,
+          initializationVector: initVector.toString('base64'),
         },
       }),
     });
