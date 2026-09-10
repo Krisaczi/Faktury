@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef, type KsefStatus } from '@/lib/ksef/submit';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 
@@ -8,24 +8,42 @@ import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
  *
  * Manually submit (or resubmit) a platform invoice to KSeF.
  * Returns the current KSeF status and response.
+ *
+ * Supports two auth modes:
+ * - User session (cookies): normal owner-initiated submission from the UI
+ * - Service key (Authorization header): internal calls from the ksefRetryWorker edge function
  */
 export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const supabase = await getSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authHeader = _req.headers.get('authorization') ?? '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isInternalCall = !!(serviceKey && authHeader === `Bearer ${serviceKey}`);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: u } = await (supabase as any)
-    .from('users')
-    .select('role, company_id')
-    .eq('id', user.id)
-    .maybeSingle();
+  let supabase: any;
+  let actorId: string;
 
-  if (u?.role !== 'owner') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (isInternalCall) {
+    supabase = getSupabaseServiceClient();
+    actorId = process.env.OWNER_USER_ID ?? '00000000-0000-0000-0000-000000000000';
+  } else {
+    supabase = await getSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: u } = await (supabase as any)
+      .from('users')
+      .select('role, company_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (u?.role !== 'owner') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    actorId = user.id;
   }
 
   // Load the invoice
@@ -160,7 +178,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('platform_invoice_audit').insert({
     invoice_id: params.id,
-    actor_id:   user.id,
+    actor_id:   actorId,
     action:     'ksef_submission',
     ip:         ownerIp,
     payload:    {
@@ -179,7 +197,7 @@ export async function POST(
   await (supabase as any).from('ksef_submission_audit').insert({
     invoice_id:       params.id,
     invoice_type:     'platform',
-    actor_id:         user.id,
+    actor_id:         actorId,
     attempt_result:   result.status,
     response_payload: result.response,
     error_message:    result.error ?? null,
