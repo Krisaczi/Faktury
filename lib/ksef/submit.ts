@@ -264,8 +264,10 @@ async function sendInvoiceInSession(
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        fileHash: invoiceHash,
-        fileSize: invoiceSize,
+        invoiceHash,
+        invoiceSize,
+        fileHash: createHash('sha256').update(encrypted).digest('base64'),
+        fileSize: encrypted.length,
         encrypted: {
           encryptedInvoice,
         },
