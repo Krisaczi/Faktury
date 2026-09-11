@@ -265,9 +265,9 @@ async function sendInvoiceInSession(
       },
       body: JSON.stringify({
         invoiceHash,
+        invoiceSize,
         encrypted: {
           encryptedInvoice,
-          invoiceSize,
         },
       }),
     });
