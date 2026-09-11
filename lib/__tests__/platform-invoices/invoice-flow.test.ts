@@ -222,7 +222,7 @@ describe('platform invoice: reporting page', () => {
 describe('platform invoice: sidebar navigation', () => {
   it('adds platform invoices link for owner role', async () => {
     const src = await readSrc('components/layout/sidebar.tsx');
-    assert.match(src, \/admin\/platform-invoices\/, 'must link to /admin/platform-invoices');
+    assert.match(src, /admin\/platform-invoices/, 'must link to /admin/platform-invoices');
     assert.match(src, /Faktury platformowe/, 'must have "Faktury platformowe" label');
   });
 });
