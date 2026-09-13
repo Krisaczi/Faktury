@@ -238,6 +238,45 @@ async function closeOnlineSession(
   }
 }
 
+async function getSessionStatus(
+  baseUrl: string,
+  accessToken: string,
+  sessionRef: string,
+): Promise<{ code: number; description?: string }> {
+  try {
+    const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!res.ok) return { code: 0 };
+    const data = await res.json() as { status?: { code?: number; description?: string } };
+    return { code: data.status?.code ?? 0, description: data.status?.description };
+  } catch {
+    return { code: 0 };
+  }
+}
+
+async function listSessionInvoices(
+  baseUrl: string,
+  accessToken: string,
+  sessionRef: string,
+): Promise<Array<{ ksefNumber?: string; invoiceHash?: string; processingCode?: number }>> {
+  try {
+    const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}/invoices`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { invoices?: Array<Record<string, unknown>> };
+    if (!data.invoices || !Array.isArray(data.invoices)) return [];
+    return data.invoices.map((inv) => ({
+      ksefNumber: (inv.ksefReferenceNumber ?? inv.ksefNumber ?? inv.elementReferenceNumber) as string | undefined,
+      invoiceHash: inv.invoiceHash as string | undefined,
+      processingCode: (inv.processingCode ?? (inv.status as { code?: number } | undefined)?.code) as number | undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function sendInvoiceInSession(
   baseUrl: string,
   accessToken: string,
@@ -275,10 +314,10 @@ async function sendInvoiceInSession(
     const responseBody = await res.json().catch(() => ({})) as Record<string, unknown>;
 
     if (res.ok || res.status === 201) {
-      const invoiceId = (responseBody.id ?? responseBody.invoiceId) as string | undefined;
+      const invoiceRef = (responseBody.referenceNumber ?? responseBody.id ?? responseBody.invoiceId) as string | undefined;
       return {
         success: true,
-        invoiceId,
+        invoiceId: invoiceRef,
         status: 'submitted',
         response: responseBody,
         transient: false,
@@ -399,55 +438,70 @@ export async function submitToKsef(params: {
   // Step 3: Send the invoice within the session
   const sendResult = await sendInvoiceInSession(baseUrl, accessToken, sessionRef, signedXml, aesKey, initVector);
 
-  // Step 4: If send succeeded, poll for processing status (a few attempts)
-  if (sendResult.success && sendResult.invoiceId) {
-    for (let i = 0; i < 3; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const statusResult = await checkInvoiceStatus(baseUrl, accessToken, sendResult.invoiceId);
-      if (statusResult.status === 'accepted' && statusResult.ksefNumber) {
-        // Step 5: Close the session
-        await closeOnlineSession(baseUrl, accessToken, sessionRef);
-        return {
-          success:       true,
-          ksefNumber:    statusResult.ksefNumber,
-          submissionId:  sendResult.invoiceId,
-          status:        'accepted',
-          response:      { ...sendResult.response, ksefNumber: statusResult.ksefNumber, processingCode: statusResult.processingCode },
-          transient:     false,
-        };
-      }
-      if (statusResult.status === 'rejected') {
-        await closeOnlineSession(baseUrl, accessToken, sessionRef);
-        return {
-          success:   false,
-          status:    'rejected',
-          response:  { ...sendResult.response, processingCode: statusResult.processingCode },
-          error:     'KSeF rejected the invoice during processing',
-          transient: false,
-        };
-      }
-    }
-
-    // Still processing after 3 polls — close session, return submitted status
+  if (!sendResult.success) {
     await closeOnlineSession(baseUrl, accessToken, sessionRef);
     return {
-      success:       true,
-      submissionId:  sendResult.invoiceId,
-      status:        'submitted',
-      response:      sendResult.response,
-      transient:     false,
+      success:   sendResult.success,
+      status:    sendResult.status,
+      response:  sendResult.response,
+      error:     sendResult.error,
+      transient: sendResult.transient,
     };
   }
 
-  // Send failed — close the session and return the error
+  // Step 4: Close the session — KSeF only processes invoices after session close
   await closeOnlineSession(baseUrl, accessToken, sessionRef);
 
+  // Step 5: Poll session status until processing completes
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const sessionStatus = await getSessionStatus(baseUrl, accessToken, sessionRef);
+
+    // Code 200 = session finished successfully, 4xx = failed
+    if (sessionStatus.code === 200) {
+      // Step 6: List session invoices to get KSeF numbers
+      const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
+      const matched = invoices[0]; // we sent one invoice
+      if (matched?.ksefNumber) {
+        return {
+          success:      true,
+          ksefNumber:   matched.ksefNumber,
+          submissionId: sendResult.invoiceId,
+          status:       'accepted',
+          response:     { ...sendResult.response, ksefNumber: matched.ksefNumber, processingCode: matched.processingCode },
+          transient:    false,
+        };
+      }
+      // Session completed but no KSeF number yet — invoice may still be processing
+      return {
+        success:      true,
+        submissionId: sendResult.invoiceId,
+        status:       'submitted',
+        response:     { ...sendResult.response, sessionStatus: sessionStatus.code },
+        transient:    false,
+      };
+    }
+
+    if (sessionStatus.code >= 400 && sessionStatus.code < 500) {
+      const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
+      const matched = invoices[0];
+      return {
+        success:   false,
+        status:    'rejected',
+        response:  { ...sendResult.response, sessionCode: sessionStatus.code, sessionDescription: sessionStatus.description, processingCode: matched?.processingCode },
+        error:     `KSeF session failed: ${sessionStatus.description ?? `code ${sessionStatus.code}`}`,
+        transient: false,
+      };
+    }
+  }
+
+  // Still processing after 10 polls (20 seconds) — return submitted status
   return {
-    success:   sendResult.success,
-    status:    sendResult.status,
-    response:  sendResult.response,
-    error:     sendResult.error,
-    transient: sendResult.transient,
+    success:      true,
+    submissionId: sendResult.invoiceId,
+    status:       'submitted',
+    response:     sendResult.response,
+    transient:    false,
   };
 }
 
