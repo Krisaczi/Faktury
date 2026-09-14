@@ -227,14 +227,19 @@ async function closeOnlineSession(
   baseUrl: string,
   accessToken: string,
   referenceNumber: string,
-): Promise<void> {
+): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   try {
-    await fetch(`${baseUrl}/sessions/online/${referenceNumber}`, {
+    const res = await fetch(`${baseUrl}/sessions/online/${referenceNumber}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
     });
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    return { ok: res.ok, status: res.status, body };
   } catch {
-    // Best-effort — don't fail the submission if close fails
+    return { ok: false, status: 0, body: { error: 'fetch failed' } };
   }
 }
 
@@ -242,14 +247,18 @@ async function getSessionStatus(
   baseUrl: string,
   accessToken: string,
   sessionRef: string,
-): Promise<{ code: number; description?: string }> {
+): Promise<{ code: number; description?: string; raw?: Record<string, unknown> }> {
   try {
     const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     });
-    if (!res.ok) return { code: 0 };
-    const data = await res.json() as { status?: { code?: number; description?: string } };
-    return { code: data.status?.code ?? 0, description: data.status?.description };
+    if (!res.ok) return { code: 0, raw: { httpStatus: res.status } };
+    const data = await res.json() as Record<string, unknown>;
+    // KSeF 2.0: session status may be in top-level or nested
+    const statusObj = (data.status as { code?: number; description?: string } | undefined);
+    const code = (data.processingCode ?? data.code ?? statusObj?.code ?? 0) as number;
+    const description = (data.description ?? statusObj?.description) as string | undefined;
+    return { code, description, raw: data };
   } catch {
     return { code: 0 };
   }
@@ -450,14 +459,16 @@ export async function submitToKsef(params: {
   }
 
   // Step 4: Close the session — KSeF only processes invoices after session close
-  await closeOnlineSession(baseUrl, accessToken, sessionRef);
+  const closeResult = await closeOnlineSession(baseUrl, accessToken, sessionRef);
 
   // Step 5: Poll session status until processing completes
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
+  const pollLog: Array<{ attempt: number; code: number; description?: string }> = [];
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
     const sessionStatus = await getSessionStatus(baseUrl, accessToken, sessionRef);
+    pollLog.push({ attempt: i + 1, code: sessionStatus.code, description: sessionStatus.description });
 
-    // Code 200 = session finished successfully, 4xx = failed
+    // Code 200 = session finished successfully
     if (sessionStatus.code === 200) {
       // Step 6: List session invoices to get KSeF numbers
       const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
@@ -468,16 +479,51 @@ export async function submitToKsef(params: {
           ksefNumber:   matched.ksefNumber,
           submissionId: sendResult.invoiceId,
           status:       'accepted',
-          response:     { ...sendResult.response, ksefNumber: matched.ksefNumber, processingCode: matched.processingCode },
+          response:     {
+            ...sendResult.response,
+            ksefNumber:       matched.ksefNumber,
+            processingCode:   matched.processingCode,
+            closeStatus:      closeResult.status,
+            closeBody:        closeResult.body,
+            pollLog,
+          },
           transient:    false,
         };
       }
-      // Session completed but no KSeF number yet — invoice may still be processing
+      // Session completed but no KSeF number — try per-invoice status check as fallback
+      if (sendResult.invoiceId) {
+        const invStatus = await checkInvoiceStatus(baseUrl, accessToken, sendResult.invoiceId);
+        if (invStatus.ksefNumber) {
+          return {
+            success:      true,
+            ksefNumber:   invStatus.ksefNumber,
+            submissionId: sendResult.invoiceId,
+            status:       'accepted',
+            response:     {
+              ...sendResult.response,
+              ksefNumber:       invStatus.ksefNumber,
+              processingCode:   invStatus.processingCode,
+              closeStatus:      closeResult.status,
+              pollLog,
+              fallbackCheck:    true,
+            },
+            transient:    false,
+          };
+        }
+      }
+      // Session completed but no KSeF number found anywhere
       return {
         success:      true,
         submissionId: sendResult.invoiceId,
         status:       'submitted',
-        response:     { ...sendResult.response, sessionStatus: sessionStatus.code },
+        response:     {
+          ...sendResult.response,
+          sessionStatus:    sessionStatus.code,
+          closeStatus:      closeResult.status,
+          closeBody:        closeResult.body,
+          pollLog,
+          sessionInvoices:  invoices,
+        },
         transient:    false,
       };
     }
@@ -488,19 +534,33 @@ export async function submitToKsef(params: {
       return {
         success:   false,
         status:    'rejected',
-        response:  { ...sendResult.response, sessionCode: sessionStatus.code, sessionDescription: sessionStatus.description, processingCode: matched?.processingCode },
+        response:  {
+          ...sendResult.response,
+          sessionCode:        sessionStatus.code,
+          sessionDescription: sessionStatus.description,
+          processingCode:     matched?.processingCode,
+          closeStatus:        closeResult.status,
+          closeBody:          closeResult.body,
+          pollLog,
+        },
         error:     `KSeF session failed: ${sessionStatus.description ?? `code ${sessionStatus.code}`}`,
         transient: false,
       };
     }
   }
 
-  // Still processing after 10 polls (20 seconds) — return submitted status
+  // Still processing after 15 polls (45 seconds) — return submitted status with diagnostics
   return {
     success:      true,
     submissionId: sendResult.invoiceId,
     status:       'submitted',
-    response:     sendResult.response,
+    response:     {
+      ...sendResult.response,
+      closeStatus: closeResult.status,
+      closeBody:   closeResult.body,
+      pollLog,
+      message:     'Session still processing after polling timeout',
+    },
     transient:    false,
   };
 }
