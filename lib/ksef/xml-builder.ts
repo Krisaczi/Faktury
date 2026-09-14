@@ -225,13 +225,11 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
     </Adnotacje>`;
 }
 
-function buildRozliczenie(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  const totalNet = vatGroups.reduce((s, g) => s + g.netTotal, 0);
+function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
   const totalGross = inv.gross_total;
 
   return `    <Rozliczenie>
       <DoZaplaty>${dec2(totalGross)}</DoZaplaty>
-      <DoRozliczenia>${dec2(totalNet)}</DoRozliczenia>
     </Rozliczenie>`;
 }
 
@@ -258,7 +256,7 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const podmiot2    = buildPodmiot2(invoice);
   const faWiersze   = buildFaWiersze(invoice);
   const totals      = buildTotalsAndAdnotacje(invoice, vatGroups);
-  const rozliczenie = buildRozliczenie(invoice, vatGroups);
+  const rozliczenie = buildRozliczenie(invoice);
   const platnosc    = buildPlatnosc(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
