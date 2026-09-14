@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { AppRole } from '@/lib/permissions';
+import { normalizePlanId } from '@/lib/plans/plan-mapping';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export interface CompanyUser {
   active:       boolean;
   company_id:   string | null;
   company_name: string | null;
+  plan:         string;
   created_at:   string;
 }
 
@@ -121,6 +123,7 @@ export async function getUser(
         active:       u.active ?? true,
         company_id:   u.company_id,
         company_name: null,
+        plan:         'starter',
         created_at:   u.created_at,
       },
     };
@@ -172,10 +175,18 @@ export async function getUsersWithRoles(params: {
     )) as string[];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [profilesRes, companiesRes] = await Promise.all([
+    const [profilesRes, companiesRes, assignmentsRes] = await Promise.all([
       (supabase as any).from('profiles').select('id, full_name').in('id', userIds),
       companyIds.length > 0
-        ? (supabase as any).from('companies').select('id, name').in('id', companyIds)
+        ? (supabase as any).from('companies').select('id, name, plan').in('id', companyIds)
+        : Promise.resolve({ data: [] }),
+      companyIds.length > 0
+        ? (supabase as any)
+            .from('plan_assignments')
+            .select('entity_id, plan_id')
+            .in('entity_id', companyIds)
+            .eq('entity_type', 'company')
+            .eq('status', 'active')
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -185,8 +196,14 @@ export async function getUsersWithRoles(params: {
     const companyMap = new Map(
       (companiesRes.data ?? []).map((c: { id: string; name: string }) => [c.id, c.name])
     );
+    const companyPlanMap = new Map(
+      (companiesRes.data ?? []).map((c: { id: string; plan: string | null }) => [c.id, normalizePlanId(c.plan)])
+    );
+    const assignmentPlanMap = new Map(
+      (assignmentsRes.data ?? []).map((a: { entity_id: string; plan_id: string | null }) => [a.entity_id, normalizePlanId(a.plan_id)])
+    );
 
-    const rows: CompanyUser[] = (data ?? []).map((u: {
+    const rows: CompanyUser[] = (data ?? []).map((u: { 
       id: string; email: string; role: string; company_id: string | null;
       active: boolean; created_at: string;
     }) => ({
@@ -197,6 +214,7 @@ export async function getUsersWithRoles(params: {
       active:       u.active ?? true,
       company_id:   u.company_id,
       company_name: u.company_id ? (companyMap.get(u.company_id) as string | null) ?? null : null,
+      plan:         u.company_id ? assignmentPlanMap.get(u.company_id) ?? companyPlanMap.get(u.company_id) ?? 'starter' : 'starter',
       created_at:   u.created_at,
     }));
 
