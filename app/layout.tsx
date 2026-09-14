@@ -9,8 +9,8 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'RiskGuard — Vendor Risk Management',
-  description: 'Intelligently manage and monitor your third-party vendor risk.',
+  title: 'BezpieczneFaktury - Kontroluj i wystawiaj faktury ',
+  description: 'Monitorowanie dostawców, automatyzacja fakturowania oraz zgodna z przepisami integracja z KSeF — wszystko w jednej inteligentnej platformie.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

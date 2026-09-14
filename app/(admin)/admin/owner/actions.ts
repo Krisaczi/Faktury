@@ -282,7 +282,7 @@ export async function getOwnerAuditLogs(limit = 50): Promise<OwnerAuditLog[]> {
 
 // ─── CHANGE COMPANY PLAN ──────────────────────────────────────────────────────
 
-const ALLOWED_PLANS = ['starter', 'pro', 'trial', 'cancelled'] as const;
+const ALLOWED_PLANS = ['starter', 'professional', 'pro', 'trial', 'cancelled'] as const;
 type AllowedPlan = typeof ALLOWED_PLANS[number];
 
 export async function changeCompanyPlan(
