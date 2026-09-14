@@ -185,8 +185,8 @@ function buildNaglowek(inv: IssuedInvoiceWithItems): string {
     : '';
 
   return `  <Naglowek>
-    <KodFormularza kodSystemowy="FA (2)" wersjaSchemy="1-0E">FA</KodFormularza>
-    <WariantFormularza>2</WariantFormularza>
+    <KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza>
+    <WariantFormularza>3</WariantFormularza>
     <DataWytworzeniaFa>${new Date().toISOString()}</DataWytworzeniaFa>
     <SystemInfo>InvoiceIQ</SystemInfo>
     <P_1>${esc(p1)}</P_1>${p6}
@@ -340,9 +340,9 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const platnosc   = buildPlatnosc(invoice);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/"
+<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://crd.gov.pl/wzor/2023/06/29/12648/ http://crd.gov.pl/wzor/2023/06/29/12648/schemat.xsd">
+         xsi:schemaLocation="http://crd.gov.pl/wzor/2025/06/25/13775/ http://crd.gov.pl/wzor/2025/06/25/13775/schemat.xsd">
 ${naglowek}
 ${podmiot1}
 ${podmiot2}

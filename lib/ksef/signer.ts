@@ -271,13 +271,21 @@ export function loadSigningCredentials(): SigningCredentials | null {
 }
 
 /**
- * Sign the XML with production credentials if available, otherwise mock.
- * This is the recommended single entry-point for signing.
+ * Sign the XML with production credentials if available.
+ * When no credentials are configured (token-based auth), the XML is returned
+ * unsigned — KSeF 2.0 with token auth does not require XAdES signing.
  */
 export function signInvoiceXml(rawXml: string): SignedPayload {
   const credentials = loadSigningCredentials();
   if (credentials) {
     return signXml(rawXml, credentials);
   }
-  return signXmlMock(rawXml);
+  // Token-based auth: no XAdES signature needed
+  return {
+    signedXml: rawXml,
+    signatureValue: '',
+    signingTime: new Date().toISOString(),
+    certFingerprint: '',
+    isMock: false,
+  };
 }
