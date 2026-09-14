@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: invoice } = await (supabase as any)
         .from('platform_invoices')
-        .select('id, status, entity_id, ksef_number, ksef_status')
+        .select('id, status, entity_id, issued_by, ksef_number, ksef_status')
         .eq('id', invoiceId)
         .maybeSingle();
 
@@ -87,17 +87,10 @@ export async function POST(req: NextRequest) {
       // company of the user who issued the invoice (issued_by), NOT the buyer
       // (entity_id). KSeF requires the token to belong to the seller's NIP.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: invoiceFull } = await (supabase as any)
-        .from('platform_invoices')
-        .select('issued_by')
-        .eq('id', invoiceId)
-        .maybeSingle();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: issuer } = await (supabase as any)
         .from('users')
         .select('company_id')
-        .eq('id', invoiceFull?.issued_by)
+        .eq('id', invoice.issued_by)
         .maybeSingle();
 
       const sellerCompanyId = issuer?.company_id;

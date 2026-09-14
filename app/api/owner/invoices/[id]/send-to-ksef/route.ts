@@ -50,7 +50,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
-    .select('id, status, invoice_number, invoice_date, entity_id, ksef_number, ksef_status, ksef_submission_id, ksef_response, metadata')
+    .select('id, status, invoice_number, invoice_date, entity_id, issued_by, ksef_number, ksef_status, ksef_submission_id, ksef_response, metadata')
     .eq('id', params.id)
     .maybeSingle();
 
