@@ -62,26 +62,41 @@ export async function POST(
     return NextResponse.json({ error: 'Faktura jest szkicem — wystaw ją najpierw.' }, { status: 400 });
   }
 
-  // Load company for NIP
+  // Load the seller company — for platform invoices, the seller is the
+  // company of the user who issued the invoice (issued_by), NOT the buyer
+  // (entity_id). KSeF requires the token to belong to the seller's NIP.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: issuer } = await (supabase as any)
+    .from('users')
+    .select('company_id')
+    .eq('id', invoice.issued_by)
+    .maybeSingle();
+
+  const sellerCompanyId = issuer?.company_id;
+  if (!sellerCompanyId) {
+    return NextResponse.json({ error: 'Nie znaleziono firmy sprzedawcy.' }, { status: 400 });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: company } = await (supabase as any)
     .from('companies')
     .select('id, nip')
-    .eq('id', invoice.entity_id)
+    .eq('id', sellerCompanyId)
     .maybeSingle();
 
   if (!company?.nip) {
-    return NextResponse.json({ error: 'Firma nie ma numeru NIP — wymagany do KSeF.' }, { status: 400 });
+    return NextResponse.json({ error: 'Firma sprzedawcy nie ma numeru NIP — wymagany do KSeF.' }, { status: 400 });
   }
 
-  // Load KSeF credentials. The "Owner can read all KSeF credentials" RLS policy
+  // Load KSeF credentials for the SELLER's company.
+  // The "Owner can read all KSeF credentials" RLS policy
   // allows the owner to read credentials for any company, so the authenticated
   // client works here — no service client needed.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: credsRows } = await (supabase as any)
     .from('ksef_credentials')
     .select('token, environment')
-    .eq('company_id', invoice.entity_id)
+    .eq('company_id', sellerCompanyId)
     .order('updated_at', { ascending: false })
     .limit(1);
   const creds = Array.isArray(credsRows) && credsRows.length > 0 ? credsRows[0] : null;
