@@ -229,10 +229,11 @@ async function closeOnlineSession(
   referenceNumber: string,
 ): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   try {
-    const res = await fetch(`${baseUrl}/sessions/online/${referenceNumber}`, {
-      method: 'DELETE',
+    const res = await fetch(`${baseUrl}/sessions/online/${referenceNumber}/close`, {
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
         Accept: 'application/json',
       },
     });
@@ -249,7 +250,7 @@ async function getSessionStatus(
   sessionRef: string,
 ): Promise<{ code: number; description?: string; raw?: Record<string, unknown> }> {
   try {
-    const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}`, {
+    const res = await fetch(`${baseUrl}/sessions/${sessionRef}`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     });
     if (!res.ok) return { code: 0, raw: { httpStatus: res.status } };
@@ -270,7 +271,7 @@ async function listSessionInvoices(
   sessionRef: string,
 ): Promise<Array<{ ksefNumber?: string; invoiceHash?: string; processingCode?: number }>> {
   try {
-    const res = await fetch(`${baseUrl}/sessions/online/${sessionRef}/invoices`, {
+    const res = await fetch(`${baseUrl}/sessions/${sessionRef}/invoices`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     });
     if (!res.ok) return [];
