@@ -240,8 +240,7 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
     : '';
 
   return `    <Platnosc>
-      <FormaPlatnosci>${methodCode}</FormaPlatnosci>
-      <PlatnoscInna>2</PlatnoscInna>${bankLine}
+      <FormaPlatnosci>${methodCode}</FormaPlatnosci>${bankLine}
     </Platnosc>`;
 }
 
