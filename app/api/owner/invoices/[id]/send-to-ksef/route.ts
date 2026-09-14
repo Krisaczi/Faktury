@@ -94,9 +94,11 @@ export async function POST(
 
   // Build the KSeF XML payload
   let signedXml: string;
+  let rawXmlForDebug: string | null = null;
   try {
     const payload = await buildPlatformKsefPayload(params.id);
     signedXml = payload.signedXml;
+    rawXmlForDebug = payload.rawXml;
   } catch (err) {
     return NextResponse.json({
       error: `Błąd budowania XML: ${(err as Error).message}`,
@@ -215,6 +217,15 @@ export async function POST(
   }
 
   if (!result.success) {
+    // Include raw XML in the stored response for debugging when rejected
+    const debugResponse = rawXmlForDebug
+      ? { ...result.response, _rawXml: rawXmlForDebug.slice(0, 8000) }
+      : result.response;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('platform_invoices')
+      .update({ ksef_response: debugResponse })
+      .eq('id', params.id);
     return NextResponse.json({
       ok:           false,
       ksefStatus:   result.status as KsefStatus,

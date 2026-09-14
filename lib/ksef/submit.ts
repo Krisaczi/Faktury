@@ -269,7 +269,7 @@ async function listSessionInvoices(
   baseUrl: string,
   accessToken: string,
   sessionRef: string,
-): Promise<Array<{ ksefNumber?: string; invoiceHash?: string; processingCode?: number }>> {
+): Promise<Array<{ ksefNumber?: string; invoiceHash?: string; processingCode?: number; processingDescription?: string }>> {
   try {
     const res = await fetch(`${baseUrl}/sessions/${sessionRef}/invoices`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
@@ -281,7 +281,25 @@ async function listSessionInvoices(
       ksefNumber: (inv.ksefReferenceNumber ?? inv.ksefNumber ?? inv.elementReferenceNumber) as string | undefined,
       invoiceHash: inv.invoiceHash as string | undefined,
       processingCode: (inv.processingCode ?? (inv.status as { code?: number } | undefined)?.code) as number | undefined,
+      processingDescription: (inv.processingDescription ?? (inv.status as { description?: string } | undefined)?.description) as string | undefined,
     }));
+  } catch {
+    return [];
+  }
+}
+
+async function listFailedSessionInvoices(
+  baseUrl: string,
+  accessToken: string,
+  sessionRef: string,
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const res = await fetch(`${baseUrl}/sessions/${sessionRef}/invoices/failed`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { invoices?: Array<Record<string, unknown>> };
+    return data.invoices ?? [];
   } catch {
     return [];
   }
@@ -532,6 +550,7 @@ export async function submitToKsef(params: {
     if (sessionStatus.code >= 400 && sessionStatus.code < 500) {
       const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
       const matched = invoices[0];
+      const failedInvoices = await listFailedSessionInvoices(baseUrl, accessToken, sessionRef);
       return {
         success:   false,
         status:    'rejected',
@@ -540,9 +559,11 @@ export async function submitToKsef(params: {
           sessionCode:        sessionStatus.code,
           sessionDescription: sessionStatus.description,
           processingCode:     matched?.processingCode,
+          processingDescription: matched?.processingDescription,
           closeStatus:        closeResult.status,
           closeBody:          closeResult.body,
           pollLog,
+          failedInvoices,
         },
         error:     `KSeF session failed: ${sessionStatus.description ?? `code ${sessionStatus.code}`}`,
         transient: false,
