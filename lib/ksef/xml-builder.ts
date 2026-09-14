@@ -181,7 +181,7 @@ function buildPodmiot1(inv: IssuedInvoiceWithItems): string {
   return `  <Podmiot1>
     <DaneIdentyfikacyjne>
       <NIP>${esc(inv.seller_nip)}</NIP>
-      <PelnaNazwa>${esc(inv.seller_name)}</PelnaNazwa>
+      <Nazwa>${esc(inv.seller_name)}</Nazwa>
     </DaneIdentyfikacyjne>
     <Adres>
       <KodKraju>${esc(addr.kraj)}</KodKraju>
@@ -199,7 +199,7 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
 
   return `  <Podmiot2>
     <DaneIdentyfikacyjne>${nipLine}
-      <PelnaNazwa>${esc(inv.buyer_name)}</PelnaNazwa>
+      <Nazwa>${esc(inv.buyer_name)}</Nazwa>
     </DaneIdentyfikacyjne>
     <Adres>
       <KodKraju>${esc(addr.kraj)}</KodKraju>

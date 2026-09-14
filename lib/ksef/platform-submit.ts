@@ -131,8 +131,8 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
 
     const unitPriceNet = item.unit_price_cents / 100;
     const netAmount = item.amount_cents / 100;
-    const vatMultiplier = Number(itemVatRate) / 100;
-    const vatAmount = netAmount * vatMultiplier;
+    const numericRate = Number(itemVatRate);
+    const vatAmount = isNaN(numericRate) ? 0 : netAmount * (numericRate / 100);
     const grossAmount = netAmount + vatAmount;
 
     return {
