@@ -6,21 +6,11 @@
  *
  * Schema reference: FA(3) — http://crd.gov.pl/wzor/2025/06/25/13775/
  *
- * FA(3) key elements produced:
- *   Naglowek          — document header (form code, creation date, system info)
- *   Podmiot1          — seller (DaneIdentyfikacyjne + Adres)
- *   Podmiot2          — buyer  (DaneIdentyfikacyjne + Adres)
- *   Fa                — invoice body
- *     P_1, P_2        — issue date, invoice number
- *     RodzajFaktury   — invoice type (VAT, KOR, ZAL, etc.)
- *     FaWiersz        — one per line item
- *     FaWierszCtrl    — control summary (line count + net total)
- *     P_13_*          — net totals by VAT rate
- *     P_14_*          — VAT totals by VAT rate
- *     P_15            — gross total
- *     Adnotacje       — mandatory annotation flags
- *     Rozliczenie     — settlement totals
- *     Platnosc        — payment details
+ * FA(3) Faktura root children order:
+ *   Naglowek, Podmiot1, Podmiot2, [Podmiot3], [PodmiotUpowazniony],
+ *   Fa (KodWaluty, P_1, P_2, P_6?, P_13_*, P_15, Adnotacje, RodzajFaktury,
+ *       FaWiersz*, [Rozliczenie], [Platnosc]),
+ *   [Stopka], [Zalacznik]
  */
 
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
@@ -39,36 +29,25 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&apos;');
 }
 
-/** Format a date string to YYYY-MM-DD, safe against null/undefined. */
 function isoDate(d: string | null | undefined): string {
   if (!d) return format(new Date(), 'yyyy-MM-dd');
   try { return format(parseISO(d), 'yyyy-MM-dd'); } catch { return d; }
 }
 
-/** Format a number to 2 decimal places as required by FA(3). */
 function dec2(n: number): string {
   return n.toFixed(2);
 }
 
-/** Format quantity to up to 4 decimal places (FA(3) allows 4). */
 function dec4(n: number): string {
   const s = n.toFixed(4);
   return s.replace(/(\.\d\d[1-9]?)0+$/, '$1');
 }
 
 // ─── VAT rate mapping for FA(3) ───────────────────────────────────────────────
-// FA(3) P_13 field indices:
-//   1 = 23%    2 = 8%    3 = 5%
-//   4 = special (ryczałt taxi etc.)
-//   5 = 0%     6 = NP (poza zakresem)    7 = ZW (zwolniona)
-//   8 = OO (odwrotne obciążenie)   9 = marża   10 = OSS/IOSS   11 = pozostałe
 
 interface VatRateMapping {
-  /** Value used in FaWiersz/P_12 */
   p12: string;
-  /** Suffix used in P_13_X and P_14_X */
   suffix: string;
-  /** Whether VAT is applicable (determines if P_14 counterpart exists) */
   hasVat: boolean;
 }
 
@@ -81,8 +60,6 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   'np': { p12: 'np', suffix: '6', hasVat: false },
   'oo': { p12: 'oo', suffix: '8', hasVat: false },
 };
-
-// ─── Payment method mapping ───────────────────────────────────────────────────
 
 const PAYMENT_METHOD_MAP: Record<string, string> = {
   transfer: '1',
@@ -102,13 +79,10 @@ interface ParsedAddress {
 
 function parseAddress(raw: string | null | undefined): ParsedAddress {
   const s = (raw ?? '').trim();
-
   const postalMatch = s.match(/\b(\d{2}-\d{3}|\d{5})\b/);
   const kodPocztowy = postalMatch ? postalMatch[1] : '';
-
   let miasto = '';
   let ulica  = s;
-
   if (postalMatch && postalMatch.index !== undefined) {
     const afterPostal = s.slice(postalMatch.index + postalMatch[0].length).trim();
     const cityMatch = afterPostal.match(/^,?\s*([^,\n]+)/);
@@ -117,13 +91,11 @@ function parseAddress(raw: string | null | undefined): ParsedAddress {
       ulica = s.slice(0, postalMatch.index).replace(/,\s*$/, '').trim();
     }
   }
-
   let kraj = 'PL';
   const countryMatch = s.match(/\b([A-Z]{2})\s*$/);
   if (countryMatch && countryMatch[1] !== 'PL' && countryMatch[1].length === 2) {
     kraj = countryMatch[1];
   }
-
   return {
     kodPocztowy: kodPocztowy || '00-000',
     miasto:      miasto      || s.split(/[,\n]/)[0].trim() || 'Nieznane',
@@ -153,13 +125,7 @@ function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
       g.vatTotal   += item.vat_amount;
       g.grossTotal += item.gross_amount;
     } else {
-      map.set(rate, {
-        rate,
-        mapping,
-        netTotal:   item.net_amount,
-        vatTotal:   item.vat_amount,
-        grossTotal: item.gross_amount,
-      });
+      map.set(rate, { rate, mapping, netTotal: item.net_amount, vatTotal: item.vat_amount, grossTotal: item.gross_amount });
     }
   }
   return Array.from(map.values());
@@ -196,7 +162,6 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
   const nipLine = inv.buyer_nip
     ? `\n      <NIP>${esc(inv.buyer_nip)}</NIP>`
     : '\n      <BrakID>1</BrakID>';
-
   return `  <Podmiot2>
     <DaneIdentyfikacyjne>${nipLine}
       <Nazwa>${esc(inv.buyer_name)}</Nazwa>
@@ -215,11 +180,9 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   return inv.items.map((item) => {
     const rate    = item.vat_rate as VatRate;
     const mapping = VAT_RATE_MAP[rate] ?? VAT_RATE_MAP['23'];
-
     const discountLine = item.discount_pct
       ? `\n      <P_10>${dec2(item.discount_pct)}</P_10>`
       : '';
-
     return `    <FaWiersz>
       <NrWierszaFa>${item.position}</NrWierszaFa>
       <P_7>${esc(item.name)}</P_7>
@@ -232,17 +195,7 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   }).join('\n');
 }
 
-function buildFaWierszCtrl(inv: IssuedInvoiceWithItems): string {
-  const itemCount = inv.items.length;
-  const totalNet = inv.items.reduce((s, i) => s + i.net_amount, 0);
-  return `    <FaWierszCtrl>
-      <LiczbaWierszyFaktury>${itemCount}</LiczbaWierszyFaktury>
-      <WartoscWierszyFaktury>${dec2(totalNet)}</WartoscWierszyFaktury>
-    </FaWierszCtrl>`;
-}
-
 function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  // P_13_X: net per VAT rate, P_14_X: VAT amount per rate
   const groupLines = vatGroups
     .map(g => {
       const sx = g.mapping.suffix;
@@ -255,7 +208,6 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
 
   const hasReverseCharge = vatGroups.some(g => g.rate === 'oo');
   const p106e2 = hasReverseCharge ? '1' : '2';
-
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
 
   return `    ${groupLines}
@@ -278,12 +230,12 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
 }
 
 function buildRozliczenie(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  const totalNetAllRates = vatGroups.reduce((s, g) => s + g.netTotal, 0);
-  const totalVatAllRates = vatGroups.reduce((s, g) => s + g.vatTotal, 0);
+  const totalNet = vatGroups.reduce((s, g) => s + g.netTotal, 0);
+  const totalGross = inv.gross_total;
 
   return `    <Rozliczenie>
-      <LacznaKwotaAktywow>${dec2(totalNetAllRates)}</LacznaKwotaAktywow>
-      <LacznaKwotaVAT>${dec2(totalVatAllRates)}</LacznaKwotaVAT>
+      <DoZaplaty>${dec2(totalGross)}</DoZaplaty>
+      <DoRozliczenia>${dec2(totalNet)}</DoRozliczenia>
     </Rozliczenie>`;
 }
 
@@ -295,8 +247,7 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
 
   return `    <Platnosc>
       <FormaPlatnosci>${methodCode}</FormaPlatnosci>
-      <TerminPlatnosci>${isoDate(inv.due_date ?? inv.issue_date)}</TerminPlatnosci>${bankLine}
-      <Waluta>${esc(inv.currency ?? 'PLN')}</Waluta>
+      <PlatnoscInna>2</PlatnoscInna>${bankLine}
     </Platnosc>`;
 }
 
@@ -310,7 +261,6 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const podmiot1    = buildPodmiot1(invoice);
   const podmiot2    = buildPodmiot2(invoice);
   const faWiersze   = buildFaWiersze(invoice);
-  const faWierszCtrl = buildFaWierszCtrl(invoice);
   const totals      = buildTotalsAndAdnotacje(invoice, vatGroups);
   const rozliczenie = buildRozliczenie(invoice, vatGroups);
   const platnosc    = buildPlatnosc(invoice);
@@ -330,10 +280,9 @@ ${podmiot2}
     <KodWaluty>${esc(invoice.currency ?? 'PLN')}</KodWaluty>
     <P_1>${esc(isoDate(invoice.issue_date))}</P_1>
     <P_2>${esc(invoice.invoice_number)}</P_2>${p6}
+${totals}
     <RodzajFaktury>VAT</RodzajFaktury>
 ${faWiersze}
-${faWierszCtrl}
-${totals}
 ${rozliczenie}
 ${platnosc}
   </Fa>
