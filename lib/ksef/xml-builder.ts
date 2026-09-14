@@ -206,6 +206,8 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
       <AdresL1>${esc(addr.ulica)}</AdresL1>
       <AdresL2>${esc(addr.kodPocztowy)} ${esc(addr.miasto)}</AdresL2>
     </Adres>
+    <JST>2</JST>
+    <GV>2</GV>
   </Podmiot2>`;
 }
 
@@ -262,13 +264,13 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>2</P_18>
-      <P_18A>2</P_18A>${hasExempt ? '\n      <Zwolnienie>\n        <P_19>1</P_19>\n      </Zwolnienie>' : '\n      <Zwolnienie>\n        <P_19>2</P_19>\n      </Zwolnienie>'}
+      <P_18A>2</P_18A>${hasExempt ? '\n      <Zwolnienie>\n        <P_19>1</P_19>\n        <P_19C>zwolnienie podmiotowe z VAT</P_19C>\n      </Zwolnienie>' : '\n      <Zwolnienie>\n        <P_19N>1</P_19N>\n      </Zwolnienie>'}
       <NoweSrodkiTransportu>
-        <P_22>2</P_22>
+        <P_22N>1</P_22N>
       </NoweSrodkiTransportu>
       <P_23>2</P_23>
       <PMarzy>
-        <P_PMarzy>2</P_PMarzy>
+        <P_PMarzyN>1</P_PMarzyN>
       </PMarzy>
       <P_106E_2>${p106e2}</P_106E_2>
       <P_106E_3>2</P_106E_3>
