@@ -206,8 +206,6 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
       return p13 + p14;
     }).join('\n');
 
-  const hasReverseCharge = vatGroups.some(g => g.rate === 'oo');
-  const p106e2 = hasReverseCharge ? '1' : '2';
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
 
   return `    ${groupLines}
@@ -224,8 +222,6 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
       <PMarzy>
         <P_PMarzyN>1</P_PMarzyN>
       </PMarzy>
-      <P_106E_2>${p106e2}</P_106E_2>
-      <P_106E_3>2</P_106E_3>
     </Adnotacje>`;
 }
 
