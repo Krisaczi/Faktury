@@ -298,6 +298,8 @@ export type Database = {
           seller_nip: string | null;
           buyer_nip: string | null;
           bank_account: string | null;
+          bank_account_number: string | null;
+          bank_name: string | null;
           file_url: string | null;
           raw_file_url: string | null;
           ksef_reference_number: string | null;
@@ -326,6 +328,8 @@ export type Database = {
           seller_nip?: string | null;
           buyer_nip?: string | null;
           bank_account?: string | null;
+          bank_account_number?: string | null;
+          bank_name?: string | null;
           file_url?: string | null;
           raw_file_url?: string | null;
           ksef_reference_number?: string | null;
@@ -352,6 +356,8 @@ export type Database = {
           seller_nip?: string | null;
           buyer_nip?: string | null;
           bank_account?: string | null;
+          bank_account_number?: string | null;
+          bank_name?: string | null;
           raw_file_url?: string | null;
           ksef_reference_number?: string | null;
           is_ksef?: boolean;

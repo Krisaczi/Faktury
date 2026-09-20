@@ -481,6 +481,7 @@ async function runKsefFetch({
           sellerNip: meta.seller?.nip ?? null,
           buyerNip: nip,
           bankAccount: null as null,
+          bankName: null as null,
           seller: undefined,
           buyer: undefined,
         }];
