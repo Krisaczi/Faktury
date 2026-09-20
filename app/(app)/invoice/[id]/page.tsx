@@ -1159,6 +1159,8 @@ export default function InvoiceDetailPage() {
                       <MetaRow label="Seller NIP"   value={invoice?.seller_nip}   mono />
                       <MetaRow label="Buyer NIP"    value={invoice?.buyer_nip}    mono />
                       <MetaRow label="Bank Account" value={invoice?.bank_account} mono />
+                      <MetaRow label="Bank Name" value={invoice?.bank_name} />
+                      <MetaRow label="Account Number" value={invoice?.bank_account_number} mono />
                     </CardContent>
                   </Card>
 

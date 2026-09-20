@@ -72,6 +72,8 @@ export interface InvoiceDetail {
   seller_nip: string | null;
   buyer_nip: string | null;
   bank_account: string | null;
+  bank_account_number: string | null;
+  bank_name: string | null;
   raw_file_url: string | null;
   overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
   vendor_id: string | null;

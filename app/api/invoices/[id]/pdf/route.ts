@@ -29,6 +29,15 @@ function esc(s: string | null | undefined): string {
     .replace(/"/g, '&quot;');
 }
 
+function formatBankAccount(acct: string): string {
+  if (!acct) return '—';
+  const digits = acct.replace(/\s/g, '');
+  if (digits.length >= 26 && /^\d{26}$/.test(digits)) {
+    return digits.replace(/^(\d{2})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})$/, '$1 $2 $3 $4 $5 $6 $7');
+  }
+  return acct;
+}
+
 function partyLines(p: ParsedParty | null | undefined, fallbackNip?: string | null): string {
   if (!p && !fallbackNip) return '<span class="empty">—</span>';
 
@@ -545,11 +554,14 @@ function buildHtml(
   </div>` : ''}
 
   <!-- Payment -->
-  ${(seller.iban || invoice.bank_account || invoice.due_date) ? `
+  ${(seller.iban || invoice.bank_account || invoice.bank_account_number || invoice.bank_name || invoice.due_date) ? `
   <p class="section-title">Payment Details</p>
   <div class="payment-box">
-    ${(seller.iban || invoice.bank_account)
-      ? `<div class="payment-row"><span class="pl">Bank Account</span><span class="pv">${esc((seller.iban ?? invoice.bank_account) as string)}</span></div>`
+    ${invoice.bank_name
+      ? `<div class="payment-row"><span class="pl">Bank</span><span class="pv">${esc(invoice.bank_name as string)}</span></div>`
+      : ''}
+    ${(invoice.bank_account_number || seller.iban || invoice.bank_account)
+      ? `<div class="payment-row"><span class="pl">Account Number</span><span class="pv">${esc(formatBankAccount((invoice.bank_account_number ?? seller.iban ?? invoice.bank_account) as string))}</span></div>`
       : ''}
     ${invoice.due_date
       ? `<div class="payment-row"><span class="pl">Due Date</span><span class="pv">${fmt(invoice.due_date as string)}</span></div>`
@@ -603,7 +615,7 @@ export async function GET(
     // Fetch invoice (RLS enforces company scope)
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .select('id, invoice_number, ksef_reference_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url, charges_total, amount_due')
+      .select('id, invoice_number, ksef_reference_number, invoice_date, issue_date, due_date, amount, total_amount, tax_amount, currency, seller_nip, buyer_nip, bank_account, bank_account_number, bank_name, overall_risk, upload_session_id, created_at, vendor_id, raw_file_url, charges_total, amount_due')
       .eq('id', params.id)
       .maybeSingle();
 

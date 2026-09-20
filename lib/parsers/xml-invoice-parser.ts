@@ -53,6 +53,7 @@ export interface ParsedInvoice {
   sellerNip?: string;
   buyerNip?: string;
   bankAccount?: string;
+  bankName?: string;
   seller?: ParsedParty;
   buyer?: ParsedParty;
   lineItems?: ParsedLineItem[];
@@ -379,9 +380,20 @@ function parseKsefSegment(segment: string): ParsedInvoice {
 
   const bankAccount = extractFirst(segment, 'NrRachunku', 'NumerRachunku', 'RachunekBankowy');
 
+  // Extract payment info from KSeF <Platnosc>/<RachunekBankowy> section
+  const platnoscBlock = segment.match(/<(?:[^:>]*:)?Platnosc[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Platnosc>/i)?.[1];
+  const rachunekBlock = platnoscBlock?.match(/<(?:[^:>]*:)?RachunekBankowy[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?RachunekBankowy>/i)?.[1];
+  const bankName = rachunekBlock
+    ? extractFirst(rachunekBlock, 'NazwaBanku', 'NazwaBankuPłatnika')
+    : undefined;
+  const paymentBankAccount = rachunekBlock
+    ? extractFirst(rachunekBlock, 'NrRB', 'NrRachunku', 'NumerRachunku')
+    : undefined;
+  const finalBankAccount = paymentBankAccount ?? bankAccount;
+
   const seller = extractParty(sellerBlockRaw, sellerNip);
   // Hoist top-level bank account into seller IBAN if not already found in the seller block
-  if (!seller.iban && bankAccount) seller.iban = bankAccount;
+  if (!seller.iban && finalBankAccount) seller.iban = finalBankAccount;
 
   const buyer = buyerBlockRaw ? extractParty(buyerBlockRaw, buyerNip) : undefined;
 
@@ -396,7 +408,8 @@ function parseKsefSegment(segment: string): ParsedInvoice {
     currency: extractFirst(segment, 'KodWaluty', 'Waluta') ?? 'PLN',
     sellerNip,
     buyerNip,
-    bankAccount,
+    bankAccount: finalBankAccount,
+    bankName,
     seller,
     buyer,
     lineItems: extractLineItems(segment, 'ksef'),

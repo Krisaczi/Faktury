@@ -516,6 +516,8 @@ async function runKsefFetch({
               seller_name: inv.seller?.name ?? inv.vendorName ?? meta.seller?.name ?? null,
               buyer_nip: inv.buyerNip ?? null,
               bank_account: inv.bankAccount ?? null,
+              bank_account_number: inv.bankAccount ?? null,
+              bank_name: inv.bankName ?? null,
               raw_file_url: urlData?.signedUrl ?? filePath,
               upload_session_id: sessionId,
             })

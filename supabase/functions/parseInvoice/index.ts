@@ -24,6 +24,7 @@ interface ParsedInvoice {
   sellerNip?: string;
   buyerNip?: string;
   bankAccount?: string;
+  bankName?: string;
 }
 
 interface ParseError {
@@ -141,6 +142,17 @@ function parseKsefSegment(seg: string): ParsedInvoice {
     ? extractFirst(buyerBlock, "NIP", "NIPNabywcy", "NIPKupujacego")
     : extractFirst(seg, "NIPNabywcy", "NIPKupujacego");
 
+  // Extract payment info from KSeF <Platnosc>/<RachunekBankowy> section
+  const platnoscBlock = seg.match(/<(?:[^:>]*:)?Platnosc[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?Platnosc>/i)?.[1];
+  const rachunekBlock = platnoscBlock?.match(/<(?:[^:>]*:)?RachunekBankowy[^>]*>([\s\S]*?)<\/(?:[^:>]*:)?RachunekBankowy>/i)?.[1];
+  const bankName = rachunekBlock
+    ? extractFirst(rachunekBlock, "NazwaBanku")
+    : undefined;
+  const paymentBankAccount = rachunekBlock
+    ? extractFirst(rachunekBlock, "NrRB", "NrRachunku", "NumerRachunku")
+    : undefined;
+  const bankAccount = paymentBankAccount ?? extractFirst(seg, "NrRachunku", "NumerRachunku", "RachunekBankowy");
+
   return {
     invoiceNumber: extractFirst(seg, "P_2", "NrFa", "NumerFaktury"),
     vendorName: normalizeVendorName(extractKsefSellerName(seg)),
@@ -152,7 +164,8 @@ function parseKsefSegment(seg: string): ParsedInvoice {
     currency: extractFirst(seg, "KodWaluty", "Waluta") ?? "PLN",
     sellerNip,
     buyerNip,
-    bankAccount: extractFirst(seg, "NrRachunku", "NumerRachunku", "RachunekBankowy"),
+    bankAccount,
+    bankName,
   };
 }
 
@@ -702,6 +715,8 @@ Deno.serve(async (req: Request) => {
             seller_nip:        inv.sellerNip ?? inv.vendorNip ?? null,
             buyer_nip:         inv.buyerNip ?? null,
             bank_account:      inv.bankAccount ?? null,
+            bank_account_number: inv.bankAccount ?? null,
+            bank_name:         inv.bankName ?? null,
             raw_file_url:      fileUrl,
             upload_session_id: uploadSessionId ?? null,
             overall_risk:      null,
