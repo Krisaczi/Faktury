@@ -78,6 +78,7 @@ async function requireInvoicingUser() {
 const FormItemSchema = IssuedInvoiceItemSchema.omit({
   id: true,
   invoice_id: true,
+  position: true,
   net_amount: true,
   vat_amount: true,
   gross_amount: true,
