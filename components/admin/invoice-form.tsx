@@ -185,10 +185,20 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
   const onSubmit = useCallback(
     (intentValue: 'draft' | 'issue') =>
       handleSubmit(async (data: LocalFormValues) => {
+        const normalize = (v: string | null | undefined) =>
+          v && v.trim() !== '' ? v.trim() : undefined;
+
         const payload = {
           ...data,
           autoGenerateNumber,
-          invoice_number: autoGenerateNumber ? undefined : data.invoice_number,
+          invoice_number: autoGenerateNumber ? undefined : normalize(data.invoice_number),
+          sale_date: normalize(data.sale_date),
+          due_date: normalize(data.due_date),
+          buyer_nip: normalize(data.buyer_nip),
+          buyer_email: normalize(data.buyer_email),
+          buyer_address: normalize(data.buyer_address) ?? '',
+          seller_bank_account: normalize(data.seller_bank_account),
+          notes: normalize(data.notes),
           overrideAddress: useOverride && isOwner ? overrideAddress : null,
         } as unknown as InvoiceFormValues;
 

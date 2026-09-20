@@ -84,12 +84,27 @@ const FormItemSchema = IssuedInvoiceItemSchema.omit({
   gross_amount: true,
 });
 
+const emptyToOpt = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' || v === null ? undefined : v), schema.optional());
+
 const FormSchema = IssuedInvoiceSchema
-  .omit({ id: true, company_id: true, items: true, invoice_number: true })
+  .omit({
+    id: true, company_id: true, items: true, invoice_number: true,
+    sale_date: true, due_date: true,
+    buyer_nip: true, buyer_email: true,
+    seller_bank_account: true, notes: true,
+  })
   .extend({
-    invoice_number: z.string().min(1, 'Numer faktury jest wymagany').max(100).regex(/^[\w/\-. ]+$/, 'Numer faktury zawiera niedozwolone znaki').optional(),
+    invoice_number: z.preprocess((v) => (v === '' || v === null ? undefined : v),
+      z.string().min(1, 'Numer faktury jest wymagany').max(100).regex(/^[\w/\-. ]+$/, 'Numer faktury zawiera niedozwolone znaki').optional()),
     autoGenerateNumber: z.boolean().optional().default(true),
     buyer_company_id: z.string().uuid().nullable().optional(),
+    sale_date: emptyToOpt(z.string().date('Nieprawidłowy format daty sprzedaży')),
+    due_date: emptyToOpt(z.string().date('Nieprawidłowy format terminu płatności')),
+    buyer_nip: emptyToOpt(z.string().regex(/^\d{10}$/, 'NIP musi składać się z 10 cyfr')),
+    buyer_email: emptyToOpt(z.string().email('Nieprawidłowy adres e-mail')),
+    seller_bank_account: emptyToOpt(z.string()),
+    notes: emptyToOpt(z.string().max(2000)),
     items: z.array(FormItemSchema).min(1, 'Dodaj co najmniej jedną pozycję'),
   });
 
