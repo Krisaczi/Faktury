@@ -104,7 +104,8 @@ export default async function EditInvoicePage({
   }
 
   const defaultValues = {
-    invoice_number:      invoice.invoice_number,
+    invoice_number:      invoice.invoice_number?.startsWith('SZKIC-') ? undefined : invoice.invoice_number,
+    autoGenerateNumber:  invoice.invoice_number?.startsWith('SZKIC-') ? true : false,
     currency:            invoice.currency,
     issue_date:          invoice.issue_date,
     sale_date:           invoice.sale_date ?? undefined,

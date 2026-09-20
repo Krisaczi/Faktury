@@ -43,6 +43,7 @@ export interface CompanySettings {
   nip: string | null;
   currency: string;
   ingestion_email: string | null;
+  invoice_numbering_mode?: 'auto' | 'manual';
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +80,7 @@ export interface CompanyUpdateInput {
   name?: string;
   nip?: string | null;
   currency?: string;
+  invoice_numbering_mode?: 'auto' | 'manual';
 }
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────────

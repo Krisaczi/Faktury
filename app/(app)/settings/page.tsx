@@ -35,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X, Eye, EyeOff, ScrollText } from 'lucide-react';
+import { Loader as Loader2, User, Shield, Bell, Palette, CircleCheck as CheckCircle, Building2, Mail, Copy, Check, ExternalLink, CreditCard, TriangleAlert as AlertTriangle, RefreshCw, Info, Zap, FlaskConical, CircleArrowUp as ArrowUpCircle, Star, X, Eye, EyeOff, ScrollText, Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import {
@@ -815,6 +815,75 @@ function OwnerBypassAuditCard() {
   );
 }
 
+// ─── Numbering Mode Card ──────────────────────────────────────────────────────
+function NumberingModeCard({ isAdmin }: { isAdmin: boolean }) {
+  const { data, isLoading, updateCompany } = useCompanySettings();
+  const mode = data?.company?.invoice_numbering_mode ?? 'auto';
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleModeChange(newMode: 'auto' | 'manual') {
+    setSaving(true);
+    try {
+      await updateCompany({ invoice_numbering_mode: newMode });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // ignore — SWR will revalidate
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border-slate-200 dark:border-slate-800">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Hash className="w-4 h-4 text-slate-500" />
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">Numeracja faktur</CardTitle>
+        </div>
+        <CardDescription>Domyślny sposób nadawania numerów faktur.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {saved && (
+          <Alert className="py-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10">
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+            <AlertDescription className="text-emerald-700 dark:text-emerald-400 ml-2">
+              Ustawienia numeracji zostały zapisane.
+            </AlertDescription>
+          </Alert>
+        )}
+        {isLoading ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <Select
+            value={mode}
+            onValueChange={(v) => handleModeChange(v as 'auto' | 'manual')}
+            disabled={!isAdmin || saving}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Automatyczna (np. 2026/09/001)</SelectItem>
+              <SelectItem value="manual">Ręczna (użytkownik podaje numer)</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        <p className="text-xs text-slate-400">
+          Użytkownicy mogą zmienić tryb podczas tworzenia konkretnej faktury.
+        </p>
+        {!isAdmin && (
+          <p className="text-xs text-slate-400 flex items-center gap-1.5">
+            <Info className="w-3.5 h-3.5" />
+            Tylko właściciel może zmienić to ustawienie.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Settings Page ────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user, profile } = useAuth();
@@ -870,6 +939,9 @@ export default function SettingsPage() {
 
             {/* Company Address */}
             <CompanyAddressCard role={role} />
+
+            {/* Invoice Numbering Mode */}
+            <NumberingModeCard isAdmin={isAdmin} />
 
             {/* Ingestion Email */}
              {/* <IngestionEmailCard />*/}

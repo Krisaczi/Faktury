@@ -25,7 +25,7 @@ async function getSellerDefaults(buyerCompanyId?: string) {
 
   const { data: company } = await supabase
     .from('companies')
-    .select('name, nip, product_type, street, address_line2, city, zip, state_region, country')
+    .select('name, nip, product_type, street, address_line2, city, zip, state_region, country, invoice_numbering_mode')
     .eq('id', userRecord.company_id)
     .maybeSingle();
 
@@ -115,6 +115,7 @@ async function getSellerDefaults(buyerCompanyId?: string) {
     },
     role:          (userRecord.role ?? 'accountant') as AppRole,
     productType:   company.product_type ?? null,
+    invoiceNumberingMode: (company.invoice_numbering_mode ?? 'auto') as 'auto' | 'manual',
     buyerDefaults,
     initialCustomer,
   };
@@ -157,6 +158,7 @@ export default async function NewInvoicePage({
         sellerAddressDetails={defaults?.addressDetails}
         sellerAddressMeta={defaults?.addressMeta}
         sellerRole={defaults?.role}
+        defaultNumberingMode={defaults?.invoiceNumberingMode}
       />
     </Stack>
   );

@@ -24,7 +24,7 @@ export async function GET() {
 
     const { data: company, error } = await supabase
       .from('companies')
-      .select('id, name, nip, currency, ingestion_email, subscription_status, created_at, updated_at')
+      .select('id, name, nip, currency, ingestion_email, subscription_status, invoice_numbering_mode, created_at, updated_at')
       .eq('id', userRecord.company_id)
       .maybeSingle();
 

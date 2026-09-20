@@ -84,8 +84,10 @@ const FormItemSchema = IssuedInvoiceItemSchema.omit({
 });
 
 const FormSchema = IssuedInvoiceSchema
-  .omit({ id: true, company_id: true, items: true })
+  .omit({ id: true, company_id: true, items: true, invoice_number: true })
   .extend({
+    invoice_number: z.string().min(1, 'Numer faktury jest wymagany').max(100).regex(/^[\w/\-. ]+$/, 'Numer faktury zawiera niedozwolone znaki').optional(),
+    autoGenerateNumber: z.boolean().optional().default(true),
     buyer_company_id: z.string().uuid().nullable().optional(),
     items: z.array(FormItemSchema).min(1, 'Dodaj co najmniej jedną pozycję'),
   });
@@ -157,10 +159,31 @@ export async function createInvoice(
 
     const invoiceNumber =
       intent === 'issue'
-        ? await generateInvoiceNumber(companyId)
-        : (data.invoice_number || `SZKIC-${Date.now()}`);
+        ? (data.autoGenerateNumber !== false
+            ? await generateInvoiceNumber(companyId)
+            : (data.invoice_number || await generateInvoiceNumber(companyId)))
+        : (data.autoGenerateNumber === false && data.invoice_number
+            ? data.invoice_number
+            : `SZKIC-${Date.now()}`);
 
     const supabase = await getSupabaseServerClient();
+
+    // Uniqueness check for manual invoice numbers
+    if (data.autoGenerateNumber === false && data.invoice_number) {
+      const { data: existing } = await supabase
+        .from('issued_invoices')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('invoice_number', data.invoice_number)
+        .maybeSingle();
+      if (existing) {
+        return {
+          ok: false,
+          error: 'Faktura z tym numerem już istnieje.',
+          fieldErrors: { invoice_number: ['Numer faktury musi być unikalny w ramach firmy'] },
+        };
+      }
+    }
 
     // ── Resolve billing address snapshot from company settings or owner override ─
     let billingSnapshot: BillingAddress;
@@ -373,8 +396,28 @@ export async function updateInvoice(
 
     const newNumber =
       intent === 'issue' && existing.status === 'draft'
-        ? await generateInvoiceNumber(companyId)
+        ? (data.autoGenerateNumber !== false
+            ? await generateInvoiceNumber(companyId)
+            : (data.invoice_number || await generateInvoiceNumber(companyId)))
         : existing.invoice_number;
+
+    // Uniqueness check for manual invoice numbers (exclude current invoice)
+    if (data.autoGenerateNumber === false && data.invoice_number && data.invoice_number !== existing.invoice_number) {
+      const { data: dup } = await supabase
+        .from('issued_invoices')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('invoice_number', data.invoice_number)
+        .neq('id', id)
+        .maybeSingle();
+      if (dup) {
+        return {
+          ok: false,
+          error: 'Faktura z tym numerem już istnieje.',
+          fieldErrors: { invoice_number: ['Numer faktury musi być unikalny w ramach firmy'] },
+        };
+      }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateErr } = await (supabase as any)

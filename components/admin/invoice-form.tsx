@@ -49,6 +49,7 @@ const ItemSchema = z.object({
 
 const FormSchema = z.object({
   invoice_number:      z.string().optional(),
+  autoGenerateNumber:  z.boolean().default(true),
   currency:            z.string().default('PLN'),
   issue_date:          z.string().min(1, 'Wymagane'),
   sale_date:           z.string().optional(),
@@ -76,6 +77,7 @@ interface Props {
   mode: 'create' | 'edit';
   invoiceId?: string;
   defaultValues?: Partial<LocalFormValues>;
+  defaultNumberingMode?: 'auto' | 'manual';
   sellerDefaults?: {
     name: string;
     nip: string;
@@ -112,7 +114,7 @@ const PAYMENT_LABELS = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, buyerDefaults, initialCustomer, sellerAddressDetails, sellerAddressMeta, sellerRole }: Props) {
+export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMode, sellerDefaults, buyerDefaults, initialCustomer, sellerAddressDetails, sellerAddressMeta, sellerRole }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
@@ -121,6 +123,9 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
   const usage = useInvoiceUsage();
   const isOwner = sellerRole === 'owner';
   const [useOverride, setUseOverride] = useState(false);
+  const [autoGenerateNumber, setAutoGenerateNumber] = useState(
+    defaultValues?.autoGenerateNumber ?? (defaultNumberingMode !== 'manual')
+  );
   const [overrideAddress, setOverrideAddress] = useState<BillingAddress>({
     addressLine1: '', addressLine2: '', city: '', postalCode: '', stateRegion: '', country: 'PL', vatId: '',
   });
@@ -143,6 +148,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
       currency:       'PLN',
       payment_method: 'transfer',
       issue_date:     todayISO(),
+      autoGenerateNumber: autoGenerateNumber,
       ...defaultValues,
       seller_name:    defaultValues?.seller_name    ?? sellerDefaults?.name    ?? '',
       seller_nip:     defaultValues?.seller_nip     ?? sellerDefaults?.nip     ?? '',
@@ -164,6 +170,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
   // Live watch for totals computation
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedBankAccountId = useWatch({ control, name: 'company_bank_account_id' });
+  const watchedInvoiceNumber = useWatch({ control, name: 'invoice_number' });
 
   const computedItems = (watchedItems ?? []).map((item) => {
     const q   = Number(item?.quantity ?? 0);
@@ -180,6 +187,8 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
       handleSubmit(async (data: LocalFormValues) => {
         const payload = {
           ...data,
+          autoGenerateNumber,
+          invoice_number: autoGenerateNumber ? undefined : data.invoice_number,
           overrideAddress: useOverride && isOwner ? overrideAddress : null,
         } as unknown as InvoiceFormValues;
 
@@ -444,6 +453,54 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, sellerDefaults, bu
             </details>
           </div>
         )}
+      </Section>
+
+      {/* ── Invoice number ────────────────────────────────────────────── */}
+      <Section title="Numer faktury" icon={Hash}>
+        <div className="flex flex-col gap-4">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoGenerateNumber}
+              onClick={() => setAutoGenerateNumber((v) => !v)}
+              className={cn(
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                autoGenerateNumber ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                  autoGenerateNumber ? 'translate-x-4' : 'translate-x-0.5'
+                )}
+              />
+            </button>
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              Generuj numer automatycznie
+            </span>
+          </label>
+
+          <Field
+            label="Numer faktury"
+            required={!autoGenerateNumber}
+            error={!autoGenerateNumber && !watchedInvoiceNumber ? 'Numer faktury jest wymagany' : undefined}
+          >
+            <Input
+              {...register('invoice_number')}
+              disabled={autoGenerateNumber}
+              placeholder={autoGenerateNumber ? 'NP. 2026/09/001 (generowany automatycznie)' : 'Wprowadź numer faktury, np. FV/001/09/2026'}
+              className={cn('font-mono', autoGenerateNumber && 'bg-slate-50 dark:bg-slate-800/60 text-slate-400')}
+            />
+          </Field>
+
+          {mode === 'edit' && !autoGenerateNumber && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3" />
+              Zmiana numeru faktury w szkicu nie wpływa na numerację automatyczną.
+            </p>
+          )}
+        </div>
       </Section>
 
       {/* ── Dates & payment ───────────────────────────────────────────── */}

@@ -31,6 +31,7 @@ export type Database = {
           is_active: boolean | null;
           registered_at: string | null;
           onboarding_step: string | null;
+          invoice_numbering_mode: 'auto' | 'manual';
           created_at: string;
           updated_at: string;
         };
@@ -55,6 +56,7 @@ export type Database = {
           is_active?: boolean | null;
           registered_at?: string | null;
           onboarding_step?: string | null;
+          invoice_numbering_mode?: 'auto' | 'manual';
           created_at?: string;
           updated_at?: string;
         };
@@ -78,6 +80,7 @@ export type Database = {
           is_active?: boolean | null;
           registered_at?: string | null;
           onboarding_step?: string | null;
+          invoice_numbering_mode?: 'auto' | 'manual';
           updated_at?: string;
         };
         Relationships: [];
