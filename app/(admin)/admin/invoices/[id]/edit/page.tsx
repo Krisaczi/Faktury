@@ -103,9 +103,12 @@ export default async function EditInvoicePage({
     notFound();
   }
 
+  const numberingMode = (invoice.numbering_mode ?? 'automatic') as 'manual' | 'automatic';
+  const isManual = numberingMode === 'manual' && invoice.invoice_number && !invoice.invoice_number.startsWith('SZKIC-');
+
   const defaultValues = {
-    invoice_number:      invoice.invoice_number?.startsWith('SZKIC-') ? undefined : invoice.invoice_number,
-    autoGenerateNumber:  invoice.invoice_number?.startsWith('SZKIC-') ? true : false,
+    invoice_number:      isManual ? invoice.invoice_number : undefined,
+    autoGenerateNumber:  !isManual,
     currency:            invoice.currency,
     issue_date:          invoice.issue_date,
     sale_date:           invoice.sale_date ?? undefined,
@@ -163,6 +166,7 @@ export default async function EditInvoicePage({
         mode="edit"
         invoiceId={params.id}
         defaultValues={defaultValues}
+        defaultNumberingMode={numberingMode === 'manual' ? 'manual' : 'auto'}
         initialCustomer={initialCustomer}
         sellerAddressDetails={sellerAddressDetails}
         sellerAddressMeta={sellerAddressMeta}

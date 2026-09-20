@@ -174,12 +174,15 @@ export async function createInvoice(
       }
     }
 
+    const isManual = data.autoGenerateNumber === false;
+    const numberingMode = isManual ? 'manual' : 'automatic';
+
     const invoiceNumber =
       intent === 'issue'
-        ? (data.autoGenerateNumber !== false
-            ? await generateInvoiceNumber(companyId)
-            : (data.invoice_number || await generateInvoiceNumber(companyId)))
-        : (data.autoGenerateNumber === false && data.invoice_number
+        ? (isManual
+            ? (data.invoice_number || await generateInvoiceNumber(companyId))
+            : await generateInvoiceNumber(companyId))
+        : (isManual && data.invoice_number
             ? data.invoice_number
             : `SZKIC-${Date.now()}`);
 
@@ -253,6 +256,7 @@ export async function createInvoice(
       .insert({
         company_id:          companyId,
         invoice_number:      invoiceNumber,
+        numbering_mode:      numberingMode,
         status:              intent === 'issue' ? 'issued' : 'draft',
         currency:            data.currency ?? 'PLN',
         issue_date:          data.issue_date,
@@ -346,7 +350,7 @@ export async function updateInvoice(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from('issued_invoices')
-      .select('id, status, invoice_number, company_id')
+      .select('id, status, invoice_number, numbering_mode, company_id')
       .eq('id', id)
       .eq('company_id', companyId)
       .maybeSingle();
@@ -411,11 +415,14 @@ export async function updateInvoice(
     const sellerAddressString = billingAddressToString(billingSnapshot);
     const nowIso = new Date().toISOString();
 
+    const isManual = data.autoGenerateNumber === false;
+    const numberingMode = isManual ? 'manual' : 'automatic';
+
     const newNumber =
       intent === 'issue' && existing.status === 'draft'
-        ? (data.autoGenerateNumber !== false
-            ? await generateInvoiceNumber(companyId)
-            : (data.invoice_number || await generateInvoiceNumber(companyId)))
+        ? (isManual
+            ? (data.invoice_number || await generateInvoiceNumber(companyId))
+            : await generateInvoiceNumber(companyId))
         : existing.invoice_number;
 
     // Uniqueness check for manual invoice numbers (exclude current invoice)
@@ -441,6 +448,7 @@ export async function updateInvoice(
       .from('issued_invoices')
       .update({
         invoice_number:      newNumber,
+        numbering_mode:      numberingMode,
         status:              intent === 'issue' ? 'issued' : 'draft',
         currency:            data.currency ?? 'PLN',
         issue_date:          data.issue_date,

@@ -220,7 +220,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
           router.push(`/admin/invoices/${result.id}`);
         });
       })(),
-    [handleSubmit, mode, invoiceId, router]
+    [handleSubmit, mode, invoiceId, router, autoGenerateNumber, useOverride, isOwner, overrideAddress]
   );
 
   return (

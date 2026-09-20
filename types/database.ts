@@ -674,6 +674,7 @@ export type Database = {
           id: string;
           company_id: string;
           invoice_number: string;
+          numbering_mode: 'manual' | 'automatic';
           status: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
           currency: string;
           issue_date: string;
@@ -710,6 +711,7 @@ export type Database = {
           id?: string;
           company_id: string;
           invoice_number: string;
+          numbering_mode?: 'manual' | 'automatic';
           status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
           currency?: string;
           issue_date?: string;
@@ -744,12 +746,8 @@ export type Database = {
         };
         Update: {
           invoice_number?: string;
-          status?: "szkic"
-| "wystawiona"
-| "wysłana do KSeF"
-| "zaakceptowana"
-| "odrzucona"
-| "anulowana";
+          numbering_mode?: 'manual' | 'automatic';
+          status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
           currency?: string;
           issue_date?: string;
           sale_date?: string | null;
@@ -769,10 +767,7 @@ export type Database = {
           notes?: string | null;
           ksef_reference_no?: string | null;
           ksef_session_token?: string | null;
-          ksef_status?: | "oczekujące"
-  | "przetwarzanie"
-  | "zaakceptowane"
-  | "odrzucone" | null;
+          ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
           ksef_error_message?: string | null;
           ksef_sent_at?: string | null;
           ksef_accepted_at?: string | null;
