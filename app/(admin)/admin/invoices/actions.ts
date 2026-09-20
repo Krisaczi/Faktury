@@ -13,6 +13,7 @@ import {
   type IssuedInvoiceInput,
 } from '@/types/issued-invoice';
 import { buildKsefPayload } from '@/lib/ksef';
+import { submitToKsef, checkKsefStatus as pollKsefStatus, generateIdempotencyKey } from '@/lib/ksef/submit';
 import {
   canAccessInvoicing,
   canWriteInvoice,
@@ -516,28 +517,9 @@ export async function redirectToInvoice(id: string) {
 
 // ─── KSeF helpers ─────────────────────────────────────────────────────────────
 
-const KSEF_TEST_URL = 'https://api-test.ksef.mf.gov.pl/v2';
-const KSEF_PROD_URL = 'https://api.ksef.mf.gov.pl/v2';
-
 export type KsefActionResult =
   | { ok: true;  id: string; rawXml: string; signedXml: string; isMock: boolean; referenceNo: string | null }
   | { ok: false; error: string };
-
-async function getKsefCreds(companyId: string) {
-  const supabase = await getSupabaseServerClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: creds } = await (supabase as any)
-    .from('ksef_credentials')
-    .select('token, environment')
-    .eq('company_id', companyId)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return {
-    token:   creds?.token   as string | null,
-    baseUrl: creds?.environment === 'prod' ? KSEF_PROD_URL : KSEF_TEST_URL,
-  };
-}
 
 // ─── sendToKsef ───────────────────────────────────────────────────────────────
 
@@ -559,7 +541,7 @@ export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: inv } = await (supabase as any)
       .from('issued_invoices')
-      .select('id, status, company_id')
+      .select('id, status, company_id, ksef_reference_no, seller_nip')
       .eq('id', invoiceId)
       .eq('company_id', companyId)
       .maybeSingle();
@@ -572,58 +554,74 @@ export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
 
     // Build + sign FA(2) XML
     const payload = await buildKsefPayload(invoiceId);
-    const { token, baseUrl } = await getKsefCreds(companyId);
 
-    let referenceNo: string | null = null;
+    // Load KSeF credentials
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: creds } = await (supabase as any)
+      .from('ksef_credentials')
+      .select('token, environment')
+      .eq('company_id', companyId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (token) {
-      const res = await fetch(`${baseUrl}/invoices/send`, {
-        method: 'POST',
-        headers: {
-          Authorization:  `Bearer ${token}`,
-          'Content-Type': 'application/octet-stream',
-          Accept:         'application/json',
-        },
-        body: Buffer.from(payload.signedXml, 'utf-8'),
-      });
-
-      if (!res.ok) {
-        const detail = (await res.text()).slice(0, 500);
-        const errMsg = `KSeF (${res.status}): ${detail}`;
-
-        // Persist error into the invoice record
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('issued_invoices')
-          .update({
-            ksef_error_message: errMsg,
-            updated_at:         new Date().toISOString(),
-          })
-          .eq('id', invoiceId);
-
-        revalidatePath(`/admin/invoices/${invoiceId}`);
-        return { ok: false, error: errMsg };
-      }
-
-      const body   = await res.json();
-      referenceNo  = body.referenceNumber ?? body.ksefReferenceNumber ?? null;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('issued_invoices')
-        .update({
-          status:             'sent_to_ksef',
-          ksef_status:        'pending',
-          ksef_sent_at:       new Date().toISOString(),
-          ksef_reference_no:  referenceNo,
-          ksef_error_message: null,
-          updated_at:         new Date().toISOString(),
-        })
-        .eq('id', invoiceId);
+    if (!creds?.token) {
+      // No credentials — return the payload without sending
+      return {
+        ok:         true,
+        id:         invoiceId,
+        rawXml:     payload.rawXml,
+        signedXml:  payload.signedXml,
+        isMock:     payload.signing.isMock,
+        referenceNo: null,
+      };
     }
+
+    // Get company NIP for KSeF auth
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: company } = await (supabase as any)
+      .from('companies')
+      .select('nip')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    if (!company?.nip) {
+      return { ok: false, error: 'Firma nie ma numeru NIP — wymagany do KSeF.' };
+    }
+
+    const idempotencyKey = generateIdempotencyKey(invoiceId);
+
+    // Submit using the proper KSeF 2.0 session-based flow
+    const result = await submitToKsef({
+      invoiceId,
+      signedXml: payload.signedXml,
+      idempotencyKey,
+      credentials: { token: creds.token, environment: creds.environment as 'test' | 'prod' },
+      companyNip: company.nip,
+      existingKsefNumber: inv.ksef_reference_no ?? null,
+    });
+
+    const nowIso = new Date().toISOString();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('issued_invoices')
+      .update({
+        status:             result.status === 'accepted' ? 'accepted' : 'sent_to_ksef',
+        ksef_status:        result.status,
+        ksef_sent_at:       nowIso,
+        ksef_reference_no:  result.ksefNumber ?? inv.ksef_reference_no ?? null,
+        ksef_error_message: result.error ?? null,
+        updated_at:         nowIso,
+      })
+      .eq('id', invoiceId);
 
     revalidatePath('/admin/invoices');
     revalidatePath(`/admin/invoices/${invoiceId}`);
+
+    if (!result.success && !result.transient) {
+      return { ok: false, error: result.error ?? 'KSeF odrzucił fakturę.' };
+    }
 
     return {
       ok:         true,
@@ -631,7 +629,7 @@ export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
       rawXml:     payload.rawXml,
       signedXml:  payload.signedXml,
       isMock:     payload.signing.isMock,
-      referenceNo,
+      referenceNo: result.ksefNumber ?? null,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
@@ -660,60 +658,70 @@ export async function checkKsefStatus(invoiceId: string): Promise<KsefStatusResu
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: inv } = await (supabase as any)
       .from('issued_invoices')
-      .select('id, status, company_id, ksef_reference_no, ksef_status, ksef_accepted_at')
+      .select('id, status, company_id, ksef_reference_no, ksef_status, ksef_accepted_at, ksef_submission_id')
       .eq('id', invoiceId)
       .eq('company_id', companyId)
       .maybeSingle();
 
     if (!inv) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
-    if (!inv.ksef_reference_no) {
+    if (!inv.ksef_reference_no && !inv.ksef_submission_id) {
       return { ok: false, error: 'Brak numeru referencyjnego KSeF — faktura nie była jeszcze wysłana.' };
     }
 
-    const { token, baseUrl } = await getKsefCreds(companyId);
+    // Load credentials
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: creds } = await (supabase as any)
+      .from('ksef_credentials')
+      .select('token, environment')
+      .eq('company_id', companyId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!token) {
-      // No credentials — return what we have in DB
+    if (!creds?.token) {
       return {
-        ok:         true,
-        status:     inv.ksef_status ?? 'pending',
+        ok:          true,
+        status:      inv.ksef_status ?? 'pending',
         referenceNo: inv.ksef_reference_no,
-        acceptedAt: inv.ksef_accepted_at ?? null,
+        acceptedAt:  inv.ksef_accepted_at ?? null,
       };
     }
 
-    const res = await fetch(
-      `${baseUrl}/invoices/send/${encodeURIComponent(inv.ksef_reference_no)}`,
-      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: company } = await (supabase as any)
+      .from('companies')
+      .select('nip')
+      .eq('id', companyId)
+      .maybeSingle();
 
-    if (!res.ok) {
-      const detail = (await res.text()).slice(0, 400);
-      return { ok: false, error: `KSeF status check failed (${res.status}): ${detail}` };
+    if (!company?.nip) {
+      return { ok: false, error: 'Firma nie ma numeru NIP.' };
     }
 
-    const data       = await res.json();
-    const statusCode: number = data.processingCode ?? data.status?.code ?? 0;
+    const submissionId = inv.ksef_submission_id ?? inv.ksef_reference_no;
+    const result = await pollKsefStatus({
+      submissionId,
+      credentials: { token: creds.token, environment: creds.environment as 'test' | 'prod' },
+      companyNip: company.nip,
+    });
 
-    let newKsefStatus: string;
+    let newKsefStatus: string = inv.ksef_status ?? 'pending';
     let newInvoiceStatus: string = inv.status;
     let acceptedAt: string | null = inv.ksef_accepted_at ?? null;
     let errorMessage: string | null = null;
 
-    if (statusCode === 200) {
+    if (result.status === 'accepted' && result.ksefNumber) {
       newKsefStatus    = 'accepted';
       newInvoiceStatus = 'accepted';
       acceptedAt       = new Date().toISOString();
-    } else if (statusCode === 400 || statusCode >= 300) {
+    } else if (result.status === 'rejected') {
       newKsefStatus    = 'rejected';
       newInvoiceStatus = 'rejected';
-      errorMessage     = data.status?.description ?? data.errorDescription ?? `Odrzucono (kod ${statusCode})`;
+      errorMessage     = result.error ?? 'Odrzucono przez KSeF';
     } else {
-      // 100 = still processing
-      newKsefStatus = 'processing';
+      newKsefStatus = result.status;
     }
 
-    // Persist updated status
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from('issued_invoices')
