@@ -62,9 +62,16 @@ function buildHtml(
   autoPrint: boolean,
 ): string {
   const cur = (invoice.currency as string | null) ?? 'PLN';
-  const netAmount = (invoice.amount as number | null) ?? (invoice.total_amount as number | null);
+
+  // The `amount` column stores the GROSS total (what the customer pays).
+  // Derive net and VAT correctly from it.
+  const grossAmount = (invoice.amount as number | null) ?? (invoice.total_amount as number | null);
   const taxAmount = invoice.tax_amount as number | null;
-  const gross = netAmount != null && taxAmount != null ? netAmount + taxAmount : netAmount;
+  const netAmount = grossAmount != null && taxAmount != null
+    ? grossAmount - taxAmount
+    : grossAmount != null
+      ? grossAmount
+      : null;
 
   // Merge DB vendor record into seller party
   const seller: ParsedParty = {
@@ -469,13 +476,19 @@ function buildHtml(
             : '<span class="empty">—</span>';
           const qty = li.quantity != null ? li.quantity.toLocaleString('pl-PL', { maximumFractionDigits: 3 }) : '';
           const unit = li.unit ? ' ' + esc(li.unit) : '';
+          const lineNet = li.netAmount ?? null;
+          const lineVat = li.vatAmount ?? null;
+          const lineGross = li.grossAmount ?? null;
+          // Derive missing values from what we have
+          const derivedVat = lineVat ?? (lineNet != null && li.vatRate ? lineNet * parseFloat(li.vatRate) / 100 : null);
+          const derivedGross = lineGross ?? (lineNet != null && derivedVat != null ? lineNet + derivedVat : lineNet);
           return `<tr>
             <td>${descHtml}</td>
             <td class="num">${qty}${unit}</td>
             <td class="num">${li.unitPrice != null ? esc(fmtAmount(li.unitPrice, cur)) : '—'}</td>
-            <td class="num">${li.netAmount != null ? esc(fmtAmount(li.netAmount, cur)) : '—'}</td>
-            <td class="num">${li.vatAmount != null ? esc(fmtAmount(li.vatAmount, cur)) : (li.vatRate ? esc(li.vatRate) : '—')}</td>
-            <td class="num">${li.grossAmount != null ? esc(fmtAmount(li.grossAmount, cur)) : '—'}</td>
+            <td class="num">${lineNet != null ? esc(fmtAmount(lineNet, cur)) : '—'}</td>
+            <td class="num">${derivedVat != null ? esc(fmtAmount(derivedVat, cur)) : (li.vatRate ? esc(li.vatRate) : '—')}</td>
+            <td class="num">${derivedGross != null ? esc(fmtAmount(derivedGross, cur)) : '—'}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -491,8 +504,8 @@ function buildHtml(
     ${taxAmount != null
       ? `<div class="totals-row"><span class="tl">VAT / Tax</span><span class="tv">${esc(fmtAmount(taxAmount, cur))}</span></div>`
       : ''}
-    ${gross != null
-      ? `<div class="totals-row gross"><span class="tl">Total (Gross)</span><span class="tv">${esc(fmtAmount(gross, cur))}</span></div>`
+    ${grossAmount != null
+      ? `<div class="totals-row gross"><span class="tl">Total (Gross)</span><span class="tv">${esc(fmtAmount(grossAmount, cur))}</span></div>`
       : ''}
     <div class="totals-row" style="background:#fafafa">
       <span class="tl" style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Currency</span>
@@ -684,6 +697,22 @@ export async function GET(
     }
     if (xmlAmountDue != null && !(invoice as Record<string, unknown>).amount_due) {
       (invoice as Record<string, unknown>).amount_due = xmlAmountDue;
+    }
+
+    // Validate totals consistency: net + vat must equal gross (within rounding)
+    const grossVal = (invoice.amount as number | null) ?? (invoice.total_amount as number | null);
+    const taxVal = invoice.tax_amount as number | null;
+    if (grossVal != null && taxVal != null) {
+      const computedNet = grossVal - taxVal;
+      const lineNetSum = lineItems.reduce((s, li) => s + (li.netAmount ?? 0), 0);
+      if (lineItems.length > 0 && lineNetSum > 0) {
+        const rounding = 0.02;
+        if (Math.abs(computedNet - lineNetSum) > rounding) {
+          console.warn('[pdf] Totals mismatch', {
+            grossVal, taxVal, computedNet, lineNetSum, invoiceId: invoice.id,
+          });
+        }
+      }
     }
 
     const html = buildHtml(
