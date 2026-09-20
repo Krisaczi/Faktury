@@ -814,6 +814,24 @@ export async function GET(
       company_bank_account: bankAccount,
     };
 
+    // Validate totals consistency before rendering
+    const computedNet = (items ?? []).reduce((s: number, i: { net_amount: number }) => s + i.net_amount, 0);
+    const computedVat = (items ?? []).reduce((s: number, i: { vat_amount: number }) => s + i.vat_amount, 0);
+    const computedGross = (items ?? []).reduce((s: number, i: { gross_amount: number }) => s + i.gross_amount, 0);
+    const rounding = 0.02;
+    if (
+      Math.abs(computedNet - invoice.net_total) > rounding ||
+      Math.abs(computedVat - invoice.vat_total) > rounding ||
+      Math.abs(computedGross - invoice.gross_total) > rounding ||
+      Math.abs(invoice.net_total + invoice.vat_total - invoice.gross_total) > rounding
+    ) {
+      console.error('[pdf] Totals mismatch', {
+        computedNet, computedVat, computedGross,
+        storedNet: invoice.net_total, storedVat: invoice.vat_total, storedGross: invoice.gross_total,
+      });
+      return new NextResponse('Błąd spójności sum faktury — skontaktuj się z obsługą.', { status: 500 });
+    }
+
     const autoPrint = req.nextUrl.searchParams.get('print') === '1';
     const html = buildHtml(invoiceWithItems, autoPrint);
 

@@ -532,6 +532,12 @@ export function PlatformInvoiceModal({
                 <span className="text-slate-500">Wartość netto</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">{formatCents(totals.subtotalCents)}</span>
               </div>
+              {totals.breakdown.length > 0 && totals.breakdown.some(b => b.taxAmountCents > 0) && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Suma VAT</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">{formatCents(totals.taxTotalCents)}</span>
+                </div>
+              )}
               {totals.breakdown.map((b, i) => (
                 <div key={i} className="flex justify-between text-sm">
                   <span className="text-slate-500">VAT ({b.vatRatePercent}%)</span>
@@ -615,19 +621,26 @@ export function PlatformInvoiceModal({
                     <th className="text-right py-2 w-16">Ilość</th>
                     <th className="text-right py-2 w-24">Cena {priceIncludesTax ? '(brutto)' : '(netto)'}</th>
                     <th className="text-right py-2 w-20">VAT</th>
-                    <th className="text-right py-2 w-24">Wartość {priceIncludesTax ? '(brutto)' : '(netto)'}</th>
+                    <th className="text-right py-2 w-24">Netto</th>
+                    <th className="text-right py-2 w-24">VAT kwota</th>
+                    <th className="text-right py-2 w-24">Brutto</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map((li, idx) => {
                     const lineResult = totals.lineItems[idx];
+                    const lineNet = lineResult?.taxBaseCents ?? Math.round(li.quantity * li.unitPriceCents);
+                    const lineVat = lineResult?.taxAmountCents ?? 0;
+                    const lineGross = lineNet + lineVat;
                     return (
                       <tr key={idx} className="border-b border-slate-100 dark:border-slate-800">
                         <td className="py-2 text-slate-700 dark:text-slate-300">{li.description}</td>
                         <td className="text-right text-slate-600 dark:text-slate-400">{li.quantity}</td>
                         <td className="text-right text-slate-600 dark:text-slate-400">{formatCents(li.unitPriceCents)}</td>
                         <td className="text-right text-slate-600 dark:text-slate-400">{lineResult?.taxable ? `${lineResult.vatRatePercent}%` : '—'}</td>
-                        <td className="text-right font-medium text-slate-700 dark:text-slate-300">{formatCents(lineResult?.amountCents ?? Math.round(li.quantity * li.unitPriceCents))}</td>
+                        <td className="text-right text-slate-600 dark:text-slate-400">{formatCents(lineNet)}</td>
+                        <td className="text-right text-slate-600 dark:text-slate-400">{formatCents(lineVat)}</td>
+                        <td className="text-right font-medium text-slate-700 dark:text-slate-300">{formatCents(lineGross)}</td>
                       </tr>
                     );
                   })}
