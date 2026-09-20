@@ -77,11 +77,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only owner can delete invoices
-    if (userRecord.role !== 'owner') {
-      return NextResponse.json({ error: 'Forbidden: only the owner can delete invoices' }, { status: 403 });
-    }
-
     // Verify the invoice belongs to this company before deleting
     const { data: invoice } = await supabase
       .from('invoices')

@@ -56,10 +56,10 @@ export function canManageBankAccounts(role: string | null | undefined): boolean 
 }
 
 /**
- * Only the owner can delete invoices.
+ * Any authenticated company member can delete invoices.
  */
 export function canDeleteInvoice(role: string | null | undefined): boolean {
-  return role === 'owner';
+  return role === 'owner' || role === 'accountant';
 }
 
 // ─── Role labels ──────────────────────────────────────────────────────────────
