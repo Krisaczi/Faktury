@@ -1164,8 +1164,8 @@ export default function InvoiceDetailPage() {
                       <MetaRow label="Data wystawienia"   value={fmt(invoice?.issue_date)} />
                       <MetaRow label="Termin płattności"     value={fmt(invoice?.due_date)} />
                       <MetaRow label="Ryzyko"   value={<RiskBadge level={invoice?.overall_risk} />} />
-                      <MetaRow label="Nazwa banku" value={invoice?.bank_name ?? company?.bank_name ?? null} />
-                      <MetaRow label="Numer konta" value={formatIBAN(invoice?.bank_account_number ?? invoice?.bank_account ?? company?.bank_account_number ?? null)} mono />
+                      <MetaRow label="Nazwa banku" value={invoice?.bank_name ?? null} />
+                      <MetaRow label="Numer konta z faktury" value={formatIBAN(invoice?.bank_account_number ?? invoice?.bank_account ?? null)} mono />
                     </CardContent>
                   </Card>
 
