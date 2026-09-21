@@ -1146,10 +1146,10 @@ export default function InvoiceDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <MetaRow label="Invoice No."  value={invoice?.invoice_number} />
-                      <MetaRow label="Vendor"       value={vendor?.name ?? '—'} />
+                      <MetaRow label="Numer faktury"  value={invoice?.invoice_number} />
+                      <MetaRow label="Dostawca"       value={vendor?.name ?? '—'} />
                       <MetaRow
-                        label="Amount"
+                        label="Kwota"
                         value={
                           <span className="font-semibold text-slate-900 dark:text-slate-100">
                             {fmtCurrency(invoice?.amount ?? null, invoice?.currency ?? 'PLN')}
@@ -1157,13 +1157,13 @@ export default function InvoiceDetailPage() {
                         }
                       />
                       {invoice?.tax_amount != null && (
-                        <MetaRow label="Tax Amount"  value={fmtCurrency(invoice.tax_amount, invoice.currency ?? 'PLN')} />
+                        <MetaRow label="Podatek"  value={fmtCurrency(invoice.tax_amount, invoice.currency ?? 'PLN')} />
                       )}
-                      <MetaRow label="Currency"     value={invoice?.currency ?? '—'} />
-                      <MetaRow label="Invoice Date" value={fmt(invoice?.invoice_date)} />
-                      <MetaRow label="Issue Date"   value={fmt(invoice?.issue_date)} />
-                      <MetaRow label="Due Date"     value={fmt(invoice?.due_date)} />
-                      <MetaRow label="Risk Level"   value={<RiskBadge level={invoice?.overall_risk} />} />
+                      <MetaRow label="Waluta"     value={invoice?.currency ?? '—'} />
+                      <MetaRow label="Data faktury" value={fmt(invoice?.invoice_date)} />
+                      <MetaRow label="Data wystawienia"   value={fmt(invoice?.issue_date)} />
+                      <MetaRow label="Termin płattności"     value={fmt(invoice?.due_date)} />
+                      <MetaRow label="Ryzyko"   value={<RiskBadge level={invoice?.overall_risk} />} />
                     </CardContent>
                   </Card>
 
@@ -1175,12 +1175,12 @@ export default function InvoiceDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <MetaRow label="Company" value={company?.name ?? null} />
-                      <MetaRow label="NIP" value={invoice?.seller_nip ?? company?.nip ?? null} mono />
-                      <MetaRow label="Buyer NIP" value={invoice?.buyer_nip ?? null} mono />
-                      <MetaRow label="Bank Name" value={invoice?.bank_name ?? company?.bank_name ?? null} />
-                      <MetaRow label="Account Number" value={formatIBAN(invoice?.bank_account_number ?? company?.bank_account_number ?? null)} mono />
-                      <MetaRow label="Address" value={companyAddress(company)} />
+                      <MetaRow label="Firma" value={company?.name ?? null} />
+                      <MetaRow label="NIP dostawcy" value={invoice?.seller_nip ?? company?.nip ?? null} mono />
+                      <MetaRow label="NIP" value={invoice?.buyer_nip ?? null} mono />
+                      <MetaRow label="Nazwa banku" value={invoice?.bank_name ?? company?.bank_name ?? null} />
+                      <MetaRow label="Numer konta" value={formatIBAN(invoice?.bank_account_number ?? company?.bank_account_number ?? null)} mono />
+                      <MetaRow label="Adres" value={companyAddress(company)} />
                     </CardContent>
                   </Card>
 
