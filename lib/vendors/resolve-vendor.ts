@@ -20,6 +20,7 @@ export interface VendorData {
   addressZip?: string | null;
   addressCity?: string | null;
   bankAccountNumber?: string | null;
+  bankName?: string | null;
 }
 
 type Client = SupabaseClient<Database>;
@@ -40,6 +41,62 @@ function stripNip(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const stripped = raw.replace(/[\s-]/g, '');
   return stripped || null;
+}
+
+function normalizeAccountNumber(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const stripped = raw.replace(/\s+/g, '');
+  return stripped || null;
+}
+
+async function upsertVendorBankAccount(
+  supabase: Client,
+  vendorId: string,
+  accountNumber: string,
+  bankName?: string | null,
+  source: string = 'invoice'
+): Promise<void> {
+  const normalized = normalizeAccountNumber(accountNumber);
+  if (!normalized) return;
+
+  const table = supabase.from('vendor_bank_accounts' as never) as never;
+  const selectBuilder = (table as unknown as {
+    select: (cols: string) => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => {
+          maybeSingle: () => Promise<{ data: { id: string } | null }>;
+        };
+      };
+    };
+  });
+
+  const { data: existing } = await selectBuilder
+    .select('id')
+    .eq('vendor_id', vendorId)
+    .eq('bank_account_number', normalized)
+    .maybeSingle();
+
+  if (existing) {
+    if (bankName) {
+      const updateBuilder = (table as unknown as {
+        update: (data: Record<string, unknown>) => {
+          eq: (col: string, val: string) => Promise<unknown>;
+        };
+      });
+      await updateBuilder.update({ bank_name: bankName }).eq('id', existing.id);
+    }
+    return;
+  }
+
+  const insertBuilder = (table as unknown as {
+    insert: (data: Record<string, unknown>) => Promise<unknown>;
+  });
+  await insertBuilder.insert({
+    vendor_id: vendorId,
+    bank_account_number: normalized,
+    bank_name: bankName ?? null,
+    source,
+  });
 }
 
 export async function resolveVendor(
@@ -92,6 +149,11 @@ export async function resolveVendor(
       if (Object.keys(updates).length > 0) {
         await supabase.from('vendors').update(updates).eq('id', existing.id);
       }
+
+      // Save bank account to vendor_bank_accounts table
+      if (vendor.bankAccountNumber) {
+        await upsertVendorBankAccount(supabase, existing.id, vendor.bankAccountNumber, vendor.bankName);
+      }
       return existing.id;
     }
   }
@@ -105,7 +167,12 @@ export async function resolveVendor(
       .ilike('name', name)
       .maybeSingle();
 
-    if (byName) return byName.id;
+    if (byName) {
+      if (vendor.bankAccountNumber) {
+        await upsertVendorBankAccount(supabase, byName.id, vendor.bankAccountNumber, vendor.bankName);
+      }
+      return byName.id;
+    }
   }
 
   // ── 3. Create new vendor ──────────────────────────────────────────────────
@@ -125,7 +192,12 @@ export async function resolveVendor(
     .select('id')
     .single();
 
-  if (created) return created.id;
+  if (created) {
+    if (vendor.bankAccountNumber) {
+      await upsertVendorBankAccount(supabase, created.id, vendor.bankAccountNumber, vendor.bankName);
+    }
+    return created.id;
+  }
 
   // Unique-constraint violation (race condition) — another process inserted first
   if (insertErr?.code === '23505' && nip) {
@@ -135,7 +207,13 @@ export async function resolveVendor(
       .eq('company_id', companyId)
       .eq('nip', nip)
       .maybeSingle();
-    return existing?.id ?? null;
+    if (existing?.id) {
+      if (vendor.bankAccountNumber) {
+        await upsertVendorBankAccount(supabase, existing.id, vendor.bankAccountNumber, vendor.bankName);
+      }
+      return existing.id;
+    }
+    return null;
   }
 
   console.error('[resolveVendor] insert failed:', insertErr?.message, insertErr?.code);

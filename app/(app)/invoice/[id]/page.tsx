@@ -72,6 +72,7 @@ import {
   useInvoiceAuditLog,
   type InvoiceFlag,
   type AuditLogEntry,
+  type InvoiceCompany,
 } from '@/hooks/use-invoice-detail';
 import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items-section';
 import { InvoiceChargesSection } from '@/components/invoice/invoice-charges-section';
@@ -99,6 +100,23 @@ function sanitize(text: string) {
   return text.replace(/[<>&"']/g, (c) =>
     ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c)
   );
+}
+
+function formatIBAN(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\s+/g, '');
+  return digits.replace(/(.{4})/g, '$1 ').trim();
+}
+
+function companyAddress(c: InvoiceCompany | null | undefined): string | null {
+  if (!c) return null;
+  const parts = [
+    c.street,
+    c.address_line2,
+    [c.zip, c.city].filter(Boolean).join(' '),
+    c.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 // ─── Risk badge ───────────────────────────────────────────────────────────────
@@ -844,6 +862,7 @@ export default function InvoiceDetailPage() {
   }
 
   const invoice       = data?.invoice;
+  const company       = data?.company ?? null;
   const flags         = data?.flags ?? [];
   const reviews       = data?.reviews ?? [];
   const vendor        = data?.vendor;
@@ -1156,11 +1175,12 @@ export default function InvoiceDetailPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <MetaRow label="Seller NIP"   value={invoice?.seller_nip}   mono />
-                      <MetaRow label="Buyer NIP"    value={invoice?.buyer_nip}    mono />
-                      <MetaRow label="Bank Account" value={invoice?.bank_account} mono />
-                      <MetaRow label="Bank Name" value={invoice?.bank_name} />
-                      <MetaRow label="Account Number" value={invoice?.bank_account_number} mono />
+                      <MetaRow label="Company" value={company?.name ?? null} />
+                      <MetaRow label="NIP" value={invoice?.seller_nip ?? company?.nip ?? null} mono />
+                      <MetaRow label="Buyer NIP" value={invoice?.buyer_nip ?? null} mono />
+                      <MetaRow label="Bank Name" value={invoice?.bank_name ?? company?.bank_name ?? null} />
+                      <MetaRow label="Account Number" value={formatIBAN(invoice?.bank_account_number ?? company?.bank_account_number ?? null)} mono />
+                      <MetaRow label="Address" value={companyAddress(company)} />
                     </CardContent>
                   </Card>
 

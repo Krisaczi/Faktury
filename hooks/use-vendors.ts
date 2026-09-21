@@ -12,7 +12,16 @@ type VendorUpdate = Database['public']['Tables']['vendors']['Update'];
 export interface VendorFull extends Vendor {
   nip: string | null;
   bank_accounts: string[];
+  bank_account_number: string | null;
   notes: string | null;
+}
+
+export interface VendorBankAccount {
+  id: string;
+  bank_account_number: string;
+  bank_name: string | null;
+  source: string;
+  created_at: string;
 }
 
 export interface VendorStats {
@@ -34,6 +43,7 @@ export interface VendorDetailResponse {
   vendor: VendorFull;
   stats: VendorStats;
   last_activity: VendorLastActivity;
+  bank_accounts: VendorBankAccount[];
 }
 
 export interface VendorInvoiceRow {

@@ -81,6 +81,18 @@ export interface InvoiceDetail {
   created_at: string;
 }
 
+export interface InvoiceCompany {
+  name: string | null;
+  nip: string | null;
+  street: string | null;
+  address_line2: string | null;
+  city: string | null;
+  zip: string | null;
+  country: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+}
+
 export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
@@ -110,6 +122,7 @@ export interface InvoiceDetailResponse {
   flags: InvoiceFlag[];
   reviews: InvoiceReview[];
   vendor: InvoiceVendor | null;
+  company: InvoiceCompany | null;
 }
 
 export interface VendorStats {

@@ -128,6 +128,7 @@ async function parseAndIngest({
           addressZip:       inv.seller?.postalCode ?? null,
           addressCity:      inv.seller?.city       ?? null,
           bankAccountNumber: inv.seller?.iban ?? inv.bankAccount ?? null,
+          bankName:          inv.bankName ?? null,
         });
 
         const { data: invoice, error: invError } = await supabase

@@ -58,6 +58,7 @@ import {
   useVendorTrend,
   useExportVendorCsv,
   type VendorFull,
+  type VendorBankAccount,
   type VendorInvoiceRow,
   type VendorInvoiceFilters,
 } from '@/hooks/use-vendors';
@@ -71,6 +72,12 @@ function fmt(date: string | null | undefined) {
 function fmtCurrency(amount: number | null | undefined, currency = 'PLN') {
   if (amount == null) return '—';
   return new Intl.NumberFormat('pl-PL', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+}
+
+function formatIBAN(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\s+/g, '');
+  return digits.replace(/(.{4})/g, '$1 ').trim();
 }
 
 // ─── Risk badge ────────────────────────────────────────────────────────────────
@@ -399,6 +406,7 @@ export default function VendorProfilePage() {
   const vendor = data?.vendor;
   const stats  = data?.stats;
   const lastActivity = data?.last_activity;
+  const bankAccounts = data?.bank_accounts ?? [];
 
   if (error) {
     return (
@@ -617,13 +625,26 @@ export default function VendorProfilePage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {(vendor.bank_accounts ?? []).length === 0 ? (
-                        <p className="text-sm text-slate-400 py-1">No bank accounts on file</p>
+                      {bankAccounts.length === 0 ? (
+                        <p className="text-sm text-slate-400 py-1">No bank accounts found</p>
                       ) : (
-                        <div className="space-y-1.5">
-                          {(vendor.bank_accounts ?? []).map((acc, i) => (
-                            <div key={i} className="font-mono text-xs bg-slate-50 dark:bg-slate-800/50 rounded-md px-3 py-2 text-slate-700 dark:text-slate-300">
-                              {acc}
+                        <div className="space-y-3">
+                          {bankAccounts.map((acc: VendorBankAccount) => (
+                            <div key={acc.id} className="rounded-lg border border-slate-100 dark:border-slate-800 p-3 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                  {acc.bank_name ?? <span className="text-slate-400">—</span>}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] capitalize">
+                                  {acc.source}
+                                </Badge>
+                              </div>
+                              <div className="font-mono text-xs text-slate-600 dark:text-slate-400 break-all">
+                                {formatIBAN(acc.bank_account_number) ?? <span className="text-slate-400">—</span>}
+                              </div>
+                              <div className="text-xs text-slate-400">
+                                Added {fmt(acc.created_at)}
+                              </div>
                             </div>
                           ))}
                         </div>
