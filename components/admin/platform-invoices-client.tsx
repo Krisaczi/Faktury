@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Receipt, Loader as Loader2, Search, Ban, CircleCheck as CheckCircle, Send, FileText, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Receipt, Loader as Loader2, Search, Ban, CircleCheck as CheckCircle, Send, FileText, Clock, RefreshCw, AlertTriangle, Code } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface PlatformInvoice {
   id:                string;
@@ -54,6 +55,26 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isPending, start]      = useTransition();
   const [error, setError]       = useState<string | null>(null);
+  const [payloadModal, setPayloadModal] = useState<{ invoiceId: string; loading: boolean; data: KsefPayloadData | null } | null>(null);
+
+  function viewKsefPayload(invoiceId: string) {
+    setPayloadModal({ invoiceId, loading: true, data: null });
+    start(async () => {
+      try {
+        const res = await fetch(`/api/owner/invoices/${invoiceId}/ksef-payload`);
+        if (!res.ok) {
+          setPayloadModal({ invoiceId, loading: false, data: null });
+          setError('Błąd pobierania danych KSeF.');
+          return;
+        }
+        const data = await res.json() as KsefPayloadData;
+        setPayloadModal({ invoiceId, loading: false, data });
+      } catch {
+        setPayloadModal({ invoiceId, loading: false, data: null });
+        setError('Błąd połączenia.');
+      }
+    });
+  }
 
   function loadInvoices() {
     setError(null);
@@ -307,6 +328,17 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                         <span className="hidden sm:inline">{inv.ksefStatus ? 'Wyślij ponownie' : 'Wyślij do KSeF'}</span>
                       </Button>
                     )}
+                    {inv.status !== 'draft' && (
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => viewKsefPayload(inv.id)}
+                        disabled={isPending}
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        title="Pokaż dane KSeF"
+                      >
+                        <Code className="w-4 h-4" />
+                      </Button>
+                    )}
                     {(inv.status === 'issued' || inv.status === 'sent') && (
                       <Button
                         variant="ghost" size="sm"
@@ -325,6 +357,123 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
           </div>
         )}
       </div>
+
+      {/* KSeF Payload Diagnostic Modal */}
+      {payloadModal && (
+        <Dialog open onOpenChange={(open) => { if (!open) setPayloadModal(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Code className="w-4 h-4 text-blue-500" />
+                Dane wysyłki KSeF
+              </DialogTitle>
+            </DialogHeader>
+            {payloadModal.loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              </div>
+            ) : payloadModal.data ? (
+              <div className="space-y-4">
+                {/* Submission Details */}
+                <div className="grid grid-cols-2 gap-4 p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Numer KSeF</p>
+                    <p className="text-sm font-mono text-slate-800 dark:text-slate-200">{payloadModal.data.ksefNumber ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Status KSeF</p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.ksefStatus ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Metoda płatności (faktura)</p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.paymentMethod ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Termin płatności (faktura)</p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.dueDate ?? '—'}</p>
+                  </div>
+                </div>
+
+                {/* Audit Record */}
+                {payloadModal.data.audit && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ostatni rekord audytu</p>
+                    <div className="grid grid-cols-2 gap-4 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">Metoda płatności wysłana</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.audit.paymentMethodSent ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">Termin płatności wysłany</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.audit.dueDateSent ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">Wynik</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.audit.attemptResult}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 mb-0.5">Data wysyłki</p>
+                        <p className="text-sm text-slate-800 dark:text-slate-200">{payloadModal.data.audit.createdAt}</p>
+                      </div>
+                      {payloadModal.data.audit.errorMessage && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-slate-400 mb-0.5">Błąd</p>
+                          <p className="text-sm text-red-600 dark:text-red-400">{payloadModal.data.audit.errorMessage}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* XML Payload */}
+                {payloadModal.data.rawXml && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">XML wysłany do KSeF</p>
+                    <pre className="text-xs font-mono p-4 rounded-lg bg-slate-900 text-slate-100 overflow-x-auto max-h-64 overflow-y-auto">
+{payloadModal.data.rawXml}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Audit XML Payload (what was actually sent) */}
+                {payloadModal.data.audit?.xmlPayload && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">XML zapisany w audycie</p>
+                    <pre className="text-xs font-mono p-4 rounded-lg bg-slate-900 text-slate-100 overflow-x-auto max-h-64 overflow-y-auto">
+{payloadModal.data.audit.xmlPayload}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 text-center py-8">Nie udało się pobrać danych.</p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
+}
+
+interface KsefPayloadData {
+  invoiceId:      string;
+  invoiceNumber:  string;
+  status:         string;
+  ksefNumber:     string | null;
+  ksefStatus:     string | null;
+  paymentMethod:  string | null;
+  dueDate:        string | null;
+  rawXml:         string | null;
+  signedXml:      string | null;
+  ksefResponse:   Record<string, unknown> | null;
+  audit: {
+    id:                string;
+    ksefNumber:        string | null;
+    paymentMethodSent: string | null;
+    dueDateSent:       string | null;
+    xmlPayload:        string | null;
+    attemptResult:     string;
+    errorMessage:      string | null;
+    createdAt:         string;
+  } | null;
 }

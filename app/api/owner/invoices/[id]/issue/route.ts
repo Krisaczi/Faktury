@@ -51,6 +51,9 @@ export async function POST(
   const autoGenerate = body.autoGenerateNumber !== false && invoice.metadata?.autoGenerateNumber !== false;
   const manualNumber = typeof body.invoiceNumber === 'string' ? body.invoiceNumber.trim() : (invoice.invoice_number ?? '');
   const requestedDate = typeof body.invoiceDate === 'string' ? body.invoiceDate : (invoice.invoice_date ?? null);
+  const paymentMethod = typeof body.paymentMethod === 'string' && ['cash', 'transfer', 'card', 'blik', 'other'].includes(body.paymentMethod)
+    ? body.paymentMethod
+    : 'transfer';
 
   let invoiceNumber: string;
 
@@ -100,6 +103,7 @@ export async function POST(
       issued_by:              user.id,
       issued_at:              nowIso,
       due_date:               dueDate.toISOString().split('T')[0],
+      payment_method:         paymentMethod,
       updated_at:             nowIso,
       tax_snapshot_taken_at:  nowIso,
     })
@@ -177,14 +181,25 @@ export async function POST(
 
       // Build XML payload
       let signedXml: string | null = null;
+      let rawXmlForAudit: string | null = null;
       try {
         const ksefPayload = await buildPlatformKsefPayload(params.id);
         signedXml = ksefPayload.signedXml;
+        rawXmlForAudit = ksefPayload.rawXml;
       } catch (xmlErr) {
         console.error('[issue] KSeF XML build error', xmlErr);
       }
 
       if (signedXml) {
+        // Pre-submission validation: verify payment method and due date are present
+        if (!paymentMethod) {
+          console.warn('[issue] KSeF submission: payment_method missing for invoice', params.id);
+        }
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+        if (!dueDateStr) {
+          console.warn('[issue] KSeF submission: due_date missing for invoice', params.id);
+        }
+
         // Create submission job
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('ksef_submission_jobs').insert({
@@ -242,16 +257,20 @@ export async function POST(
           },
         });
 
-        // KSeF submission audit (dedicated audit table)
+        // KSeF submission audit (dedicated audit table with XML payload)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('ksef_submission_audit').insert({
-          invoice_id:       params.id,
-          invoice_type:     'platform',
-          actor_id:         user.id,
-          attempt_result:   submitResult.status,
-          response_payload: submitResult.response,
-          error_message:    submitResult.error ?? null,
-          ip:               ownerIp,
+          invoice_id:           params.id,
+          invoice_type:         'platform',
+          actor_id:             user.id,
+          attempt_result:       submitResult.status,
+          ksef_number:          submitResult.ksefNumber ?? null,
+          payment_method_sent:  paymentMethod,
+          due_date_sent:        dueDateStr,
+          xml_payload:          rawXmlForAudit,
+          response_payload:     submitResult.response,
+          error_message:        submitResult.error ?? null,
+          ip:                   ownerIp,
         });
 
         ksefResult = {

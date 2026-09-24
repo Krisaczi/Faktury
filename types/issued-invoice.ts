@@ -22,7 +22,7 @@ export const ISSUED_INVOICE_STATUSES = [
 
 export type IssuedInvoiceStatus = (typeof ISSUED_INVOICE_STATUSES)[number];
 
-export const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'other'] as const;
+export const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'blik', 'other'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const VAT_RATES = ['23', '8', '5', '0', 'zw', 'np', 'oo'] as const;

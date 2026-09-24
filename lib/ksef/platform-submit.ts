@@ -168,7 +168,7 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
     issue_date: invoice.invoice_date ?? (invoice.issued_at ? invoice.issued_at.split('T')[0] : new Date().toISOString().split('T')[0]),
     sale_date: null,
     due_date: invoice.due_date ?? null,
-    payment_method: 'transfer',
+    payment_method: invoice.payment_method ?? 'transfer',
     seller_name: sellerName,
     seller_nip: sellerNip,
     seller_address: sellerAddress,

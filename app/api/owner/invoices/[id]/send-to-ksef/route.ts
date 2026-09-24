@@ -50,7 +50,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invoice } = await (supabase as any)
     .from('platform_invoices')
-    .select('id, status, invoice_number, invoice_date, entity_id, issued_by, ksef_number, ksef_status, ksef_submission_id, ksef_response, metadata')
+    .select('id, status, invoice_number, invoice_date, entity_id, issued_by, ksef_number, ksef_status, ksef_submission_id, ksef_response, metadata, payment_method, due_date')
     .eq('id', params.id)
     .maybeSingle();
 
@@ -209,16 +209,20 @@ export async function POST(
     },
   });
 
-  // KSeF submission audit (dedicated audit table)
+  // KSeF submission audit (dedicated audit table with XML payload + sent values)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('ksef_submission_audit').insert({
-    invoice_id:       params.id,
-    invoice_type:     'platform',
-    actor_id:         actorId,
-    attempt_result:   result.status,
-    response_payload: result.response,
-    error_message:    result.error ?? null,
-    ip:               ownerIp,
+    invoice_id:           params.id,
+    invoice_type:         'platform',
+    actor_id:             actorId,
+    attempt_result:       result.status,
+    ksef_number:          result.ksefNumber ?? null,
+    payment_method_sent:  invoice.payment_method ?? null,
+    due_date_sent:        invoice.due_date ?? null,
+    xml_payload:          rawXmlForDebug,
+    response_payload:     result.response,
+    error_message:        result.error ?? null,
+    ip:                   ownerIp,
   });
 
   if (result.transient) {

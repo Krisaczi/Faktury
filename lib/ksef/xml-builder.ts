@@ -61,11 +61,22 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   'oo': { p12: 'oo', suffix: '8', hasVat: false },
 };
 
+// FA(3) FormaPlatnosci codes (per Ministerstwo Finansów FA(3) schema):
+//   1 = gotówka (cash)
+//   2 = karta (card)
+//   3 = bon (voucher)
+//   4 = czek (cheque)
+//   5 = kredyt (credit)
+//   6 = przelew (transfer)
+//   7 = płatność mobilna (mobile/BLIK)
+// Any unmapped value falls back to 6 (przelew) — never 'bon'.
 const PAYMENT_METHOD_MAP: Record<string, string> = {
-  transfer: '1',
+  cash:     '1',
   card:     '2',
-  cash:     '3',
-  other:    '4',
+  transfer: '6',
+  blik:     '7',
+  mobile:   '7',
+  other:    '6',
 };
 
 // ─── Address parser ──────────────────────────────────────────────────────────
@@ -234,13 +245,16 @@ function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
 }
 
 function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
-  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '1';
+  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '6';
   const bankLine = inv.seller_bank_account
     ? `\n      <RachunekBankowy>\n        <NrRB>${esc(inv.seller_bank_account)}</NrRB>\n      </RachunekBankowy>`
     : '';
+  const dueDateLine = inv.due_date
+    ? `\n      <TerminPlatnosci>${esc(isoDate(inv.due_date))}</TerminPlatnosci>`
+    : '';
 
   return `    <Platnosc>
-      <FormaPlatnosci>${methodCode}</FormaPlatnosci>${bankLine}
+      <FormaPlatnosci>${methodCode}</FormaPlatnosci>${bankLine}${dueDateLine}
     </Platnosc>`;
 }
 
