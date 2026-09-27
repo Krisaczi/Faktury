@@ -8,8 +8,8 @@
  *
  * FA(3) Faktura root children order:
  *   Naglowek, Podmiot1, Podmiot2, [Podmiot3], [PodmiotUpowazniony],
- *   Fa (KodWaluty, P_1, P_2, P_6?, P_13_*, P_15, Adnotacje, RodzajFaktury,
- *       FaWiersz*, [Rozliczenie], [Platnosc]),
+ *   Fa (KodWaluty, P_1, P_2, P_6?, P_13_*, P_14_*, P_15, RodzajFaktury,
+ *       Adnotacje, FaWiersz*, [Rozliczenie], [Platnosc]),
  *   [Stopka], [Zalacznik]
  */
 
@@ -142,6 +142,11 @@ function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
   return Array.from(map.values());
 }
 
+// Sort suffixes numerically so P_13_1 < P_13_2 < P_13_3 < P_13_5 < P_13_6 < P_13_7 < P_13_8
+function suffixOrder(s: string): number {
+  return parseInt(s, 10);
+}
+
 // ─── XML builders ─────────────────────────────────────────────────────────────
 
 function buildNaglowek(): string {
@@ -182,8 +187,6 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
       <AdresL1>${esc(addr.ulica)}</AdresL1>
       <AdresL2>${esc(addr.kodPocztowy)} ${esc(addr.miasto)}</AdresL2>
     </Adres>
-    <JST>2</JST>
-    <GV>2</GV>
   </Podmiot2>`;
 }
 
@@ -206,26 +209,52 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   }).join('\n');
 }
 
-function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  const groupLines = vatGroups
-    .map(g => {
-      const sx = g.mapping.suffix;
-      const p13 = `    <P_13_${sx}>${dec2(g.netTotal)}</P_13_${sx}>`;
-      const p14 = g.mapping.hasVat
-        ? `\n    <P_14_${sx}>${dec2(g.vatTotal)}</P_14_${sx}>`
-        : '';
-      return p13 + p14;
-    }).join('\n');
+/**
+ * Build the P_13_*, P_14_*, P_15, RodzajFaktury, and Adnotacje block.
+ *
+ * FA(3) element order within <Fa>:
+ *   KodWaluty, P_1, P_2, [P_6], P_13_1..P_13_8, P_14_1..P_14_8, P_15,
+ *   RodzajFaktury, Adnotacje, FaWiersz*, [Rozliczenie], [Platnosc]
+ *
+ * P_13 and P_14 are grouped (all P_13 first, then all P_14), each with
+ * suffixes in ascending numeric order: 1, 2, 3, 5, 6, 7, 8.
+ *
+ * Adnotacje: for a standard VAT invoice with no special procedures, only the
+ * "does not apply" negative indicators are emitted. The Zwolnienie,
+ * NoweSrodkiTransportu, and PMarzy choice blocks are only emitted when
+ * applicable, using the negative form (P_19N, P_22N, P_PMarzyN) when the
+ * procedure does not apply.
+ */
+function buildTotalsRodzajAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
+  const sorted = [...vatGroups].sort((a, b) => suffixOrder(a.mapping.suffix) - suffixOrder(b.mapping.suffix));
+
+  // P_13_* — all net totals grouped first
+  const p13Lines = sorted
+    .map(g => `    <P_13_${g.mapping.suffix}>${dec2(g.netTotal)}</P_13_${g.mapping.suffix}>`)
+    .join('\n');
+
+  // P_14_* — all VAT totals grouped after P_13
+  // For rates with hasVat=true (23, 8, 5): emit P_14_x with the VAT amount
+  // For 0% rate (suffix 5): emit P_14_5 with 0.00 (schema expects the pair)
+  // For zw/np/oo: omit P_14 entirely (no VAT amount to report)
+  const p14Lines = sorted
+    .filter(g => g.mapping.hasVat || g.rate === '0')
+    .map(g => `    <P_14_${g.mapping.suffix}>${dec2(g.vatTotal)}</P_14_${g.mapping.suffix}>`)
+    .join('\n');
 
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
 
-  return `    ${groupLines}
-    <P_15>${dec2(inv.gross_total)}</P_15>
-    <Adnotacje>
+  // Adnotacje: emit only the standard negative indicators for a regular VAT invoice.
+  // P_16=2 (no cash register method), P_17=2 (no split payment), P_18=2 (no exemption),
+  // P_18A=2 (no reverse charge). Then negative forms for Zwolnienie, NoweSrodkiTransportu, PMarzy.
+  const adnotacje = `    <Adnotacje>
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>2</P_18>
-      <P_18A>2</P_18A>${hasExempt ? '\n      <Zwolnienie>\n        <P_19>1</P_19>\n        <P_19C>zwolnienie podmiotowe z VAT</P_19C>\n      </Zwolnienie>' : '\n      <Zwolnienie>\n        <P_19N>1</P_19N>\n      </Zwolnienie>'}
+      <P_18A>2</P_18A>
+      <Zwolnienie>
+        <P_19N>1</P_19N>
+      </Zwolnienie>
       <NoweSrodkiTransportu>
         <P_22N>1</P_22N>
       </NoweSrodkiTransportu>
@@ -234,6 +263,11 @@ function buildTotalsAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGrou
         <P_PMarzyN>1</P_PMarzyN>
       </PMarzy>
     </Adnotacje>`;
+
+  return `    ${p13Lines}
+${p14Lines ? p14Lines + '\n' : ''}    <P_15>${dec2(inv.gross_total)}</P_15>
+    <RodzajFaktury>VAT</RodzajFaktury>
+${adnotacje}`;
 }
 
 function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
@@ -241,6 +275,8 @@ function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
 
   return `    <Rozliczenie>
       <DoZaplaty>${dec2(totalGross)}</DoZaplaty>
+      <Zaplacono>${dec2(0)}</Zaplacono>
+      <Zaplaciodne>${dec2(totalGross)}</Zaplaciodne>
     </Rozliczenie>`;
 }
 
@@ -268,7 +304,7 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const podmiot1    = buildPodmiot1(invoice);
   const podmiot2    = buildPodmiot2(invoice);
   const faWiersze   = buildFaWiersze(invoice);
-  const totals      = buildTotalsAndAdnotacje(invoice, vatGroups);
+  const totals      = buildTotalsRodzajAndAdnotacje(invoice, vatGroups);
   const rozliczenie = buildRozliczenie(invoice);
   const platnosc    = buildPlatnosc(invoice);
 
@@ -288,7 +324,6 @@ ${podmiot2}
     <P_1>${esc(isoDate(invoice.issue_date))}</P_1>
     <P_2>${esc(invoice.invoice_number)}</P_2>${p6}
 ${totals}
-    <RodzajFaktury>VAT</RodzajFaktury>
 ${faWiersze}
 ${rozliczenie}
 ${platnosc}
