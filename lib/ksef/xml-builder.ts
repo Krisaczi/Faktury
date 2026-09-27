@@ -8,9 +8,14 @@
  *
  * FA(3) Faktura root children order:
  *   Naglowek, Podmiot1, Podmiot2, [Podmiot3], [PodmiotUpowazniony],
- *   Fa (KodWaluty, P_1, P_2, P_6?, P_13_*, P_14_*, P_15, RodzajFaktury,
- *       Adnotacje, FaWiersz*, [Rozliczenie], [Platnosc]),
- *   [Stopka], [Zalacznik]
+ *   Fa, [Stopka], [Zalacznik]
+ *
+ * FA(3) <Fa> element order (per official XSD sequence):
+ *   KodWaluty, P_1, [P_1M], P_2, [WZ], [P_6],
+ *   P_13_1, P_14_1, [P_14_1W], P_13_2, P_14_2, [P_14_2W], ... (interleaved per rate),
+ *   P_13_5, P_14_5, P_13_6_1, P_13_6_2, P_13_6_3, P_13_7, P_13_8, P_13_9,
+ *   P_15, Adnotacje, RodzajFaktury, [PrzyczynaKorekty], [TypKorekty],
+ *   [DaneFaKorygowanej], FaWiersz*, [Platnosc], [Zamowienie]
  */
 
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
@@ -45,38 +50,55 @@ function dec4(n: number): string {
 
 // ─── VAT rate mapping for FA(3) ───────────────────────────────────────────────
 
+/**
+ * FA(3) P_13/P_14 suffix mapping per VAT rate.
+ *
+ * The XSD sequence inside <Fa> interleaves P_13_x and P_14_x per rate:
+ *   P_13_1, P_14_1, [P_14_1W], P_13_2, P_14_2, [P_14_2W], ...
+ *
+ * Suffix assignments (per FA(3) schema):
+ *   1 = 23%      (P_13_1 / P_14_1)
+ *   2 = 8%       (P_13_2 / P_14_2)
+ *   3 = 5%       (P_13_3 / P_14_3)
+ *   4 = taxi flat (P_13_4 / P_14_4) — not used
+ *   5 = 0%       (P_13_5 / P_14_5)
+ *   6 = "zw"     (P_13_6_1) — exempt; uses P_13_6_1 not P_13_6
+ *   7 = "np"     (P_13_7)    — non-taxable
+ *   8 = "oo"     (P_13_8)    — out of scope
+ */
 interface VatRateMapping {
-  p12: string;
-  suffix: string;
-  hasVat: boolean;
+  p12:           string;
+  p13Element:    string;
+  p14Element:    string | null;
+  hasVat:        boolean;
+  order:         number;
 }
 
 const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
-  '23': { p12: '23', suffix: '1', hasVat: true  },
-  '8':  { p12: '8',  suffix: '2', hasVat: true  },
-  '5':  { p12: '5',  suffix: '3', hasVat: true  },
-  '0':  { p12: '0',  suffix: '5', hasVat: false },
-  'zw': { p12: 'zw', suffix: '7', hasVat: false },
-  'np': { p12: 'np', suffix: '6', hasVat: false },
-  'oo': { p12: 'oo', suffix: '8', hasVat: false },
+  '23': { p12: '23', p13Element: 'P_13_1', p14Element: 'P_14_1', hasVat: true,  order: 1 },
+  '8':  { p12: '8',  p13Element: 'P_13_2', p14Element: 'P_14_2', hasVat: true,  order: 2 },
+  '5':  { p12: '5',  p13Element: 'P_13_3', p14Element: 'P_14_3', hasVat: true,  order: 3 },
+  '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: 'P_14_5', hasVat: false, order: 5 },
+  'zw': { p12: 'zw', p13Element: 'P_13_6_1', p14Element: null,   hasVat: false, order: 6 },
+  'np': { p12: 'np', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
+  'oo': { p12: 'oo', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
 };
 
 // FA(3) FormaPlatnosci codes (per Ministerstwo Finansów FA(3) schema):
 //   1 = gotówka (cash)
 //   2 = karta (card)
-//   3 = bon (voucher)
+//   3 = przelew (transfer)  — note: FA(3) changed this from FA(2)
 //   4 = czek (cheque)
-//   5 = kredyt (credit)
-//   6 = przelew (transfer)
+//   5 = bon (voucher)
+//   6 = kredyt (credit)
 //   7 = płatność mobilna (mobile/BLIK)
-// Any unmapped value falls back to 6 (przelew) — never 'bon'.
 const PAYMENT_METHOD_MAP: Record<string, string> = {
   cash:     '1',
   card:     '2',
-  transfer: '6',
+  transfer: '3',
   blik:     '7',
   mobile:   '7',
-  other:    '6',
+  other:    '3',
 };
 
 // ─── Address parser ──────────────────────────────────────────────────────────
@@ -139,12 +161,7 @@ function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
       map.set(rate, { rate, mapping, netTotal: item.net_amount, vatTotal: item.vat_amount, grossTotal: item.gross_amount });
     }
   }
-  return Array.from(map.values());
-}
-
-// Sort suffixes numerically so P_13_1 < P_13_2 < P_13_3 < P_13_5 < P_13_6 < P_13_7 < P_13_8
-function suffixOrder(s: string): number {
-  return parseInt(s, 10);
+  return Array.from(map.values()).sort((a, b) => a.mapping.order - b.mapping.order);
 }
 
 // ─── XML builders ─────────────────────────────────────────────────────────────
@@ -190,6 +207,54 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
   </Podmiot2>`;
 }
 
+/**
+ * Build interleaved P_13_x / P_14_x VAT summary lines + P_15.
+ *
+ * FA(3) XSD sequence: P_13_1, P_14_1, P_13_2, P_14_2, ... (interleaved per rate)
+ * Each rate emits its P_13 element, then its P_14 element (if the rate has VAT).
+ */
+function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
+  const lines: string[] = [];
+
+  for (const g of vatGroups) {
+    lines.push(`    <${g.mapping.p13Element}>${dec2(g.netTotal)}</${g.mapping.p13Element}>`);
+    if (g.mapping.p14Element) {
+      lines.push(`    <${g.mapping.p14Element}>${dec2(g.vatTotal)}</${g.mapping.p14Element}>`);
+    }
+  }
+
+  lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
+
+  return lines.join('\n');
+}
+
+/**
+ * Build the Adnotacje block.
+ *
+ * For a standard VAT invoice with no special procedures, all eight fields
+ * are mandatory, using "2" (does not apply) and negative forms.
+ *
+ * Element order: P_16 → P_17 → P_18 → P_18A → Zwolnienie → NoweSrodkiTransportu → P_23 → PMarzy
+ */
+function buildAdnotacje(): string {
+  return `    <Adnotacje>
+      <P_16>2</P_16>
+      <P_17>2</P_17>
+      <P_18>2</P_18>
+      <P_18A>2</P_18A>
+      <Zwolnienie>
+        <P_19N>1</P_19N>
+      </Zwolnienie>
+      <NoweSrodkiTransportu>
+        <P_22N>1</P_22N>
+      </NoweSrodkiTransportu>
+      <P_23>2</P_23>
+      <PMarzy>
+        <P_PMarzyN>1</P_PMarzyN>
+      </PMarzy>
+    </Adnotacje>`;
+}
+
 function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   return inv.items.map((item) => {
     const rate    = item.vat_rate as VatRate;
@@ -209,79 +274,8 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   }).join('\n');
 }
 
-/**
- * Build the P_13_*, P_14_*, P_15, RodzajFaktury, and Adnotacje block.
- *
- * FA(3) element order within <Fa>:
- *   KodWaluty, P_1, P_2, [P_6], P_13_1..P_13_8, P_14_1..P_14_8, P_15,
- *   RodzajFaktury, Adnotacje, FaWiersz*, [Rozliczenie], [Platnosc]
- *
- * P_13 and P_14 are grouped (all P_13 first, then all P_14), each with
- * suffixes in ascending numeric order: 1, 2, 3, 5, 6, 7, 8.
- *
- * Adnotacje: for a standard VAT invoice with no special procedures, only the
- * "does not apply" negative indicators are emitted. The Zwolnienie,
- * NoweSrodkiTransportu, and PMarzy choice blocks are only emitted when
- * applicable, using the negative form (P_19N, P_22N, P_PMarzyN) when the
- * procedure does not apply.
- */
-function buildTotalsRodzajAndAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  const sorted = [...vatGroups].sort((a, b) => suffixOrder(a.mapping.suffix) - suffixOrder(b.mapping.suffix));
-
-  // P_13_* — all net totals grouped first
-  const p13Lines = sorted
-    .map(g => `    <P_13_${g.mapping.suffix}>${dec2(g.netTotal)}</P_13_${g.mapping.suffix}>`)
-    .join('\n');
-
-  // P_14_* — all VAT totals grouped after P_13
-  // For rates with hasVat=true (23, 8, 5): emit P_14_x with the VAT amount
-  // For 0% rate (suffix 5): emit P_14_5 with 0.00 (schema expects the pair)
-  // For zw/np/oo: omit P_14 entirely (no VAT amount to report)
-  const p14Lines = sorted
-    .filter(g => g.mapping.hasVat || g.rate === '0')
-    .map(g => `    <P_14_${g.mapping.suffix}>${dec2(g.vatTotal)}</P_14_${g.mapping.suffix}>`)
-    .join('\n');
-
-  const hasExempt = vatGroups.some(g => g.rate === 'zw');
-
-  // Adnotacje: emit only the standard negative indicators for a regular VAT invoice.
-  // P_16=2 (no cash register method), P_17=2 (no split payment), P_18=2 (no exemption),
-  // P_18A=2 (no reverse charge). Then negative forms for Zwolnienie, NoweSrodkiTransportu, PMarzy.
-  const adnotacje = `    <Adnotacje>
-      <P_16>2</P_16>
-      <P_17>2</P_17>
-      <P_18>2</P_18>
-      <P_18A>2</P_18A>
-      <Zwolnienie>
-        <P_19N>1</P_19N>
-      </Zwolnienie>
-      <NoweSrodkiTransportu>
-        <P_22N>1</P_22N>
-      </NoweSrodkiTransportu>
-      <P_23>2</P_23>
-      <PMarzy>
-        <P_PMarzyN>1</P_PMarzyN>
-      </PMarzy>
-    </Adnotacje>`;
-
-  return `    ${p13Lines}
-${p14Lines ? p14Lines + '\n' : ''}    <P_15>${dec2(inv.gross_total)}</P_15>
-    <RodzajFaktury>VAT</RodzajFaktury>
-${adnotacje}`;
-}
-
-function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
-  const totalGross = inv.gross_total;
-
-  return `    <Rozliczenie>
-      <DoZaplaty>${dec2(totalGross)}</DoZaplaty>
-      <Zaplacono>${dec2(0)}</Zaplacono>
-      <Zaplaciodne>${dec2(totalGross)}</Zaplaciodne>
-    </Rozliczenie>`;
-}
-
 function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
-  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '6';
+  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '3';
   const bankLine = inv.seller_bank_account
     ? `\n      <RachunekBankowy>\n        <NrRB>${esc(inv.seller_bank_account)}</NrRB>\n      </RachunekBankowy>`
     : '';
@@ -300,13 +294,13 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
 export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const vatGroups = buildVatGroups(invoice.items);
 
-  const naglowek    = buildNaglowek();
-  const podmiot1    = buildPodmiot1(invoice);
-  const podmiot2    = buildPodmiot2(invoice);
-  const faWiersze   = buildFaWiersze(invoice);
-  const totals      = buildTotalsRodzajAndAdnotacje(invoice, vatGroups);
-  const rozliczenie = buildRozliczenie(invoice);
-  const platnosc    = buildPlatnosc(invoice);
+  const naglowek  = buildNaglowek();
+  const podmiot1  = buildPodmiot1(invoice);
+  const podmiot2  = buildPodmiot2(invoice);
+  const vatSum    = buildVatSummaryAndP15(invoice, vatGroups);
+  const adnotacje = buildAdnotacje();
+  const faWiersze = buildFaWiersze(invoice);
+  const platnosc  = buildPlatnosc(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
     ? `\n    <P_6>${esc(isoDate(invoice.sale_date))}</P_6>`
@@ -323,9 +317,10 @@ ${podmiot2}
     <KodWaluty>${esc(invoice.currency ?? 'PLN')}</KodWaluty>
     <P_1>${esc(isoDate(invoice.issue_date))}</P_1>
     <P_2>${esc(invoice.invoice_number)}</P_2>${p6}
-${totals}
+${vatSum}
+${adnotacje}
+    <RodzajFaktury>VAT</RodzajFaktury>
 ${faWiersze}
-${rozliczenie}
 ${platnosc}
   </Fa>
 </Faktura>`;
