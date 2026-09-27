@@ -229,22 +229,33 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
 }
 
 /**
- * Build the Adnotacje block.
- *
- * For a standard VAT invoice with no special procedures, all eight fields
- * are mandatory, using "2" (does not apply) and negative forms.
+ * Build the Adnotacje block, driven by the VAT rates on the invoice.
  *
  * Element order: P_16 → P_17 → P_18 → P_18A → Zwolnienie → NoweSrodkiTransportu → P_23 → PMarzy
+ *
+ * When the invoice uses a "zw" (exempt) VAT rate, P_18 must be "1" (exemption
+ * applies) and the Zwolnienie block uses P_19 (positive form, with a reason
+ * text in P_19). Otherwise P_18=2 and P_19N=1 (does not apply).
  */
-function buildAdnotacje(): string {
+function buildAdnotacje(vatGroups: VatGroup[]): string {
+  const hasExempt = vatGroups.some(g => g.rate === 'zw');
+
+  const p18      = hasExempt ? '1' : '2';
+  const zwolnienie = hasExempt
+    ? `      <Zwolnienie>
+        <P_19>1</P_19>
+        <P_19A>zwolnienie z podatku VAT</P_19A>
+      </Zwolnienie>`
+    : `      <Zwolnienie>
+        <P_19N>1</P_19N>
+      </Zwolnienie>`;
+
   return `    <Adnotacje>
       <P_16>2</P_16>
       <P_17>2</P_17>
-      <P_18>2</P_18>
+      <P_18>${p18}</P_18>
       <P_18A>2</P_18A>
-      <Zwolnienie>
-        <P_19N>1</P_19N>
-      </Zwolnienie>
+${zwolnienie}
       <NoweSrodkiTransportu>
         <P_22N>1</P_22N>
       </NoweSrodkiTransportu>
@@ -259,8 +270,11 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   return inv.items.map((item) => {
     const rate    = item.vat_rate as VatRate;
     const mapping = VAT_RATE_MAP[rate] ?? VAT_RATE_MAP['23'];
-    const discountLine = item.discount_pct
-      ? `\n      <P_10>${dec2(item.discount_pct)}</P_10>`
+    const discountPct = typeof item.discount_pct === 'string'
+      ? parseFloat(item.discount_pct)
+      : item.discount_pct;
+    const discountLine = discountPct && discountPct > 0
+      ? `\n      <P_10>${dec2(discountPct)}</P_10>`
       : '';
     return `    <FaWiersz>
       <NrWierszaFa>${item.position}</NrWierszaFa>
@@ -298,7 +312,7 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const podmiot1  = buildPodmiot1(invoice);
   const podmiot2  = buildPodmiot2(invoice);
   const vatSum    = buildVatSummaryAndP15(invoice, vatGroups);
-  const adnotacje = buildAdnotacje();
+  const adnotacje = buildAdnotacje(vatGroups);
   const faWiersze = buildFaWiersze(invoice);
   const platnosc  = buildPlatnosc(invoice);
 
