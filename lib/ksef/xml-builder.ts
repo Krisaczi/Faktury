@@ -110,25 +110,64 @@ interface ParsedAddress {
   kraj:        string;
 }
 
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  'polska':   'PL',
+  'niemcy':   'DE',
+  'francja':  'FR',
+  'czechy':   'CZ',
+  'slowacja': 'SK',
+  'ukraina':  'UA',
+  'litwa':    'LT',
+  'lotwa':    'LV',
+  'estonia':  'EE',
+  'holandia': 'NL',
+  'belgia':   'BE',
+  'austria':  'AT',
+  'wegry':    'HU',
+  'rumunia':  'RO',
+  'bulgaria': 'BG',
+  'grecja':   'GR',
+  'hiszpania':'ES',
+  'wlochy':   'IT',
+  'portugalia':'PT',
+  'irlandia': 'IE',
+  'szwecja':  'SE',
+  'dania':    'DK',
+  'finlandia':'FI',
+  'chorwacja':'HR',
+  'slowenia': 'SI',
+  'luksemburg':'LU',
+  'malta':    'MT',
+};
+
 function parseAddress(raw: string | null | undefined): ParsedAddress {
   const s = (raw ?? '').trim();
   const postalMatch = s.match(/\b(\d{2}-\d{3}|\d{5})\b/);
   const kodPocztowy = postalMatch ? postalMatch[1] : '';
   let miasto = '';
   let ulica  = s;
+  let kraj   = 'PL';
+
   if (postalMatch && postalMatch.index !== undefined) {
     const afterPostal = s.slice(postalMatch.index + postalMatch[0].length).trim();
-    const cityMatch = afterPostal.match(/^,?\s*([^,\n]+)/);
-    if (cityMatch) {
-      miasto = cityMatch[1].trim();
-      ulica = s.slice(0, postalMatch.index).replace(/,\s*$/, '').trim();
+    const segments = afterPostal.split(/,\s*/).filter(Boolean);
+    for (const seg of segments) {
+      const lower = seg.trim().toLowerCase();
+      if (COUNTRY_NAME_TO_CODE[lower]) {
+        kraj = COUNTRY_NAME_TO_CODE[lower].toUpperCase();
+      } else if (!miasto) {
+        miasto = seg.trim();
+      }
     }
+    ulica = s.slice(0, postalMatch.index).replace(/,\s*$/, '').trim();
   }
-  let kraj = 'PL';
+
+  // Also check for ISO country code at end of string
   const countryMatch = s.match(/\b([A-Z]{2})\s*$/);
-  if (countryMatch && countryMatch[1] !== 'PL' && countryMatch[1].length === 2) {
+  if (countryMatch && countryMatch[1].length === 2) {
     kraj = countryMatch[1];
   }
+
   return {
     kodPocztowy: kodPocztowy || '00-000',
     miasto:      miasto      || s.split(/[,\n]/)[0].trim() || 'Nieznane',
@@ -290,8 +329,15 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
 
 function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
   const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '3';
-  const bankLine = inv.seller_bank_account
-    ? `\n      <RachunekBankowy>\n        <NrRB>${esc(inv.seller_bank_account)}</NrRB>\n      </RachunekBankowy>`
+
+  // RachunekBankowy only makes sense for non-cash payments (transfer, card, etc.)
+  // Including it for cash (FormaPlatnosci=1) is a logical inconsistency KSeF rejects.
+  const isCash = methodCode === '1';
+  const rawAccount = inv.seller_bank_account?.trim() ?? '';
+  // Strip IBAN country-code prefix ("PL") — FA(3) NrRB expects the 26-digit Polish BBAN
+  const nrRb = rawAccount.replace(/^PL/i, '').replace(/\s/g, '');
+  const bankLine = !isCash && nrRb
+    ? `\n      <RachunekBankowy>\n        <NrRB>${esc(nrRb)}</NrRB>\n      </RachunekBankowy>`
     : '';
   const dueDateLine = inv.due_date
     ? `\n      <TerminPlatnosci>${esc(isoDate(inv.due_date))}</TerminPlatnosci>`
