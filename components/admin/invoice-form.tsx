@@ -266,7 +266,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
             </div>
             {!useOverride && (
               <Link
-                href="/admin/settings"
+                href="/settings"
                 target="_blank"
                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
               >
@@ -308,7 +308,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
                   <div className="text-sm text-amber-700 dark:text-amber-400">
                     <p className="font-medium">Adres firmy jest niekompletny</p>
                     <p className="text-xs mt-0.5">Brakujące pola: {addressCheck.missingFields.join(', ')}. Uzupełnij „Adres firmy" w Ustawieniach, aby wystawić fakturę.</p>
-                    <Link href="/admin/settings" target="_blank" className="text-xs font-medium text-amber-700 dark:text-amber-400 underline flex items-center gap-1 mt-1">
+                    <Link href="/settings" target="_blank" className="text-xs font-medium text-amber-700 dark:text-amber-400 underline flex items-center gap-1 mt-1">
                       <SettingsIcon className="w-3 h-3" />
                       Przejdź do Ustawień
                     </Link>

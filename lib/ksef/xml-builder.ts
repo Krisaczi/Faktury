@@ -170,7 +170,7 @@ function parseAddress(raw: string | null | undefined): ParsedAddress {
 
   return {
     kodPocztowy: kodPocztowy || '00-000',
-    miasto:      miasto      || s.split(/[,\n]/)[0].trim() || 'Nieznane',
+    miasto:      miasto      || 'Nieznane',
     ulica:       ulica       || s,
     kraj,
   };
@@ -262,6 +262,9 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     }
   }
 
+  // P_13_9 = total net across all rates, P_14_9 = total VAT across all rates
+  lines.push(`    <P_13_9>${dec2(inv.net_total)}</P_13_9>`);
+  lines.push(`    <P_14_9>${dec2(inv.vat_total)}</P_14_9>`);
   lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
 
   return lines.join('\n');
