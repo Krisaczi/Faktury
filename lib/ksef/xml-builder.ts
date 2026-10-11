@@ -249,22 +249,73 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
 }
 
 /**
- * Build interleaved P_13_x / P_14_x VAT summary lines + P_15.
+ * Build the full P_13_x / P_14_x VAT summary sequence + P_15.
  *
- * FA(3) XSD sequence: P_13_1, P_14_1, P_13_2, P_14_2, ... (interleaved per rate)
- * Each rate emits its P_13 element, then its P_14 element (if the rate has VAT).
+ * FA(3) XSD requires ALL P_13/P_14 elements in a fixed sequence, even when
+ * their values are 0. The sequence is:
+ *   P_13_1, P_14_1, [P_14_1W],
+ *   P_13_2, P_14_2, [P_14_2W],
+ *   P_13_3, P_14_3, [P_14_3W],
+ *   P_13_4, P_14_4, [P_14_4W],
+ *   P_13_5, [P_14_5],          (0% rate — P_14_5 optional)
+ *   P_13_6_1, [P_13_6_2], [P_13_6_3],  (zw — all optional)
+ *   P_13_7,                     (np — optional)
+ *   P_13_8,                     (oo — optional)
+ *   P_13_9,                     (total net — optional)
+ *   P_14_9,                     (total vat — optional)
+ *   P_15                        (total gross — required)
+ *
+ * We emit every element that the schema marks as mandatory (no minOccurs="0")
+ * with 0.00 when the invoice doesn't use that rate, plus optional elements
+ * that do apply. This ensures the XML always validates against the XSD.
  */
 function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
+  const rateMap = new Map<VatRate, VatGroup>();
+  for (const g of vatGroups) rateMap.set(g.rate, g);
+
+  const get = (rate: VatRate, field: 'netTotal' | 'vatTotal'): number =>
+    rateMap.get(rate)?.[field] ?? 0;
+
   const lines: string[] = [];
 
-  for (const g of vatGroups) {
-    lines.push(`    <${g.mapping.p13Element}>${dec2(g.netTotal)}</${g.mapping.p13Element}>`);
-    if (g.mapping.p14Element) {
-      lines.push(`    <${g.mapping.p14Element}>${dec2(g.vatTotal)}</${g.mapping.p14Element}>`);
-    }
+  // 23% — P_13_1, P_14_1 (both required)
+  lines.push(`    <P_13_1>${dec2(get('23', 'netTotal'))}</P_13_1>`);
+  lines.push(`    <P_14_1>${dec2(get('23', 'vatTotal'))}</P_14_1>`);
+
+  // 8% — P_13_2, P_14_2 (both required)
+  lines.push(`    <P_13_2>${dec2(get('8', 'netTotal'))}</P_13_2>`);
+  lines.push(`    <P_14_2>${dec2(get('8', 'vatTotal'))}</P_14_2>`);
+
+  // 5% — P_13_3, P_14_3 (both required)
+  lines.push(`    <P_13_3>${dec2(get('5', 'netTotal'))}</P_13_3>`);
+  lines.push(`    <P_14_3>${dec2(get('5', 'vatTotal'))}</P_14_3>`);
+
+  // 4 = taxi flat rate — P_13_4, P_14_4 (both required, always 0 for us)
+  lines.push(`    <P_13_4>0.00</P_13_4>`);
+  lines.push(`    <P_14_4>0.00</P_14_4>`);
+
+  // 0% — P_13_5 (required), P_14_5 (optional, only if 0% rate present)
+  lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
+  if (rateMap.has('0')) {
+    lines.push(`    <P_14_5>${dec2(get('0', 'vatTotal'))}</P_14_5>`);
   }
 
-  // P_13_9 = total net across all rates, P_14_9 = total VAT across all rates
+  // zw (exempt) — P_13_6_1, P_13_6_2, P_13_6_3 (all optional, emit if present)
+  if (rateMap.has('zw')) {
+    lines.push(`    <P_13_6_1>${dec2(get('zw', 'netTotal'))}</P_13_6_1>`);
+  }
+
+  // np (non-taxable) — P_13_7 (optional, emit if present)
+  if (rateMap.has('np')) {
+    lines.push(`    <P_13_7>${dec2(get('np', 'netTotal'))}</P_13_7>`);
+  }
+
+  // oo (out of scope) — P_13_8 (optional, emit if present)
+  if (rateMap.has('oo')) {
+    lines.push(`    <P_13_8>${dec2(get('oo', 'netTotal'))}</P_13_8>`);
+  }
+
+  // Totals — P_13_9, P_14_9, P_15
   lines.push(`    <P_13_9>${dec2(inv.net_total)}</P_13_9>`);
   lines.push(`    <P_14_9>${dec2(inv.vat_total)}</P_14_9>`);
   lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
