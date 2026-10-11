@@ -11,11 +11,17 @@
  *   Fa, [Stopka], [Zalacznik]
  *
  * FA(3) <Fa> element order (per official XSD sequence):
- *   KodWaluty, P_1, [P_1M], P_2, [WZ], [P_6],
- *   P_13_1, P_14_1, [P_14_1W], P_13_2, P_14_2, [P_14_2W], ... (interleaved per rate),
- *   P_13_5, P_14_5, P_13_6_1, P_13_6_2, P_13_6_3, P_13_7, P_13_8, P_13_9,
- *   P_15, Adnotacje, RodzajFaktury, [PrzyczynaKorekty], [TypKorekty],
- *   [DaneFaKorygowanej], FaWiersz*, [Platnosc], [Zamowienie]
+ *   KodWaluty, P_1, [P_1M], P_2, [WZ],
+ *   choice: [P_6] | [OkresFa],
+ *   [seq: P_13_1, P_14_1, [P_14_1W]],
+ *   [seq: P_13_2, P_14_2, [P_14_2W]],
+ *   [seq: P_13_3, P_14_3, [P_14_3W]],
+ *   [seq: P_13_4, P_14_4, [P_14_4W]],
+ *   [seq: P_13_5, [P_14_5]],
+ *   [P_13_6_1], [P_13_6_2], [P_13_6_3],
+ *   [P_13_7], [P_13_8], [P_13_9], [P_13_10], [P_13_11],
+ *   P_15, [KursWalutyZ], Adnotacje, RodzajFaktury,
+ *   FaWiersz*, [Rozliczenie], [Platnosc], [WarunkiTransakcji], [Zamowienie]
  */
 
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
@@ -51,10 +57,12 @@ function dec4(n: number): string {
 // ─── VAT rate mapping for FA(3) ───────────────────────────────────────────────
 
 /**
- * FA(3) P_13/P_14 suffix mapping per VAT rate.
+ * FA(3) P_12 (TStawkaPodatku) allowed values:
+ *   23, 22, 8, 7, 5, 4, 3, 0 KR, 0 WDT, 0 EX, zw, oo, np I, np II
  *
- * The XSD sequence inside <Fa> interleaves P_13_x and P_14_x per rate:
- *   P_13_1, P_14_1, [P_14_1W], P_13_2, P_14_2, [P_14_2W], ...
+ * P_13/P_14 element mapping per VAT rate. The XSD wraps each taxable rate
+ * (23%, 8%, 5%, 4%, taxi) in an optional <sequence>, so we only emit the
+ * sequences for rates that appear on the invoice.
  *
  * Suffix assignments (per FA(3) schema):
  *   1 = 23%      (P_13_1 / P_14_1)
@@ -62,7 +70,7 @@ function dec4(n: number): string {
  *   3 = 5%       (P_13_3 / P_14_3)
  *   4 = taxi flat (P_13_4 / P_14_4) — not used
  *   5 = 0%       (P_13_5 / P_14_5)
- *   6 = "zw"     (P_13_6_1) — exempt; uses P_13_6_1 not P_13_6
+ *   6_1 = "zw"   (P_13_6_1) — exempt
  *   7 = "np"     (P_13_7)    — non-taxable
  *   8 = "oo"     (P_13_8)    — out of scope
  */
@@ -78,20 +86,15 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   '23': { p12: '23', p13Element: 'P_13_1', p14Element: 'P_14_1', hasVat: true,  order: 1 },
   '8':  { p12: '8',  p13Element: 'P_13_2', p14Element: 'P_14_2', hasVat: true,  order: 2 },
   '5':  { p12: '5',  p13Element: 'P_13_3', p14Element: 'P_14_3', hasVat: true,  order: 3 },
-  '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: 'P_14_5', hasVat: false, order: 5 },
+  '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
   'zw': { p12: 'zw', p13Element: 'P_13_6_1', p14Element: null,   hasVat: false, order: 6 },
   'np': { p12: 'np', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
   'oo': { p12: 'oo', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
 };
 
-// FA(3) FormaPlatnosci codes (per Ministerstwo Finansów FA(3) schema):
-//   1 = gotówka (cash)
-//   2 = karta (card)
-//   3 = przelew (transfer)  — note: FA(3) changed this from FA(2)
-//   4 = czek (cheque)
-//   5 = bon (voucher)
-//   6 = kredyt (credit)
-//   7 = płatność mobilna (mobile/BLIK)
+// FA(3) FormaPlatnosci codes:
+//   1 = gotówka, 2 = karta, 3 = przelew, 4 = czek,
+//   5 = bon, 6 = kredyt, 7 = płatność mobilna
 const PAYMENT_METHOD_MAP: Record<string, string> = {
   cash:     '1',
   card:     '2',
@@ -162,7 +165,6 @@ function parseAddress(raw: string | null | undefined): ParsedAddress {
     ulica = s.slice(0, postalMatch.index).replace(/,\s*$/, '').trim();
   }
 
-  // Also check for ISO country code at end of string
   const countryMatch = s.match(/\b([A-Z]{2})\s*$/);
   if (countryMatch && countryMatch[1].length === 2) {
     kraj = countryMatch[1];
@@ -249,25 +251,18 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
 }
 
 /**
- * Build the full P_13_x / P_14_x VAT summary sequence + P_15.
+ * Build the P_13/P_14 VAT summary + P_15 per the FA(3) XSD.
  *
- * FA(3) XSD requires ALL P_13/P_14 elements in a fixed sequence, even when
- * their values are 0. The sequence is:
- *   P_13_1, P_14_1, [P_14_1W],
- *   P_13_2, P_14_2, [P_14_2W],
- *   P_13_3, P_14_3, [P_14_3W],
- *   P_13_4, P_14_4, [P_14_4W],
- *   P_13_5, [P_14_5],          (0% rate — P_14_5 optional)
- *   P_13_6_1, [P_13_6_2], [P_13_6_3],  (zw — all optional)
- *   P_13_7,                     (np — optional)
- *   P_13_8,                     (oo — optional)
- *   P_13_9,                     (total net — optional)
- *   P_14_9,                     (total vat — optional)
- *   P_15                        (total gross — required)
+ * Each taxable rate (23%, 8%, 5%, taxi, 0%) is wrapped in an optional <sequence>.
+ * We only emit the sequences for rates that appear on the invoice.
  *
- * We emit every element that the schema marks as mandatory (no minOccurs="0")
- * with 0.00 when the invoice doesn't use that rate, plus optional elements
- * that do apply. This ensures the XML always validates against the XSD.
+ * After those sequences, the XSD has standalone optional elements:
+ *   P_13_6_1 (zw), P_13_6_2, P_13_6_3, P_13_7 (np), P_13_8 (oo),
+ *   P_13_9, P_13_10, P_13_11 — all optional
+ *
+ * Then P_15 (total gross) is required.
+ *
+ * Note: FA(3) does NOT have P_14_9 (total VAT). The total net is P_13_9.
  */
 function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
   const rateMap = new Map<VatRate, VatGroup>();
@@ -278,59 +273,54 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
 
   const lines: string[] = [];
 
-  // 23% — P_13_1, P_14_1 (both required)
-  lines.push(`    <P_13_1>${dec2(get('23', 'netTotal'))}</P_13_1>`);
-  lines.push(`    <P_14_1>${dec2(get('23', 'vatTotal'))}</P_14_1>`);
-
-  // 8% — P_13_2, P_14_2 (both required)
-  lines.push(`    <P_13_2>${dec2(get('8', 'netTotal'))}</P_13_2>`);
-  lines.push(`    <P_14_2>${dec2(get('8', 'vatTotal'))}</P_14_2>`);
-
-  // 5% — P_13_3, P_14_3 (both required)
-  lines.push(`    <P_13_3>${dec2(get('5', 'netTotal'))}</P_13_3>`);
-  lines.push(`    <P_14_3>${dec2(get('5', 'vatTotal'))}</P_14_3>`);
-
-  // 4 = taxi flat rate — P_13_4, P_14_4 (both required, always 0 for us)
-  lines.push(`    <P_13_4>0.00</P_13_4>`);
-  lines.push(`    <P_14_4>0.00</P_14_4>`);
-
-  // 0% — P_13_5 (required), P_14_5 (optional, only if 0% rate present)
-  lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
-  if (rateMap.has('0')) {
-    lines.push(`    <P_14_5>${dec2(get('0', 'vatTotal'))}</P_14_5>`);
+  // 23% — optional sequence: P_13_1, P_14_1
+  if (rateMap.has('23')) {
+    lines.push(`    <P_13_1>${dec2(get('23', 'netTotal'))}</P_13_1>`);
+    lines.push(`    <P_14_1>${dec2(get('23', 'vatTotal'))}</P_14_1>`);
   }
 
-  // zw (exempt) — P_13_6_1, P_13_6_2, P_13_6_3 (all optional, emit if present)
+  // 8% — optional sequence: P_13_2, P_14_2
+  if (rateMap.has('8')) {
+    lines.push(`    <P_13_2>${dec2(get('8', 'netTotal'))}</P_13_2>`);
+    lines.push(`    <P_14_2>${dec2(get('8', 'vatTotal'))}</P_14_2>`);
+  }
+
+  // 5% — optional sequence: P_13_3, P_14_3
+  if (rateMap.has('5')) {
+    lines.push(`    <P_13_3>${dec2(get('5', 'netTotal'))}</P_13_3>`);
+    lines.push(`    <P_14_3>${dec2(get('5', 'vatTotal'))}</P_14_3>`);
+  }
+
+  // 0% — optional sequence: P_13_5, [P_14_5]
+  if (rateMap.has('0')) {
+    lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
+  }
+
+  // Standalone optional elements
   if (rateMap.has('zw')) {
     lines.push(`    <P_13_6_1>${dec2(get('zw', 'netTotal'))}</P_13_6_1>`);
   }
-
-  // np (non-taxable) — P_13_7 (optional, emit if present)
   if (rateMap.has('np')) {
     lines.push(`    <P_13_7>${dec2(get('np', 'netTotal'))}</P_13_7>`);
   }
-
-  // oo (out of scope) — P_13_8 (optional, emit if present)
   if (rateMap.has('oo')) {
     lines.push(`    <P_13_8>${dec2(get('oo', 'netTotal'))}</P_13_8>`);
   }
 
-  // Totals — P_13_9, P_14_9, P_15
+  // P_13_9 = total net across all rates
   lines.push(`    <P_13_9>${dec2(inv.net_total)}</P_13_9>`);
-  lines.push(`    <P_14_9>${dec2(inv.vat_total)}</P_14_9>`);
+
+  // P_15 = total gross (required)
   lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
 
   return lines.join('\n');
 }
 
 /**
- * Build the Adnotacje block, driven by the VAT rates on the invoice.
+ * Build the Adnotacje block.
  *
  * Element order: P_16 → P_17 → P_18 → P_18A → Zwolnienie → NoweSrodkiTransportu → P_23 → PMarzy
- *
- * When the invoice uses a "zw" (exempt) VAT rate, P_18 must be "1" (exemption
- * applies) and the Zwolnienie block uses P_19 (positive form, with a reason
- * text in P_19). Otherwise P_18=2 and P_19N=1 (does not apply).
+ * All eight are required (minOccurs=1).
  */
 function buildAdnotacje(vatGroups: VatGroup[]): string {
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
@@ -383,24 +373,27 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   }).join('\n');
 }
 
+/**
+ * Build the Platnosc block per FA(3) XSD.
+ *
+ * Sequence: [Zaplata choice], [TerminPlatnosci], [FormaPlatnosci | PlatnoscInna],
+ *           [RachunekBankowy], [RachunekBankowyFaktora], [Skonto], [LinkDoPlatnosci], [IPKSeF]
+ */
 function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
   const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '3';
 
-  // RachunekBankowy only makes sense for non-cash payments (transfer, card, etc.)
-  // Including it for cash (FormaPlatnosci=1) is a logical inconsistency KSeF rejects.
-  const isCash = methodCode === '1';
-  const rawAccount = inv.seller_bank_account?.trim() ?? '';
-  // Strip IBAN country-code prefix ("PL") — FA(3) NrRB expects the 26-digit Polish BBAN
-  const nrRb = rawAccount.replace(/^PL/i, '').replace(/\s/g, '');
-  const bankLine = !isCash && nrRb
-    ? `\n      <RachunekBankowy>\n        <NrRB>${esc(nrRb)}</NrRB>\n      </RachunekBankowy>`
-    : '';
   const dueDateLine = inv.due_date
-    ? `\n      <TerminPlatnosci>${esc(isoDate(inv.due_date))}</TerminPlatnosci>`
+    ? `\n      <TerminPlatnosci>\n        <Termin>${esc(isoDate(inv.due_date))}</Termin>\n      </TerminPlatnosci>`
     : '';
 
-  return `    <Platnosc>
-      <FormaPlatnosci>${methodCode}</FormaPlatnosci>${bankLine}${dueDateLine}
+  const rawAccount = inv.seller_bank_account?.trim() ?? '';
+  const nrRb = rawAccount.replace(/^PL/i, '').replace(/\s/g, '');
+  const bankLine = nrRb
+    ? `\n      <RachunekBankowy>\n        <NrRB>${esc(nrRb)}</NrRB>\n      </RachunekBankowy>`
+    : '';
+
+  return `    <Platnosc>${dueDateLine}
+      <FormaPlatnosci>${methodCode}</FormaPlatnosci>${bankLine}
     </Platnosc>`;
 }
 
