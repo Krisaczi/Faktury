@@ -243,6 +243,8 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
       <AdresL1>${esc(addr.ulica)}</AdresL1>
       <AdresL2>${esc(addr.kodPocztowy)} ${esc(addr.miasto)}</AdresL2>
     </Adres>
+    <JST>2</JST>
+    <GV>2</GV>
   </Podmiot2>`;
 }
 
