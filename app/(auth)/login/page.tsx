@@ -9,6 +9,7 @@ import { Eye, EyeOff, Loader as Loader2, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -22,15 +23,17 @@ import { signInSchema, type SignInFormData } from '@/lib/validations/auth';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { isSafeRedirect } from '@/lib/auth/determine-post-login-redirect';
 import { getPostLoginRedirect } from './actions';
+import { REMEMBER_ME_COOKIE } from '@/lib/auth/cookie-options';
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const rawNext = searchParams.get('redirect') ?? null;
-  // Validate client-side; final decision is made server-side in getPostLoginRedirect
+  const sessionExpired = searchParams.get('expired') === '1';
   const next = rawNext && isSafeRedirect(rawNext) ? rawNext : null;
 
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const {
     register,
@@ -42,6 +45,11 @@ function LoginForm() {
 
   async function onSubmit(data: SignInFormData) {
     setServerError('');
+
+    // Set the remember-me cookie BEFORE calling signInWithPassword so that
+    // the Supabase client's cookie setter can read it and decide maxAge.
+    document.cookie = `${REMEMBER_ME_COOKIE}=${rememberMe ? '1' : '0'}; path=/; samesite=lax${rememberMe ? `; max-age=${60 * 60 * 24 * 7}` : ''}`;
+
     const supabase = getSupabaseBrowserClient();
     const { data: authData, error } = await supabase.auth.signInWithPassword({
       email: data.email,
@@ -68,14 +76,20 @@ function LoginForm() {
       return;
     }
 
-    // Ask the server where to redirect — it reads the freshly-set session cookies
-    // and applies the canonical redirect logic (onboarding check, role, safe next).
     const destination = await getPostLoginRedirect(next);
     window.location.href = destination;
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {sessionExpired && (
+        <Alert className="py-3 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            Your session has expired. Please log in again.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {serverError && (
         <Alert variant="destructive" className="py-3">
           <AlertDescription>{serverError}</AlertDescription>
@@ -132,6 +146,21 @@ function LoginForm() {
           <p className="text-xs text-red-500">{errors.password.message}</p>
         )}
       </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="remember-me"
+          checked={rememberMe}
+          onCheckedChange={(checked) => setRememberMe(checked === true)}
+        />
+        <Label
+          htmlFor="remember-me"
+          className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer select-none"
+        >
+          Keep me signed in for 7 days
+        </Label>
+      </div>
+
       <Button
         type="submit"
         className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 font-medium"
