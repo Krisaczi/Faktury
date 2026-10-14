@@ -546,14 +546,16 @@ export async function seedDemoSession(opts: {
   const authUserId = authData.user.id as string;
 
   // ── 3. Upsert public users row ─────────────────────────────────────────────
+  // Demo user is 'accountant' (not 'owner') because a partial unique index
+  // (users_single_owner) allows only one owner across the entire database.
   await db.from('users').upsert(
-    { id: authUserId, email: demoEmail, company_id: companyId, role: 'owner' },
+    { id: authUserId, email: demoEmail, company_id: companyId, role: 'accountant' },
     { onConflict: 'id' }
   );
 
   // ── 4. Upsert profiles row ─────────────────────────────────────────────────
   await db.from('profiles').upsert(
-    { id: authUserId, email: demoEmail, full_name: 'Demo User', role: 'owner' },
+    { id: authUserId, email: demoEmail, full_name: 'Demo User', role: 'accountant' },
     { onConflict: 'id' }
   );
 
