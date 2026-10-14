@@ -54,7 +54,9 @@ export async function POST(
       invoice.vendor_id,
       invoice.seller_nip,
       bankAccount,
-      invoice.invoice_date ?? invoice.issue_date ?? null,
+      // Manual rechecks must use the current VAT register. The invoice date can
+      // be historical and may return NOT_FOUND even when the vendor is listed today.
+      null,
       user.id
     );
 
