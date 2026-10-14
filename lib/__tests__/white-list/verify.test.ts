@@ -2,7 +2,6 @@ import { describe, it, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyOnWhiteList } from '../../../lib/white-list/verify';
 
-// Mock global fetch
 const originalFetch = globalThis.fetch;
 
 function mockResponse(body: unknown, status = 200) {
@@ -22,35 +21,56 @@ after(() => {
   globalThis.fetch = originalFetch;
 });
 
+// Valid 26-digit Polish bank account: 61 1020 1234 5678 9012 3456 7890
+const VALID_IBAN_PL = 'PL61 1020 1234 5678 9012 3456 7890';
+const VALID_NRB = '61102012345678901234567890';
+const VALID_NIP = '5210000000';
+
 describe('verifyOnWhiteList', () => {
   it('returns VALID when account is assigned to the vendor', async () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({
         result: {
-          subject: { nip: '5210000000', name: 'Test Sp. z o.o.' },
+          subject: { nip: VALID_NIP, name: 'Test Sp. z o.o.' },
           accountStatus: 'Posiada',
-          accounts: [{ bankAccount: '69114012382444800352226545' }],
+          accounts: [{ bankAccount: VALID_NRB }],
         },
       });
 
-    const result = await verifyOnWhiteList('521-000-00-00', '69 1140 1238 2444 8003 5222 6545', '2026-10-14');
+    const result = await verifyOnWhiteList(VALID_NIP, VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'VALID');
     assert.equal(result.companyName, 'Test Sp. z o.o.');
-    assert.equal(result.taxId, '5210000000');
+    assert.equal(result.taxId, VALID_NIP);
+    assert.equal(result.bankAccount, VALID_NRB);
+  });
+
+  it('returns VALID with plain NRB (no PL prefix)', async () => {
+    (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
+      async () => mockResponse({
+        result: {
+          subject: { nip: VALID_NIP, name: 'Test Sp. z o.o.' },
+          accountStatus: 'Posiada',
+        },
+      });
+
+    const result = await verifyOnWhiteList(VALID_NIP, VALID_NRB, '2026-10-14');
+
+    assert.equal(result.status, 'VALID');
+    assert.equal(result.bankAccount, VALID_NRB);
   });
 
   it('returns INVALID when company found but account not assigned', async () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({
         result: {
-          subject: { nip: '5210000000', name: 'Test Sp. z o.o.' },
+          subject: { nip: VALID_NIP, name: 'Test Sp. z o.o.' },
           accountStatus: 'Nie posiada',
           accounts: [],
         },
       });
 
-    const result = await verifyOnWhiteList('5210000000', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList(VALID_NIP, VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'INVALID');
     assert.equal(result.companyName, 'Test Sp. z o.o.');
@@ -60,7 +80,7 @@ describe('verifyOnWhiteList', () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({ error: 'Not found' }, 404);
 
-    const result = await verifyOnWhiteList('9999999999', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList('9999999999', VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'NOT_FOUND');
     assert.equal(result.companyName, null);
@@ -70,7 +90,7 @@ describe('verifyOnWhiteList', () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({ result: {} });
 
-    const result = await verifyOnWhiteList('9999999999', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList('9999999999', VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'NOT_FOUND');
   });
@@ -79,29 +99,37 @@ describe('verifyOnWhiteList', () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => { throw new Error('Network timeout'); };
 
-    const result = await verifyOnWhiteList('5210000000', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList(VALID_NIP, VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'ERROR');
     assert.ok(result.message.includes('Network timeout'));
   });
 
   it('returns ERROR for invalid NIP', async () => {
-    const result = await verifyOnWhiteList('12', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList('12', VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'ERROR');
   });
 
-  it('returns ERROR for invalid bank account', async () => {
-    const result = await verifyOnWhiteList('5210000000', '123', '2026-10-14');
+  it('returns ERROR for bank account with wrong digit count (too short)', async () => {
+    const result = await verifyOnWhiteList(VALID_NIP, '12345678', '2026-10-14');
 
     assert.equal(result.status, 'ERROR');
+    assert.ok(result.message.includes('26 digits'));
+  });
+
+  it('returns ERROR for bank account with too many digits', async () => {
+    const result = await verifyOnWhiteList(VALID_NIP, '123456789012345678901234567890', '2026-10-14');
+
+    assert.equal(result.status, 'ERROR');
+    assert.ok(result.message.includes('26 digits'));
   });
 
   it('returns ERROR when API returns 500', async () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({ error: 'Server error' }, 500);
 
-    const result = await verifyOnWhiteList('5210000000', '69114012382444800352226545', '2026-10-14');
+    const result = await verifyOnWhiteList(VALID_NIP, VALID_IBAN_PL, '2026-10-14');
 
     assert.equal(result.status, 'ERROR');
     assert.ok(result.message.includes('500'));

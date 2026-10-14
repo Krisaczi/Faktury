@@ -27,8 +27,27 @@ interface MfWhiteListResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Normalizes a bank account for the White List API.
+ *
+ * The MF API requires exactly 26 digits (Polish NRB format).
+ * IBAN strings like "PL61 1020 ...26 digits" must have the "PL" prefix
+ * and whitespace stripped before submission.
+ *
+ * Returns the 26-digit NRB string, or an empty string if the account
+ * does not contain 26 digits after stripping non-digit characters.
+ */
 function normalizeAccount(account: string): string {
-  return account.replace(/[\s\-]/g, '').toUpperCase();
+  // Strip whitespace, dashes, and the PL country prefix (case-insensitive)
+  let cleaned = account.replace(/[\s\-]/g, '').toUpperCase();
+  if (cleaned.startsWith('PL')) {
+    cleaned = cleaned.slice(2);
+  }
+  // Extract only digits
+  const digits = cleaned.replace(/[^0-9]/g, '');
+  // The MF API requires exactly 26 digits
+  if (digits.length !== 26) return '';
+  return digits;
 }
 
 function normalizeNip(nip: string): string {
@@ -71,13 +90,13 @@ export async function verifyOnWhiteList(
     };
   }
 
-  if (!cleanAccount || cleanAccount.length < 8) {
+  if (!cleanAccount) {
     return {
       status: 'ERROR',
       companyName: null,
       taxId: cleanNip,
-      bankAccount: cleanAccount,
-      message: 'Invalid bank account number',
+      bankAccount: bankAccount,
+      message: 'Invalid bank account number — Polish bank accounts require exactly 26 digits',
     };
   }
 
