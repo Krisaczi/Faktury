@@ -45,6 +45,32 @@ describe('verifyOnWhiteList', () => {
     assert.equal(result.bankAccount, VALID_NRB);
   });
 
+  it('returns VALID for the Ministry accountAssigned TAK response', async () => {
+    (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
+      async () => mockResponse({
+        result: {
+          accountAssigned: 'TAK',
+          requestDateTime: '14-10-2026 13:06:40',
+          requestId: 'test-request-id',
+        },
+      });
+
+    const result = await verifyOnWhiteList('5212897517', 'PL15109016940000000119960665', null);
+
+    assert.equal(result.status, 'VALID');
+    assert.equal(result.taxId, '5212897517');
+    assert.equal(result.bankAccount, '15109016940000000119960665');
+  });
+
+  it('returns INVALID for the Ministry accountAssigned NIE response', async () => {
+    (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
+      async () => mockResponse({ result: { accountAssigned: 'NIE' } });
+
+    const result = await verifyOnWhiteList('5212897517', '15109016940000000119960665', null);
+
+    assert.equal(result.status, 'INVALID');
+  });
+
   it('returns VALID with plain NRB (no PL prefix)', async () => {
     (globalThis.fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>) =
       async () => mockResponse({

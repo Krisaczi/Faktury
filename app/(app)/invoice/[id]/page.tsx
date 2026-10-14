@@ -1235,6 +1235,7 @@ export default function InvoiceDetailPage() {
                     <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
                       <MetaRow label="Numer faktury"  value={invoice?.invoice_number} />
                       <MetaRow label="Dostawca"       value={vendor?.name ?? '—'} />
+                      <MetaRow label="NIP dostawcy" value={invoice?.seller_nip ?? company?.nip ?? null} mono />
                       <MetaRow
                         label="Kwota"
                         value={

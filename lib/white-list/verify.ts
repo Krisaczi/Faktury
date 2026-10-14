@@ -21,6 +21,7 @@ interface MfWhiteListResponse {
       workingAddress?: string;
     };
     accountStatus?: string; // "Posiada" / "Nie posiada" / "Brak konta"
+    accountAssigned?: 'TAK' | 'NIE';
     accounts?: Array<{ bankAccount?: string }>;
   };
 }
@@ -151,21 +152,36 @@ export async function verifyOnWhiteList(
 
     const subject = result.subject;
     const accountStatus = result.accountStatus;
+    const accountAssigned = result.accountAssigned?.toUpperCase();
 
-    if (!subject) {
+    const companyName = subject?.name ?? null;
+    const taxId = subject?.nip ?? cleanNip;
+
+    // The account-check endpoint returns accountAssigned (TAK/NIE) and does
+    // not include a subject object. This is the authoritative result for the
+    // requested NIP + IBAN pair.
+    if (accountAssigned === 'TAK') {
       return {
-        status: 'NOT_FOUND',
-        companyName: null,
-        taxId: cleanNip,
+        status: 'VALID',
+        companyName,
+        taxId,
         bankAccount: cleanAccount,
-        message: 'Vendor not found on VAT White List',
+        message: 'Bank account verified on VAT White List',
       };
     }
 
-    const companyName = subject.name ?? null;
-    const taxId = subject.nip ?? cleanNip;
+    if (accountAssigned === 'NIE') {
+      return {
+        status: 'INVALID',
+        companyName,
+        taxId,
+        bankAccount: cleanAccount,
+        message: 'Bank account not assigned to this vendor on VAT White List',
+      };
+    }
 
-    // accountStatus "Posiada" = the account is assigned to this entity
+    // Legacy response shape: accountStatus "Posiada" means the account is
+    // assigned to this entity.
     if (accountStatus && accountStatus.toLowerCase() === 'posiada') {
       return {
         status: 'VALID',
@@ -190,6 +206,16 @@ export async function verifyOnWhiteList(
           message: 'Bank account verified on VAT White List',
         };
       }
+    }
+
+    if (!subject) {
+      return {
+        status: 'NOT_FOUND',
+        companyName: null,
+        taxId: cleanNip,
+        bankAccount: cleanAccount,
+        message: 'Vendor not found on VAT White List',
+      };
     }
 
     return {
