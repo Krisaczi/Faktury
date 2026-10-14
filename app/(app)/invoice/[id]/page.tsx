@@ -78,8 +78,7 @@ import {
   type AuditLogEntry,
   type InvoiceCompany,
 } from '@/hooks/use-invoice-detail';
-import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items-section';
-import { InvoiceChargesSection } from '@/components/invoice/invoice-charges-section';
+import { InvoicePdfPreviewCard } from '@/components/invoice/invoice-pdf-preview-card';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { BBox } from '@/types/invoice-item';
 import type { WhiteListStatus } from '@/hooks/use-invoice-detail';
@@ -1257,23 +1256,6 @@ export default function InvoiceDetailPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Tax & banking */}
-                  <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                    <CardHeader className="pb-1">
-                      <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                        Dane Podatkowe & Bankowe
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <MetaRow label="Firma" value={company?.name ?? null} />
-                      <MetaRow label="NIP dostawcy" value={invoice?.seller_nip ?? company?.nip ?? null} mono />
-                      <MetaRow label="NIP" value={invoice?.buyer_nip ?? null} mono />
-                      <MetaRow label="Nazwa banku" value={invoice?.bank_name ?? company?.bank_name ?? null} />
-                      <MetaRow label="Numer konta" value={formatIBAN(invoice?.bank_account_number ?? company?.bank_account_number ?? null)} mono />
-                      <MetaRow label="Adres" value={companyAddress(company)} />
-                    </CardContent>
-                  </Card>
-
                   {/* White List verification */}
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <CardHeader className="pb-1">
@@ -1433,24 +1415,22 @@ export default function InvoiceDetailPage() {
                 <RightPanelSkeleton />
               ) : (
                 <>
-                  {/* Line Items */}
-                  <InvoiceLineItemsSection
+                  {/* PDF Preview + Items + Charges tabs */}
+                  <InvoicePdfPreviewCard
                     invoiceId={id}
+                    invoiceNumber={invoice?.invoice_number}
+                    hasRawFile={!!invoice?.raw_file_url}
                     userRole={userRoleData?.role ?? null}
                     onHoverItem={(bbox, pageNum) => {
                       setHoveredBBox(bbox);
                       setHoveredPage(pageNum);
                     }}
-                  />
-
-                  {/* Rozliczenie — Charges */}
-                  <InvoiceChargesSection
-                    invoiceId={id}
-                    userRole={userRoleData?.role ?? null}
                     onHoverCharge={(bbox, pageNum) => {
                       setHoveredBBox(bbox);
                       setHoveredPage(pageNum);
                     }}
+                    onDownload={handleDownload}
+                    downloading={downloading}
                   />
 
                   {/* Risk flags */}
