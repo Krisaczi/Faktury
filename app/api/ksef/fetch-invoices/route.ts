@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 import crypto from 'crypto';
 import { resolveVendor } from '@/lib/vendors/resolve-vendor';
+import { runWhiteListVerification } from '@/lib/white-list/verify';
 
 function getAuthedClient(accessToken: string): SupabaseClient<Database> {
   return createClient<Database>(
@@ -607,6 +608,29 @@ async function runKsefFetch({
             }
             if (highestRisk) {
               await supabase.from('invoices').update({ overall_risk: highestRisk }).eq('id', invoice.id);
+            }
+
+            // ── White List (Biała Lista) verification ───────────────────────────
+            const wlBankAccount = inv.bankAccount ?? inv.seller?.iban ?? null;
+            const wlNip = sellerNip;
+            if (wlNip && wlBankAccount) {
+              try {
+                await runWhiteListVerification(
+                  supabase,
+                  invoice.id,
+                  companyId,
+                  vendorId,
+                  wlNip,
+                  wlBankAccount,
+                  inv.invoiceDate ?? meta.issueDate ?? null,
+                  null
+                );
+              } catch (wlErr) {
+                errors.push({
+                  message: `White List verification failed for ${ksefId}: ${wlErr instanceof Error ? wlErr.message : 'Unknown error'}`,
+                  context: ksefId,
+                });
+              }
             }
           } else {
             errorCount++;

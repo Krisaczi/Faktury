@@ -60,6 +60,16 @@ export interface InvoiceVendor {
   contact_email: string | null;
 }
 
+export type WhiteListStatus = 'VALID' | 'INVALID' | 'NOT_FOUND' | 'ERROR';
+
+export interface WhiteListResult {
+  status: WhiteListStatus;
+  companyName: string | null;
+  taxId: string | null;
+  bankAccount: string | null;
+  message: string;
+}
+
 export interface InvoiceDetail {
   id: string;
   invoice_number: string | null;
@@ -79,6 +89,12 @@ export interface InvoiceDetail {
   vendor_id: string | null;
   upload_session_id: string | null;
   created_at: string;
+  white_list_status: WhiteListStatus | null;
+  white_list_verified_at: string | null;
+  white_list_company_name: string | null;
+  white_list_tax_id: string | null;
+  white_list_bank_account: string | null;
+  white_list_message: string | null;
 }
 
 export interface InvoiceCompany {
@@ -275,6 +291,17 @@ export function useInvoiceDetail(invoiceId: string | null) {
     await apiFetch(`/api/invoices/${invoiceId}`, { method: 'DELETE' });
   }
 
+  // ── White List recheck ─────────────────────────────────────────────────────
+  async function recheckWhiteList(): Promise<WhiteListResult> {
+    if (!invoiceId) throw new Error('No invoice ID');
+    const result = await apiFetch<WhiteListResult>(
+      `/api/invoices/${invoiceId}/white-list-check`,
+      { method: 'POST' }
+    );
+    await mutate();
+    return result;
+  }
+
   return {
     data,
     error,
@@ -285,6 +312,7 @@ export function useInvoiceDetail(invoiceId: string | null) {
     addReview,
     getDownloadUrl,
     deleteInvoice,
+    recheckWhiteList,
   };
 }
 

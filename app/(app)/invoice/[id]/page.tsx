@@ -30,6 +30,10 @@ import {
   FileDown,
   Eye,
   Maximize2,
+  ShieldCheck,
+  ShieldX,
+  ShieldAlert,
+  ShieldOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,6 +82,7 @@ import { InvoiceLineItemsSection } from '@/components/invoice/invoice-line-items
 import { InvoiceChargesSection } from '@/components/invoice/invoice-charges-section';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { BBox } from '@/types/invoice-item';
+import type { WhiteListStatus } from '@/hooks/use-invoice-detail';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -160,6 +165,40 @@ function FlagStatusIcon({ status }: { status: InvoiceFlag['status'] }) {
   if (status === 'dismissed')    return <X className="w-3.5 h-3.5 text-slate-400" />;
   if (status === 'escalated')    return <ChevronsUp className="w-3.5 h-3.5 text-red-500" />;
   return <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />;
+}
+
+// ─── White List badge ───────────────────────────────────────────────────────
+
+function WhiteListBadge({ status }: { status: WhiteListStatus | null | undefined }) {
+  if (!status) return <Badge variant="outline" className="text-slate-400 border-slate-200 dark:border-slate-700 text-xs">—</Badge>;
+  const styles: Record<string, string> = {
+    VALID:      'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+    INVALID:    'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800',
+    NOT_FOUND:  'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+    ERROR:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  };
+  const labels: Record<string, string> = {
+    VALID: 'Verified',
+    INVALID: 'Not on White List',
+    NOT_FOUND: 'Vendor not found',
+    ERROR: 'Verification unavailable',
+  };
+  return (
+    <Badge variant="outline" className={cn('text-xs font-semibold', styles[status] ?? '')}>
+      {labels[status] ?? status}
+    </Badge>
+  );
+}
+
+function WhiteListIcon({ status }: { status: WhiteListStatus | null | undefined }) {
+  if (!status) return null;
+  const icons: Record<string, React.ReactNode> = {
+    VALID:     <ShieldCheck className="w-4 h-4 text-emerald-500" />,
+    INVALID:   <ShieldX className="w-4 h-4 text-red-500" />,
+    NOT_FOUND: <ShieldAlert className="w-4 h-4 text-amber-500" />,
+    ERROR:     <ShieldOff className="w-4 h-4 text-slate-400" />,
+  };
+  return icons[status] ?? null;
 }
 
 // ─── MetaRow ──────────────────────────────────────────────────────────────────
@@ -758,7 +797,7 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const {
     data, error, isLoading,
-    updateFlag, addFlag, addReview, getDownloadUrl, deleteInvoice,
+    updateFlag, addFlag, addReview, getDownloadUrl, deleteInvoice, recheckWhiteList,
   } = useInvoiceDetail(id ?? null);
 
   const [updatingFlag, setUpdatingFlag]         = useState<string | null>(null);
@@ -770,6 +809,7 @@ export default function InvoiceDetailPage() {
   const [hoveredPage, setHoveredPage]           = useState<number | null>(null);
   const { data: userRoleData }                  = useUserRole();
   const [toast, setToast]               = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [wlRechecking, setWlRechecking]         = useState(false);
 
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
@@ -843,6 +883,24 @@ export default function InvoiceDetailPage() {
   async function handleReview(status: string, note?: string) {
     await addReview(status as 'reviewed' | 'approved' | 'flagged_for_follow_up', note);
     showToast('Review submitted', 'success');
+  }
+
+  async function handleWhiteListRecheck() {
+    setWlRechecking(true);
+    try {
+      const result = await recheckWhiteList();
+      if (result.status === 'VALID') {
+        showToast('Bank account verified on White List', 'success');
+      } else if (result.status === 'ERROR') {
+        showToast('White List verification unavailable', 'error');
+      } else {
+        showToast('Bank account not verified on White List', 'error');
+      }
+    } catch {
+      showToast('White List recheck failed', 'error');
+    } finally {
+      setWlRechecking(false);
+    }
   }
 
   if (error) {
@@ -1112,6 +1170,35 @@ export default function InvoiceDetailPage() {
         {/* ── Body ─────────────────────────────────────────────────────────── */}
         <div className="max-w-6xl mx-auto px-6 py-6">
 
+          {/* White List warning banner */}
+          {!isLoading && (invoice?.white_list_status === 'INVALID' || invoice?.white_list_status === 'NOT_FOUND') && (
+            <div
+              role="alert"
+              className="mb-6 rounded-xl border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30 px-5 py-4"
+            >
+              <div className="flex items-start gap-3">
+                <ShieldX className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-red-800 dark:text-red-300 uppercase tracking-wide">
+                    Ostrzeżenie
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                    {invoice?.white_list_status === 'INVALID'
+                      ? 'The bank account indicated on this invoice could not be verified on the Polish VAT White List.'
+                      : 'The vendor could not be found on the Polish VAT White List. Bank account cannot be verified.'}
+                  </p>
+                  <div className="mt-2 text-xs text-red-600 dark:text-red-500 space-y-0.5">
+                    <p><span className="font-semibold">Bank Account:</span> {formatIBAN(invoice?.white_list_bank_account ?? invoice?.bank_account_number ?? invoice?.bank_account) ?? '—'}</p>
+                    <p><span className="font-semibold">Vendor:</span> {vendor?.name ?? invoice?.seller_nip ?? '—'}</p>
+                  </div>
+                  <p className="text-xs text-red-600 dark:text-red-500 mt-2 italic">
+                    Please verify before making payment.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Summary stats */}
           {!isLoading && flags.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" aria-label="Flag summary statistics">
@@ -1183,6 +1270,55 @@ export default function InvoiceDetailPage() {
                       <MetaRow label="Nazwa banku" value={invoice?.bank_name ?? company?.bank_name ?? null} />
                       <MetaRow label="Numer konta" value={formatIBAN(invoice?.bank_account_number ?? company?.bank_account_number ?? null)} mono />
                       <MetaRow label="Adres" value={companyAddress(company)} />
+                    </CardContent>
+                  </Card>
+
+                  {/* White List verification */}
+                  <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                    <CardHeader className="pb-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                          Biała Lista VAT
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                          <WhiteListIcon status={invoice?.white_list_status ?? null} />
+                          <WhiteListBadge status={invoice?.white_list_status ?? null} />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <MetaRow label="Status" value={
+                        invoice?.white_list_status === 'VALID'
+                          ? 'Sprawdzono na Białej Liście VAT'
+                          : invoice?.white_list_status === 'INVALID'
+                          ? 'Brak konta na Białej Liście VAT'
+                          : invoice?.white_list_status === 'NOT_FOUND'
+                          ? 'Dostawca nie znaleziony'
+                          : invoice?.white_list_status === 'ERROR'
+                          ? 'Weryfikacja niedostępna'
+                          : 'Nie sprawdzano'
+                      } />
+                      <MetaRow label="Data weryfikacji" value={fmt(invoice?.white_list_verified_at)} />
+                      <MetaRow label="Zweryfikowana firma" value={invoice?.white_list_company_name ?? null} />
+                      <MetaRow label="Zweryfikowany NIP" value={invoice?.white_list_tax_id ?? null} mono />
+                      <MetaRow label="Zweryfikowane konto" value={formatIBAN(invoice?.white_list_bank_account ?? null)} mono />
+                      {invoice?.white_list_message && (
+                        <MetaRow label="Wiadomość" value={invoice.white_list_message} />
+                      )}
+                      <div className="pt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2 h-9"
+                          onClick={handleWhiteListRecheck}
+                          disabled={wlRechecking}
+                        >
+                          {wlRechecking
+                            ? <RefreshCw className="w-4 h-4 animate-spin" />
+                            : <ShieldCheck className="w-4 h-4" />}
+                          Sprawdź ponownie Białą Listę
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
 

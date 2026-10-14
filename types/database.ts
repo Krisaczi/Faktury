@@ -312,6 +312,12 @@ export type Database = {
           overall_risk: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total: number | null;
           amount_due: number | null;
+          white_list_status: string | null;
+          white_list_verified_at: string | null;
+          white_list_company_name: string | null;
+          white_list_tax_id: string | null;
+          white_list_bank_account: string | null;
+          white_list_message: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -342,6 +348,12 @@ export type Database = {
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
+          white_list_status?: string | null;
+          white_list_verified_at?: string | null;
+          white_list_company_name?: string | null;
+          white_list_tax_id?: string | null;
+          white_list_bank_account?: string | null;
+          white_list_message?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -369,6 +381,12 @@ export type Database = {
           overall_risk?: 'low' | 'medium' | 'high' | 'critical' | null;
           charges_total?: number | null;
           amount_due?: number | null;
+          white_list_status?: string | null;
+          white_list_verified_at?: string | null;
+          white_list_company_name?: string | null;
+          white_list_tax_id?: string | null;
+          white_list_bank_account?: string | null;
+          white_list_message?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1240,6 +1258,71 @@ export type Database = {
         };
         Relationships: [];
       };
+      vendor_bank_accounts: {
+        Row: {
+          id: string;
+          vendor_id: string;
+          bank_account_number: string;
+          bank_name: string | null;
+          source: string;
+          verified_on_white_list: boolean;
+          verification_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vendor_id: string;
+          bank_account_number: string;
+          bank_name?: string | null;
+          source?: string;
+          verified_on_white_list?: boolean;
+          verification_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          bank_account_number?: string;
+          bank_name?: string | null;
+          source?: string;
+          verified_on_white_list?: boolean;
+          verification_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      white_list_audit: {
+        Row: {
+          id: string;
+          invoice_id: string | null;
+          vendor_id: string | null;
+          company_id: string;
+          nip: string;
+          iban: string;
+          result: string;
+          message: string | null;
+          actor_id: string | null;
+          event_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id?: string | null;
+          vendor_id?: string | null;
+          company_id: string;
+          nip: string;
+          iban: string;
+          result: string;
+          message?: string | null;
+          actor_id?: string | null;
+          event_type: string;
+          created_at?: string;
+        };
+        Update: {
+          message?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1307,6 +1390,7 @@ export type Database = {
           flags: Json;
           reviews: Json;
           vendor: Json | null;
+          company: Json | null;
         }[];
       };
       get_vendor_summary: {
