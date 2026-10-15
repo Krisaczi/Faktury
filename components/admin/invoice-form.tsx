@@ -44,8 +44,8 @@ import { BillingAddressSchema, validateBillingAddress, type BillingAddress } fro
 const ItemSchema = z.object({
   name:           z.string().min(1, 'Wymagane'),
   unit:           z.string().min(1).default('szt.'),
-  quantity:       z.coerce.number().positive('> 0'),
-  unit_price_net: z.coerce.number().min(0, '>= 0'),
+  quantity:       z.coerce.number().refine((v) => v !== 0, 'Ilość nie może wynosić 0'),
+  unit_price_net: z.coerce.number(),
   vat_rate:       z.enum(VAT_RATES),
   discount_pct:   z.coerce.number().min(0).max(99.99).nullable().optional(),
 });
@@ -197,6 +197,9 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
   });
 
   const totals = computeInvoiceTotals(computedItems);
+  const isCorrection = watchedDocType === 'CORRECTION';
+  const qtyMin = isCorrection ? undefined : '0.0001';
+  const priceMin = isCorrection ? undefined : '0';
 
   const onSubmit = useCallback(
     (intentValue: 'draft' | 'issue') =>
@@ -666,7 +669,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
                       <Input
                         {...register(`items.${i}.quantity`)}
                         type="number"
-                        min="0.0001"
+                        min={qtyMin}
                         step="0.01"
                         placeholder="1"
                         className={cn('h-8 text-sm text-right', errors.items?.[i]?.quantity && 'border-red-400')}
@@ -676,7 +679,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
                       <Input
                         {...register(`items.${i}.unit_price_net`)}
                         type="number"
-                        min="0"
+                        min={priceMin}
                         step="0.01"
                         placeholder="0.00"
                         className={cn('h-8 text-sm text-right', errors.items?.[i]?.unit_price_net && 'border-red-400')}

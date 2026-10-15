@@ -66,12 +66,12 @@ export const IssuedInvoiceItemSchema = z.object({
   position:       z.number().int().positive(),
   name:           z.string().min(1, 'Nazwa pozycji jest wymagana').max(500),
   unit:           z.string().min(1).max(20).default('szt.'),
-  quantity:       z.number().positive('Ilość musi być większa od 0'),
-  unit_price_net: z.number().min(0, 'Cena jednostkowa nie może być ujemna'),
+  quantity:       z.number().refine((v) => v !== 0, 'Ilość nie może wynosić 0'),
+  unit_price_net: z.number(),
   vat_rate:       z.enum(VAT_RATES),
-  net_amount:     z.number().min(0),
-  vat_amount:     z.number().min(0).default(0),
-  gross_amount:   z.number().min(0),
+  net_amount:     z.number(),
+  vat_amount:     z.number().default(0),
+  gross_amount:   z.number(),
   discount_pct:   z.number().min(0).max(99.99).nullable().optional(),
 });
 
@@ -108,9 +108,9 @@ export const IssuedInvoiceSchema = z.object({
   buyer_email:   z.string().email('Nieprawidłowy adres e-mail').nullable().optional(),
 
   // Totals
-  net_total:   z.number().min(0).default(0),
-  vat_total:   z.number().min(0).default(0),
-  gross_total: z.number().min(0).default(0),
+  net_total:   z.number().default(0),
+  vat_total:   z.number().default(0),
+  gross_total: z.number().default(0),
 
   notes: z.string().max(2000).nullable().optional(),
 
