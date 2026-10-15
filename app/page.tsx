@@ -70,18 +70,18 @@ const plans = [
     price: 'PLN 149',
     period: '/miesięcznie',
     desc: 'Idealny dla małych firm, które chcą wdrożyć VMD',
-    features: ['Do 25 dostawców', '10 raportów miesięcznie', 'Wczytywanie plików', 'Wsparcie email'],
+    features: ['10 faktur miesięcznie', 'Do 25 dostawców', '10 raportów miesięcznie', 'Wsparcie email'],
     cta: 'Rozpocznij bezpłatny okres próbny',
-    highlight: false,
+    highlight: true,
   },
   {
     name: 'Pro',
     price: 'PLN 499',
     period: '/miesięcznie',
     desc: 'Dla rozwijających się firm o zaawansowanych potrzebach.',
-    features: ['Nielimitowana liczba dostawców', 'Nielimitowane raporty', 'Priorytetowe wsparcie','Wystawianie faktur'],
+    features: ['Nielimitowane wystawianie faktur', 'Nielimitowana liczba dostawców', 'Nielimitowane raporty', 'Priorytetowe wsparcie'],
     cta: 'Rozpocznij bezpłatny okres próbny',
-    highlight: true,
+    highlight: false,
   },
   {
     name: '',
@@ -161,7 +161,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
-            7 dniowy okres próbny · Anuluj w dowolnym momencie
+            Pierwsze 14 dni bez żadnych opłat · Zrezygnuj w dowolnym momencie
           </p>
         </div>
       </section>
