@@ -7,7 +7,7 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info, MapPin, AlertTriangle, RefreshCw, Settings as SettingsIcon, Lock } from 'lucide-react';
+import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info, MapPin, AlertTriangle, RefreshCw, Settings as SettingsIcon, Lock, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +24,10 @@ import {
   computeItemAmounts,
   computeInvoiceTotals,
   VAT_RATES,
+  DOCUMENT_TYPES,
+  DOCUMENT_TYPE_LABELS,
   type VatRate,
+  type DocumentType,
   type IssuedInvoiceRow,
   type IssuedInvoiceItemRow,
 } from '@/types/issued-invoice';
@@ -48,6 +51,7 @@ const ItemSchema = z.object({
 });
 
 const FormSchema = z.object({
+  document_type:       z.enum(DOCUMENT_TYPES).default('STANDARD'),
   invoice_number:      z.string().optional(),
   autoGenerateNumber:  z.boolean().default(true),
   currency:            z.string().default('PLN'),
@@ -66,6 +70,16 @@ const FormSchema = z.object({
   buyer_address:       z.string().optional(),
   buyer_email:         z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   notes:               z.string().optional(),
+  // CORRECTION fields
+  corrected_invoice_number: z.string().optional(),
+  corrected_invoice_date:   z.string().optional(),
+  correction_reason:        z.string().optional(),
+  // ADVANCE / SETTLEMENT fields
+  advance_amount:       z.coerce.number().min(0).optional(),
+  order_total_gross:    z.coerce.number().min(0).optional(),
+  remaining_amount:     z.coerce.number().min(0).optional(),
+  total_advances_amount: z.coerce.number().min(0).optional(),
+  amount_due:           z.coerce.number().min(0).optional(),
   items:               z.array(ItemSchema).min(1, 'Dodaj co najmniej jedną pozycję'),
 });
 
@@ -150,6 +164,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
       issue_date:     todayISO(),
       autoGenerateNumber: autoGenerateNumber,
       ...defaultValues,
+      document_type:  defaultValues?.document_type ?? 'STANDARD',
       seller_name:    defaultValues?.seller_name    ?? sellerDefaults?.name    ?? '',
       seller_nip:     defaultValues?.seller_nip     ?? sellerDefaults?.nip     ?? '',
       seller_address: defaultValues?.seller_address ?? sellerDefaults?.address ?? '',
@@ -171,6 +186,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedBankAccountId = useWatch({ control, name: 'company_bank_account_id' });
   const watchedInvoiceNumber = useWatch({ control, name: 'invoice_number' });
+  const watchedDocType = useWatch({ control, name: 'document_type' }) ?? 'STANDARD';
 
   const computedItems = (watchedItems ?? []).map((item) => {
     const q   = Number(item?.quantity ?? 0);
@@ -199,6 +215,9 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
           buyer_address: normalize(data.buyer_address) ?? '',
           seller_bank_account: normalize(data.seller_bank_account),
           notes: normalize(data.notes),
+          corrected_invoice_number: normalize(data.corrected_invoice_number),
+          corrected_invoice_date: normalize(data.corrected_invoice_date),
+          correction_reason: normalize(data.correction_reason),
           overrideAddress: useOverride && isOwner ? overrideAddress : null,
         } as unknown as InvoiceFormValues;
 
@@ -225,6 +244,72 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
 
   return (
     <form className="space-y-6" onSubmit={(e) => e.preventDefault()} noValidate>
+
+      {/* ── Document type ─────────────────────────────────────────────── */}
+      <Section title="Typ dokumentu" icon={FileText}>
+        <Field label="Rodzaj faktury" required>
+          <Select
+            value={watchedDocType}
+            onValueChange={(v) => setValue('document_type', v as DocumentType, { shouldValidate: true })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DOCUMENT_TYPES.map((dt) => (
+                <SelectItem key={dt} value={dt}>{DOCUMENT_TYPE_LABELS[dt]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {watchedDocType === 'CORRECTION' && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
+            <Field label="Numer faktury korygowanej" required error={errors.corrected_invoice_number?.message}>
+              <Input {...register('corrected_invoice_number')} placeholder="FV/001/09/2026" className="font-mono" />
+            </Field>
+            <Field label="Data faktury korygowanej" required error={errors.corrected_invoice_date?.message}>
+              <Input {...register('corrected_invoice_date')} type="date" />
+            </Field>
+            <Field label="Powód korekty" required className="sm:col-span-2" error={errors.correction_reason?.message}>
+              <textarea
+                {...register('correction_reason')}
+                rows={2}
+                placeholder="Np. zmiana stawki VAT, korekta ilości…"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-colors"
+              />
+            </Field>
+          </div>
+        )}
+
+        {(watchedDocType === 'ADVANCE' || watchedDocType === 'SETTLEMENT') && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
+            {watchedDocType === 'ADVANCE' && (
+              <Field label="Kwota zaliczki (brutto)" required error={errors.advance_amount?.message}>
+                <Input {...register('advance_amount')} type="number" min="0" step="0.01" placeholder="0.00" className="text-right" />
+              </Field>
+            )}
+            {(watchedDocType === 'ADVANCE' || watchedDocType === 'SETTLEMENT') && (
+              <Field label="Wartość zamówienia (brutto)" error={errors.order_total_gross?.message}>
+                <Input {...register('order_total_gross')} type="number" min="0" step="0.01" placeholder="0.00" className="text-right" />
+              </Field>
+            )}
+            {watchedDocType === 'ADVANCE' && (
+              <Field label="Pozostała kwota do zapłaty" error={errors.remaining_amount?.message}>
+                <Input {...register('remaining_amount')} type="number" min="0" step="0.01" placeholder="0.00" className="text-right" />
+              </Field>
+            )}
+            {watchedDocType === 'SETTLEMENT' && (
+              <Field label="Suma zaliczek (brutto)" required error={errors.total_advances_amount?.message}>
+                <Input {...register('total_advances_amount')} type="number" min="0" step="0.01" placeholder="0.00" className="text-right" />
+              </Field>
+            )}
+            {watchedDocType === 'SETTLEMENT' && (
+              <Field label="Kwota do zapłaty" required error={errors.amount_due?.message}>
+                <Input {...register('amount_due')} type="number" min="0" step="0.01" placeholder="0.00" className="text-right" />
+              </Field>
+            )}
+          </div>
+        )}
+      </Section>
 
       {/* ── Seller ────────────────────────────────────────────────────── */}
       <Section title="Sprzedawca" icon={Building2}>

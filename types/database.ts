@@ -694,6 +694,7 @@ export type Database = {
           invoice_number: string;
           numbering_mode: 'manual' | 'automatic';
           status: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          document_type: 'STANDARD' | 'CORRECTION' | 'ADVANCE' | 'SETTLEMENT' | 'SIMPLIFIED';
           currency: string;
           issue_date: string;
           sale_date: string | null;
@@ -711,6 +712,16 @@ export type Database = {
           vat_total: number;
           gross_total: number;
           notes: string | null;
+          original_invoice_id: string | null;
+          correction_reason: string | null;
+          corrected_invoice_number: string | null;
+          corrected_invoice_date: string | null;
+          advance_amount: number | null;
+          order_total_gross: number | null;
+          remaining_amount: number | null;
+          settlement_of_invoice_id: string | null;
+          total_advances_amount: number | null;
+          amount_due: number | null;
           ksef_reference_no: string | null;
           ksef_session_token: string | null;
           ksef_status: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
@@ -731,6 +742,7 @@ export type Database = {
           invoice_number: string;
           numbering_mode?: 'manual' | 'automatic';
           status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          document_type?: 'STANDARD' | 'CORRECTION' | 'ADVANCE' | 'SETTLEMENT' | 'SIMPLIFIED';
           currency?: string;
           issue_date?: string;
           sale_date?: string | null;
@@ -749,6 +761,16 @@ export type Database = {
           vat_total?: number;
           gross_total?: number;
           notes?: string | null;
+          original_invoice_id?: string | null;
+          correction_reason?: string | null;
+          corrected_invoice_number?: string | null;
+          corrected_invoice_date?: string | null;
+          advance_amount?: number | null;
+          order_total_gross?: number | null;
+          remaining_amount?: number | null;
+          settlement_of_invoice_id?: string | null;
+          total_advances_amount?: number | null;
+          amount_due?: number | null;
           ksef_reference_no?: string | null;
           ksef_session_token?: string | null;
           ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
@@ -766,6 +788,7 @@ export type Database = {
           invoice_number?: string;
           numbering_mode?: 'manual' | 'automatic';
           status?: 'draft' | 'issued' | 'sent_to_ksef' | 'accepted' | 'rejected' | 'cancelled';
+          document_type?: 'STANDARD' | 'CORRECTION' | 'ADVANCE' | 'SETTLEMENT' | 'SIMPLIFIED';
           currency?: string;
           issue_date?: string;
           sale_date?: string | null;
@@ -783,6 +806,16 @@ export type Database = {
           vat_total?: number;
           gross_total?: number;
           notes?: string | null;
+          original_invoice_id?: string | null;
+          correction_reason?: string | null;
+          corrected_invoice_number?: string | null;
+          corrected_invoice_date?: string | null;
+          advance_amount?: number | null;
+          order_total_gross?: number | null;
+          remaining_amount?: number | null;
+          settlement_of_invoice_id?: string | null;
+          total_advances_amount?: number | null;
+          amount_due?: number | null;
           ksef_reference_no?: string | null;
           ksef_session_token?: string | null;
           ksef_status?: 'pending' | 'processing' | 'accepted' | 'rejected' | null;
@@ -925,6 +958,42 @@ export type Database = {
             foreignKeyName: 'customer_audit_log_user_id_fkey';
             columns: ['user_id'];
             referencedRelation: 'users';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      issued_invoice_advances: {
+        Row: {
+          id: string;
+          settlement_invoice_id: string;
+          advance_invoice_id: string;
+          advance_amount: number;
+          advance_number: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          settlement_invoice_id: string;
+          advance_invoice_id: string;
+          advance_amount?: number;
+          advance_number?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          advance_amount?: number;
+          advance_number?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'issued_invoice_advances_settlement_invoice_id_fkey';
+            columns: ['settlement_invoice_id'];
+            referencedRelation: 'issued_invoices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'issued_invoice_advances_advance_invoice_id_fkey';
+            columns: ['advance_invoice_id'];
+            referencedRelation: 'issued_invoices';
             referencedColumns: ['id'];
           }
         ];

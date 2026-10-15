@@ -28,6 +28,33 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const VAT_RATES = ['23', '8', '5', '0', 'zw', 'np', 'oo'] as const;
 export type VatRate = (typeof VAT_RATES)[number];
 
+export const DOCUMENT_TYPES = ['STANDARD', 'CORRECTION', 'ADVANCE', 'SETTLEMENT', 'SIMPLIFIED'] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  STANDARD:   'Faktura VAT',
+  CORRECTION: 'Faktura korygująca',
+  ADVANCE:    'Faktura zaliczkowa',
+  SETTLEMENT: 'Faktura rozliczeniowa',
+  SIMPLIFIED: 'Faktura uproszczona',
+};
+
+export const DOCUMENT_TYPE_PREFIXES: Record<DocumentType, string> = {
+  STANDARD:   'FV',
+  CORRECTION: 'FK',
+  ADVANCE:    'FZ',
+  SETTLEMENT: 'FR',
+  SIMPLIFIED: 'FU',
+};
+
+export const KSEF_RODZAJ_FAKTURY: Record<DocumentType, string> = {
+  STANDARD:   'VAT',
+  CORRECTION: 'KOR',
+  ADVANCE:    'ZAL',
+  SETTLEMENT: 'ROZ',
+  SIMPLIFIED: 'UPR',
+};
+
 export const KSEF_STATUSES = ['pending', 'processing', 'accepted', 'rejected'] as const;
 export type KsefStatus = (typeof KSEF_STATUSES)[number];
 
@@ -59,6 +86,7 @@ export const IssuedInvoiceSchema = z.object({
     .regex(/^[\w/\-. ]+$/, 'Numer faktury zawiera niedozwolone znaki'),
 
   status:         z.enum(ISSUED_INVOICE_STATUSES).default('draft'),
+  document_type:  z.enum(DOCUMENT_TYPES).default('STANDARD'),
   currency:       z.string().length(3).default('PLN'),
 
   issue_date:     z.string().date('Nieprawidłowy format daty wystawienia'),
@@ -85,6 +113,22 @@ export const IssuedInvoiceSchema = z.object({
   gross_total: z.number().min(0).default(0),
 
   notes: z.string().max(2000).nullable().optional(),
+
+  // Correction invoice fields
+  original_invoice_id:    z.string().uuid().nullable().optional(),
+  correction_reason:      z.string().max(1000).nullable().optional(),
+  corrected_invoice_number: z.string().max(100).nullable().optional(),
+  corrected_invoice_date:  z.string().date().nullable().optional(),
+
+  // Advance invoice fields
+  advance_amount:      z.number().min(0).nullable().optional(),
+  order_total_gross:   z.number().min(0).nullable().optional(),
+  remaining_amount:    z.number().min(0).nullable().optional(),
+
+  // Settlement invoice fields
+  settlement_of_invoice_id: z.string().uuid().nullable().optional(),
+  total_advances_amount:    z.number().min(0).nullable().optional(),
+  amount_due:               z.number().min(0).nullable().optional(),
 
   // KSeF
   ksef_reference_no:  z.string().nullable().optional(),
@@ -113,6 +157,13 @@ export type IssuedInvoiceWithItems = IssuedInvoiceRow & {
     bic: string | null;
     bank_name: string | null;
   } | null;
+  // Linked advance invoices (for settlement invoices)
+  linked_advances?: Array<{
+    id: string;
+    advance_invoice_id: string;
+    advance_amount: number;
+    advance_number: string | null;
+  }>;
 };
 
 // ─── Calculation helpers ──────────────────────────────────────────────────────

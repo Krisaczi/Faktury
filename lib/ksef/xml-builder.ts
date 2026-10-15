@@ -25,7 +25,8 @@
  */
 
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
-import type { VatRate } from '@/types/issued-invoice';
+import type { VatRate, DocumentType } from '@/types/issued-invoice';
+import { KSEF_RODZAJ_FAKTURY } from '@/types/issued-invoice';
 import { format, parseISO } from 'date-fns';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,15 +65,15 @@ function dec4(n: number): string {
  * (23%, 8%, 5%, 4%, taxi) in an optional <sequence>, so we only emit the
  * sequences for rates that appear on the invoice.
  *
- * Suffix assignments (per FA(3) schema):
+ * Suffix assignments (per FA(3) official information sheet):
  *   1 = 23%      (P_13_1 / P_14_1)
  *   2 = 8%       (P_13_2 / P_14_2)
  *   3 = 5%       (P_13_3 / P_14_3)
  *   4 = taxi flat (P_13_4 / P_14_4) — not used
  *   5 = 0%       (P_13_5 / P_14_5)
- *   6_1 = "zw"   (P_13_6_1) — exempt
- *   7 = "np"     (P_13_7)    — non-taxable
- *   8 = "oo"     (P_13_8)    — out of scope
+ *   6_1 = 0% excluding WDT/export (P_13_6_1)
+ *   7 = "zw"     (P_13_7)    — VAT exempt (zwolnione od podatku)
+ *   8 = "np"/"oo" (P_13_8)   — non-taxable / out of scope (nie podlega)
  */
 interface VatRateMapping {
   p12:           string;
@@ -87,21 +88,21 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   '8':  { p12: '8',  p13Element: 'P_13_2', p14Element: 'P_14_2', hasVat: true,  order: 2 },
   '5':  { p12: '5',  p13Element: 'P_13_3', p14Element: 'P_14_3', hasVat: true,  order: 3 },
   '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
-  'zw': { p12: 'zw', p13Element: 'P_13_6_1', p14Element: null,   hasVat: false, order: 6 },
-  'np': { p12: 'np', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
+  'zw': { p12: 'zw', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
+  'np': { p12: 'np', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
   'oo': { p12: 'oo', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
 };
 
-// FA(3) FormaPlatnosci codes:
-//   1 = gotówka, 2 = karta, 3 = przelew, 4 = czek,
-//   5 = bon, 6 = kredyt, 7 = płatność mobilna
+// FA(3) FormaPlatnosci codes (per official FA(3) documentation):
+//   1 = gotówka, 2 = karta, 3 = bon, 4 = czek,
+//   5 = kredyt, 6 = przelew, 7 = płatność mobilna
 const PAYMENT_METHOD_MAP: Record<string, string> = {
   cash:     '1',
   card:     '2',
-  transfer: '3',
+  transfer: '6',
   blik:     '7',
   mobile:   '7',
-  other:    '3',
+  other:    '6',
 };
 
 // ─── Address parser ──────────────────────────────────────────────────────────
@@ -257,7 +258,8 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
  * We only emit the sequences for rates that appear on the invoice.
  *
  * After those sequences, the XSD has standalone optional elements:
- *   P_13_6_1 (zw), P_13_6_2, P_13_6_3, P_13_7 (np), P_13_8 (oo),
+ *   P_13_6_1 (0% non-WDT/non-export), P_13_6_2, P_13_6_3,
+ *   P_13_7 (zw — exempt), P_13_8 (np/oo — non-taxable),
  *   P_13_9, P_13_10, P_13_11 — all optional
  *
  * Then P_15 (total gross) is required.
@@ -296,15 +298,15 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
   }
 
-  // Standalone optional elements
+  // P_13_7 = VAT exempt (zwolnione od podatku)
   if (rateMap.has('zw')) {
-    lines.push(`    <P_13_6_1>${dec2(get('zw', 'netTotal'))}</P_13_6_1>`);
+    lines.push(`    <P_13_7>${dec2(get('zw', 'netTotal'))}</P_13_7>`);
   }
-  if (rateMap.has('np')) {
-    lines.push(`    <P_13_7>${dec2(get('np', 'netTotal'))}</P_13_7>`);
-  }
-  if (rateMap.has('oo')) {
-    lines.push(`    <P_13_8>${dec2(get('oo', 'netTotal'))}</P_13_8>`);
+
+  // P_13_8 = non-taxable / out of scope (nie podlega) — np and oo share this field
+  const nonTaxableTotal = get('np', 'netTotal') + get('oo', 'netTotal');
+  if (nonTaxableTotal > 0) {
+    lines.push(`    <P_13_8>${dec2(nonTaxableTotal)}</P_13_8>`);
   }
 
   // P_13_9 = total net across all rates
@@ -322,14 +324,18 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
  * Element order: P_16 → P_17 → P_18 → P_18A → Zwolnienie → NoweSrodkiTransportu → P_23 → PMarzy
  * All eight are required (minOccurs=1).
  */
-function buildAdnotacje(vatGroups: VatGroup[]): string {
+function buildAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
 
-  const p18      = hasExempt ? '1' : '2';
+  // P_18=1 means reverse charge; P_18=2 means not applicable
+  const p18      = '2';
+  const exemptionReason = inv.notes?.trim()
+    ? inv.notes.trim()
+    : 'zwolnienie z podatku VAT';
   const zwolnienie = hasExempt
     ? `      <Zwolnienie>
         <P_19>1</P_19>
-        <P_19A>zwolnienie z podatku VAT</P_19A>
+        <P_19A>${esc(exemptionReason)}</P_19A>
       </Zwolnienie>`
     : `      <Zwolnienie>
         <P_19N>1</P_19N>
@@ -380,7 +386,7 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
  *           [RachunekBankowy], [RachunekBankowyFaktora], [Skonto], [LinkDoPlatnosci], [IPKSeF]
  */
 function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
-  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '3';
+  const methodCode = PAYMENT_METHOD_MAP[inv.payment_method] ?? '6';
 
   const dueDateLine = inv.due_date
     ? `\n      <TerminPlatnosci>\n        <Termin>${esc(isoDate(inv.due_date))}</Termin>\n      </TerminPlatnosci>`
@@ -397,6 +403,32 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
     </Platnosc>`;
 }
 
+// ─── Document-type-specific builders ──────────────────────────────────────────
+
+/**
+ * Build the FakturaKorygowana element for correction invoices.
+ * FA(3) places this inside <Fa> after <RodzajFaktury>.
+ */
+function buildFakturaKorygowana(inv: IssuedInvoiceWithItems): string {
+  if (!inv.corrected_invoice_number) return '';
+  const origDate = inv.corrected_invoice_date ?? inv.issue_date;
+  return `\n    <FakturaKorygowana>
+      <P_2K>${esc(inv.corrected_invoice_number)}</P_2K>
+      <P_1K>${esc(isoDate(origDate))}</P_1K>
+    </FakturaKorygowana>`;
+}
+
+/**
+ * Build the Zalacznik elements referencing advance invoices for settlement invoices.
+ * In FA(3), advance references appear in the Rozliczenie section.
+ */
+function buildAdvanceReferences(inv: IssuedInvoiceWithItems): string {
+  if (!inv.linked_advances || inv.linked_advances.length === 0) return '';
+  return inv.linked_advances.map(adv => {
+    return `\n      <ZalacznikTyp>\n        <P_7>${esc(adv.advance_number ?? '')}</P_7>\n      </ZalacznikTyp>`;
+  }).join('');
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /** Raw FA(3) XML for a single issued invoice. No signing applied. */
@@ -407,13 +439,19 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const podmiot1  = buildPodmiot1(invoice);
   const podmiot2  = buildPodmiot2(invoice);
   const vatSum    = buildVatSummaryAndP15(invoice, vatGroups);
-  const adnotacje = buildAdnotacje(vatGroups);
+  const adnotacje = buildAdnotacje(invoice, vatGroups);
   const faWiersze = buildFaWiersze(invoice);
   const platnosc  = buildPlatnosc(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
     ? `\n    <P_6>${esc(isoDate(invoice.sale_date))}</P_6>`
     : '';
+
+  const docType = (invoice.document_type ?? 'STANDARD') as DocumentType;
+  const rodzaj = KSEF_RODZAJ_FAKTURY[docType] ?? 'VAT';
+
+  // Correction invoice: add FakturaKorygowana after RodzajFaktury
+  const korygowana = docType === 'CORRECTION' ? buildFakturaKorygowana(invoice) : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"
@@ -428,7 +466,7 @@ ${podmiot2}
     <P_2>${esc(invoice.invoice_number)}</P_2>${p6}
 ${vatSum}
 ${adnotacje}
-    <RodzajFaktury>VAT</RodzajFaktury>
+    <RodzajFaktury>${rodzaj}</RodzajFaktury>${korygowana}
 ${faWiersze}
 ${platnosc}
   </Fa>
