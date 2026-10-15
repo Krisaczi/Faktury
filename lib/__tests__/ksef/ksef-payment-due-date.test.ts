@@ -86,7 +86,8 @@ describe('KSeF XML builder — payment method mapping', () => {
 describe('KSeF XML builder — due date in XML', () => {
   it('includes TerminPlatnosci when due_date is set', () => {
     const xml = buildFa2Xml(makeInvoice({ due_date: '2026-09-20' }));
-    assert.ok(xml.includes('<TerminPlatnosci>2026-09-20</TerminPlatnosci>'), 'due date should be in XML');
+    assert.ok(xml.includes('<TerminPlatnosci>'), 'TerminPlatnosci element should be present');
+    assert.ok(xml.includes('<Termin>2026-09-20</Termin>'), 'Termin should contain the due date');
   });
 
   it('includes TerminPlatnosci with correct date for transfer payment', () => {
@@ -94,7 +95,7 @@ describe('KSeF XML builder — due date in XML', () => {
       payment_method: 'transfer',
       due_date: '2026-10-01',
     }));
-    assert.ok(xml.includes('<TerminPlatnosci>2026-10-01</TerminPlatnosci>'), 'due date should be 2026-10-01');
+    assert.ok(xml.includes('<Termin>2026-10-01</Termin>'), 'Termin should contain 2026-10-01');
     assert.ok(xml.includes('<FormaPlatnosci>6</FormaPlatnosci>'), 'transfer should map to 6');
   });
 

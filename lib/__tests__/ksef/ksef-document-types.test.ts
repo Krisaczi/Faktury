@@ -79,9 +79,9 @@ describe('KSeF XML builder — STANDARD document type', () => {
     assert.ok(xml.includes('<RodzajFaktury>VAT</RodzajFaktury>'), 'STANDARD must use VAT');
   });
 
-  it('does not include FakturaKorygowana for STANDARD invoices', () => {
+  it('does not include DaneFaKorygowanej for STANDARD invoices', () => {
     const xml = buildFa2Xml(makeInvoice());
-    assert.ok(!xml.includes('FakturaKorygowana'), 'STANDARD must not have FakturaKorygowana');
+    assert.ok(!xml.includes('DaneFaKorygowanej'), 'STANDARD must not have DaneFaKorygowanej');
   });
 });
 
@@ -120,15 +120,20 @@ describe('KSeF XML builder — CORRECTION document type', () => {
     assert.ok(xml.includes('<RodzajFaktury>KOR</RodzajFaktury>'), 'CORRECTION must use KOR');
   });
 
-  it('includes FakturaKorygowana with original invoice number', () => {
+  it('includes DaneFaKorygowanej with original invoice number', () => {
     const xml = buildFa2Xml(correctionInvoice);
-    assert.ok(xml.includes('<FakturaKorygowana>'), 'must include FakturaKorygowana');
-    assert.ok(xml.includes('<P_2K>FV/2026/09/005</P_2K>'), 'must include original invoice number');
+    assert.ok(xml.includes('<DaneFaKorygowanej>'), 'must include DaneFaKorygowanej');
+    assert.ok(xml.includes('<NrFaKorygowanej>FV/2026/09/005</NrFaKorygowanej>'), 'must include original invoice number');
   });
 
-  it('includes original invoice date in P_1K', () => {
+  it('includes original invoice date in DataWystFaKorygowanej', () => {
     const xml = buildFa2Xml(correctionInvoice);
-    assert.ok(xml.includes('<P_1K>2026-09-20</P_1K>'), 'must include original invoice date');
+    assert.ok(xml.includes('<DataWystFaKorygowanej>2026-09-20</DataWystFaKorygowanej>'), 'must include original invoice date');
+  });
+
+  it('includes PrzyczynaKorekty with correction reason', () => {
+    const xml = buildFa2Xml(correctionInvoice);
+    assert.ok(xml.includes('<PrzyczynaKorekty>Zwrot towaru - błędna ilość</PrzyczynaKorekty>'), 'must include correction reason');
   });
 
   it('uses correction invoice number in P_2', () => {
@@ -171,9 +176,9 @@ describe('KSeF XML builder — ADVANCE document type', () => {
     assert.ok(xml.includes('<RodzajFaktury>ZAL</RodzajFaktury>'), 'ADVANCE must use ZAL');
   });
 
-  it('does not include FakturaKorygowana for ADVANCE invoices', () => {
+  it('does not include DaneFaKorygowanej for ADVANCE invoices', () => {
     const xml = buildFa2Xml(advanceInvoice);
-    assert.ok(!xml.includes('FakturaKorygowana'), 'ADVANCE must not have FakturaKorygowana');
+    assert.ok(!xml.includes('DaneFaKorygowanej'), 'ADVANCE must not have DaneFaKorygowanej');
   });
 });
 
@@ -218,9 +223,9 @@ describe('KSeF XML builder — SETTLEMENT document type', () => {
     assert.ok(xml.includes('<RodzajFaktury>ROZ</RodzajFaktury>'), 'SETTLEMENT must use ROZ');
   });
 
-  it('does not include FakturaKorygowana for SETTLEMENT invoices', () => {
+  it('does not include DaneFaKorygowanej for SETTLEMENT invoices', () => {
     const xml = buildFa2Xml(settlementInvoice);
-    assert.ok(!xml.includes('FakturaKorygowana'), 'SETTLEMENT must not have FakturaKorygowana');
+    assert.ok(!xml.includes('DaneFaKorygowanej'), 'SETTLEMENT must not have DaneFaKorygowanej');
   });
 });
 
@@ -257,9 +262,9 @@ describe('KSeF XML builder — SIMPLIFIED document type', () => {
     assert.ok(xml.includes('<RodzajFaktury>UPR</RodzajFaktury>'), 'SIMPLIFIED must use UPR');
   });
 
-  it('does not include FakturaKorygowana for SIMPLIFIED invoices', () => {
+  it('does not include DaneFaKorygowanej for SIMPLIFIED invoices', () => {
     const xml = buildFa2Xml(simplifiedInvoice);
-    assert.ok(!xml.includes('FakturaKorygowana'), 'SIMPLIFIED must not have FakturaKorygowana');
+    assert.ok(!xml.includes('DaneFaKorygowanej'), 'SIMPLIFIED must not have DaneFaKorygowanej');
   });
 
   it('handles null buyer_nip with BrakID', () => {

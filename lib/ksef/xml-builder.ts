@@ -21,6 +21,8 @@
  *   [P_13_6_1], [P_13_6_2], [P_13_6_3],
  *   [P_13_7], [P_13_8], [P_13_9], [P_13_10], [P_13_11],
  *   P_15, [KursWalutyZ], Adnotacje, RodzajFaktury,
+ *   [PrzyczynaKorekty], [TypKorekty], [DaneFaKorygowanej*], ... [KursWalutyZK],
+ *   [ZaliczkaCzesciowa*], [FakturaZaliczkowa*], [DodatkowyOpis],
  *   FaWiersz*, [Rozliczenie], [Platnosc], [WarunkiTransakcji], [Zamowienie]
  */
 
@@ -406,16 +408,22 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
 // ─── Document-type-specific builders ──────────────────────────────────────────
 
 /**
- * Build the FakturaKorygowana element for correction invoices.
- * FA(3) places this inside <Fa> after <RodzajFaktury>.
+ * Build correction invoice elements for FA(3).
+ * Per the FA(3) schema, after RodzajFaktury the correction fields appear:
+ *   PrzyczynaKorekty (reason), TypKorekty (type), DaneFaKorygowanej (corrected invoice data)
  */
-function buildFakturaKorygowana(inv: IssuedInvoiceWithItems): string {
+function buildCorrectionElements(inv: IssuedInvoiceWithItems): string {
   if (!inv.corrected_invoice_number) return '';
   const origDate = inv.corrected_invoice_date ?? inv.issue_date;
-  return `\n    <FakturaKorygowana>
-      <P_2K>${esc(inv.corrected_invoice_number)}</P_2K>
-      <P_1K>${esc(isoDate(origDate))}</P_1K>
-    </FakturaKorygowana>`;
+  const przyczyna = inv.correction_reason?.trim();
+  const przyczynaLine = przyczyna
+    ? `\n    <PrzyczynaKorekty>${esc(przyczyna)}</PrzyczynaKorekty>`
+    : '';
+  return `${przyczynaLine}
+    <DaneFaKorygowanej>
+      <DataWystFaKorygowanej>${esc(isoDate(origDate))}</DataWystFaKorygowanej>
+      <NrFaKorygowanej>${esc(inv.corrected_invoice_number)}</NrFaKorygowanej>
+    </DaneFaKorygowanej>`;
 }
 
 /**
@@ -427,6 +435,17 @@ function buildAdvanceReferences(inv: IssuedInvoiceWithItems): string {
   return inv.linked_advances.map(adv => {
     return `\n      <ZalacznikTyp>\n        <P_7>${esc(adv.advance_number ?? '')}</P_7>\n      </ZalacznikTyp>`;
   }).join('');
+}
+
+/**
+ * Build the Rozliczenie block per FA(3) XSD.
+ * Contains an optional choice of DoZaplaty (amount to pay) or DoRozliczenia (overpaid).
+ * DoZaplaty = P_15 + charges - deductions. With no charges/deductions, it equals P_15.
+ */
+function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
+  return `    <Rozliczenie>
+      <DoZaplaty>${dec2(inv.gross_total)}</DoZaplaty>
+    </Rozliczenie>`;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -441,6 +460,7 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const vatSum    = buildVatSummaryAndP15(invoice, vatGroups);
   const adnotacje = buildAdnotacje(invoice, vatGroups);
   const faWiersze = buildFaWiersze(invoice);
+  const rozliczenie = buildRozliczenie(invoice);
   const platnosc  = buildPlatnosc(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
@@ -450,8 +470,8 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const docType = (invoice.document_type ?? 'STANDARD') as DocumentType;
   const rodzaj = KSEF_RODZAJ_FAKTURY[docType] ?? 'VAT';
 
-  // Correction invoice: add FakturaKorygowana after RodzajFaktury
-  const korygowana = docType === 'CORRECTION' ? buildFakturaKorygowana(invoice) : '';
+  // Correction invoice: add PrzyczynaKorekty + DaneFaKorygowanej after RodzajFaktury
+  const korygowana = docType === 'CORRECTION' ? buildCorrectionElements(invoice) : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"
@@ -468,6 +488,7 @@ ${vatSum}
 ${adnotacje}
     <RodzajFaktury>${rodzaj}</RodzajFaktury>${korygowana}
 ${faWiersze}
+${rozliczenie}
 ${platnosc}
   </Fa>
 </Faktura>`;
