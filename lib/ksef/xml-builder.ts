@@ -92,7 +92,7 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
   'zw': { p12: 'zw', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
   'np': { p12: 'np I', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
-  'oo': { p12: 'oo',   p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
+  'oo': { p12: 'oo',   p13Element: 'P_13_10',  p14Element: null,   hasVat: false, order: 9 },
 };
 
 // FA(3) FormaPlatnosci codes (per official FA(3) documentation):
@@ -305,15 +305,20 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     lines.push(`    <P_13_7>${dec2(get('zw', 'netTotal'))}</P_13_7>`);
   }
 
-  // P_13_8 = non-taxable / out of scope (nie podlega) — np and oo share this field
-  // Emit whenever np or oo rates are present, even for negative amounts (corrections)
-  if (rateMap.has('np') || rateMap.has('oo')) {
-    const nonTaxableTotal = get('np', 'netTotal') + get('oo', 'netTotal');
-    lines.push(`    <P_13_8>${dec2(nonTaxableTotal)}</P_13_8>`);
+  // P_13_8 = non-taxable / out of scope (nie podlega) — only np (np I / np II)
+  // Emit even for negative amounts (corrections)
+  if (rateMap.has('np')) {
+    lines.push(`    <P_13_8>${dec2(get('np', 'netTotal'))}</P_13_8>`);
   }
 
   // P_13_9 = total net across all rates
   lines.push(`    <P_13_9>${dec2(inv.net_total)}</P_13_9>`);
+
+  // P_13_10 = domestic reverse charge (oo) — sales under reverse charge procedure
+  // Emit even for negative amounts (corrections)
+  if (rateMap.has('oo')) {
+    lines.push(`    <P_13_10>${dec2(get('oo', 'netTotal'))}</P_13_10>`);
+  }
 
   // P_15 = total gross (required)
   lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
@@ -329,9 +334,10 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
  */
 function buildAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
+  const hasReverseCharge = vatGroups.some(g => g.rate === 'oo');
 
-  // P_18=1 means reverse charge; P_18=2 means not applicable
-  const p18      = '2';
+  // P_18=1 means reverse charge (odwrotne obciążenie); P_18=2 means not applicable
+  const p18 = hasReverseCharge ? '1' : '2';
   const exemptionReason = inv.notes?.trim()
     ? inv.notes.trim()
     : 'zwolnienie z podatku VAT';

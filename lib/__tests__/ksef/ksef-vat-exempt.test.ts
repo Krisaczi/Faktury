@@ -280,7 +280,7 @@ describe('KSeF XML builder — non-taxable (np) invoices', () => {
 // ─── Out of scope (oo) invoices ───────────────────────────────────────────────
 
 describe('KSeF XML builder — out of scope (oo) invoices', () => {
-  it('maps oo to P_13_8 (non-taxable)', () => {
+  it('maps oo to P_13_10 (domestic reverse charge), NOT P_13_8 (non-taxable)', () => {
     const xml = buildFa2Xml(makeInvoice({
       net_total: 300,
       vat_total: 0,
@@ -300,14 +300,38 @@ describe('KSeF XML builder — out of scope (oo) invoices', () => {
         discount_pct: null,
       }],
     }));
-    assert.ok(xml.includes('<P_13_8>300.00</P_13_8>'), 'oo must map to P_13_8');
+    assert.ok(xml.includes('<P_13_10>300.00</P_13_10>'), 'oo must map to P_13_10 (reverse charge)');
+    assert.ok(!xml.includes('<P_13_8>'), 'oo must NOT map to P_13_8 (that is for np)');
+  });
+
+  it('sets P_18 to 1 (reverse charge) for oo invoices', () => {
+    const xml = buildFa2Xml(makeInvoice({
+      net_total: 300,
+      vat_total: 0,
+      gross_total: 300,
+      items: [{
+        id: '00000000-0000-0000-0000-000000000010',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 1,
+        name: 'Usługa',
+        unit: 'szt.',
+        quantity: 1,
+        unit_price_net: 300,
+        vat_rate: 'oo',
+        net_amount: 300,
+        vat_amount: 0,
+        gross_amount: 300,
+        discount_pct: null,
+      }],
+    }));
+    assert.ok(xml.includes('<P_18>1</P_18>'), 'P_18 must be 1 for reverse charge (oo)');
   });
 });
 
 // ─── Mixed np + oo invoices ───────────────────────────────────────────────────
 
 describe('KSeF XML builder — mixed np + oo invoices', () => {
-  it('combines np and oo into a single P_13_8', () => {
+  it('splits np into P_13_8 and oo into P_13_10', () => {
     const xml = buildFa2Xml(makeInvoice({
       net_total: 500,
       vat_total: 0,
@@ -343,6 +367,47 @@ describe('KSeF XML builder — mixed np + oo invoices', () => {
         },
       ],
     }));
-    assert.ok(xml.includes('<P_13_8>500.00</P_13_8>'), 'np+oo should combine into P_13_8=500');
+    assert.ok(xml.includes('<P_13_8>200.00</P_13_8>'), 'np should go to P_13_8=200');
+    assert.ok(xml.includes('<P_13_10>300.00</P_13_10>'), 'oo should go to P_13_10=300');
+    assert.ok(!xml.includes('<P_13_8>500.00</P_13_8>'), 'np+oo must NOT be combined into P_13_8');
+  });
+
+  it('sets P_18 to 1 when oo is present alongside np', () => {
+    const xml = buildFa2Xml(makeInvoice({
+      net_total: 500,
+      vat_total: 0,
+      gross_total: 500,
+      items: [
+        {
+          id: '00000000-0000-0000-0000-000000000010',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          position: 1,
+          name: 'Usługa NP',
+          unit: 'szt.',
+          quantity: 1,
+          unit_price_net: 200,
+          vat_rate: 'np',
+          net_amount: 200,
+          vat_amount: 0,
+          gross_amount: 200,
+          discount_pct: null,
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000011',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          position: 2,
+          name: 'Usługa OO',
+          unit: 'szt.',
+          quantity: 1,
+          unit_price_net: 300,
+          vat_rate: 'oo',
+          net_amount: 300,
+          vat_amount: 0,
+          gross_amount: 300,
+          discount_pct: null,
+        },
+      ],
+    }));
+    assert.ok(xml.includes('<P_18>1</P_18>'), 'P_18 must be 1 when oo (reverse charge) is present');
   });
 });
