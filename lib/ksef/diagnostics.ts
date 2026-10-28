@@ -167,7 +167,7 @@ export function validateKsefSubmission(inv: InvoiceForValidation): ValidationRes
   const issueDate = inv.issue_date ?? inv.invoice_date ?? null;
   check(invoiceGroup, { field: 'issue_date', label: 'Invoice Date', ksefField: 'P_1', value: issueDate, customValid: v => /^\d{4}-\d{2}-\d{2}$/.test(v), invalidMessage: 'Date must be YYYY-MM-DD' });
   check(invoiceGroup, { field: 'currency', label: 'Currency', ksefField: 'KodWaluty', value: inv.currency ?? 'PLN', customValid: v => /^[A-Z]{3}$/.test(v) });
-  check(invoiceGroup, { field: 'net_total', label: 'Net Total', ksefField: 'P_13_9', value: inv.net_total != null ? String(inv.net_total) : null });
+  check(invoiceGroup, { field: 'net_total', label: 'Net Total', ksefField: 'SUM(P_13_*)', value: inv.net_total != null ? String(inv.net_total) : null });
   check(invoiceGroup, { field: 'gross_total', label: 'Gross Total', ksefField: 'P_15', value: inv.gross_total != null ? String(inv.gross_total) : null });
   groups.push(invoiceGroup);
 
@@ -252,7 +252,7 @@ export function buildFieldMappings(inv: InvoiceForValidation): FieldMapping[] {
     { invoiceField: 'Payment Method',    ksefElement: 'FormaPlatnosci',     value: inv.payment_method ?? null,  status: inv.payment_method ? 'mapped' : 'missing' },
     { invoiceField: 'Due Date',          ksefElement: 'TerminPlatnosci/Termin', value: inv.due_date ?? null,    status: inv.due_date ? 'mapped' : 'missing' },
     { invoiceField: 'Bank Account',      ksefElement: 'RachunekBankowy/NrRB', value: inv.seller_bank_account ?? null, status: inv.seller_bank_account ? 'mapped' : 'missing' },
-    { invoiceField: 'Net Total',         ksefElement: 'P_13_9',             value: inv.net_total != null ? String(inv.net_total) : null, status: inv.net_total != null ? 'mapped' : 'missing' },
+    { invoiceField: 'Net Total',         ksefElement: 'SUM(P_13_*)',        value: inv.net_total != null ? String(inv.net_total) : null, status: inv.net_total != null ? 'mapped' : 'missing' },
     { invoiceField: 'VAT Total',         ksefElement: 'P_14_1..P_14_4',     value: inv.vat_total != null ? String(inv.vat_total) : null, status: inv.vat_total != null ? 'mapped' : 'missing' },
     { invoiceField: 'Gross Total',       ksefElement: 'P_15',               value: inv.gross_total != null ? String(inv.gross_total) : null, status: inv.gross_total != null ? 'mapped' : 'missing' },
   ];

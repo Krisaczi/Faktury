@@ -193,13 +193,41 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_19N>1</P_19N>
       </Zwolnienie>`;
 
+  // NoweSrodkiTransportu and PMarzy are MANDATORY children of Adnotacje per FA(3) XSD.
+  // They are xsd:choice elements: either the full sequence (for special procedures)
+  // or the "N" marker (indicating the procedure does NOT apply).
+  const flags = inv.specialProcedure;
+  const newTransport = flags?.newMeansOfTransport === true;
+  const marginScheme = flags?.marginScheme === true;
+
+  const noweSrodki = newTransport
+    ? `      <NoweSrodkiTransportu>
+        <P_22>1</P_22>
+      </NoweSrodkiTransportu>`
+    : `      <NoweSrodkiTransportu>
+        <P_22N>1</P_22N>
+      </NoweSrodkiTransportu>`;
+
+  // P_23 is mandatory: "1" for simplified procedure invoices, "2" otherwise.
+  const p23 = '2';
+
+  const pMarzy = marginScheme
+    ? `      <PMarzy>
+        <P_PMarzy>1</P_PMarzy>
+      </PMarzy>`
+    : `      <PMarzy>
+        <P_PMarzyN>1</P_PMarzyN>
+      </PMarzy>`;
+
   return `    <Adnotacje>
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>${p18}</P_18>
       <P_18A>2</P_18A>
 ${zwolnienie}
-      
+${noweSrodki}
+      <P_23>${p23}</P_23>
+${pMarzy}
     </Adnotacje>`;
 }
 
@@ -308,38 +336,11 @@ interface OptionalSectionResult {
   skipped: string[];
 }
 
-function buildOptionalSections(inv: IssuedInvoiceWithItems): OptionalSectionResult {
-  const flags = inv.specialProcedure;
-  const newTransport = flags?.newMeansOfTransport === true;
-  const marginScheme = flags?.marginScheme === true;
-
-  const generated: string[] = [];
-  const skipped: string[] = [];
-  const parts: string[] = [];
-
-  if (newTransport) {
-    parts.push(`    <NoweSrodkiTransportu>
-      <P_22N>1</P_22N>
-    </NoweSrodkiTransportu>`);
-    generated.push('NoweSrodkiTransportu');
-  } else {
-    skipped.push('NoweSrodkiTransportu');
-  }
-
-  if (marginScheme) {
-    parts.push(`    <PMarzy>
-      <P_PMarzyN>1</P_PMarzyN>
-    </PMarzy>`);
-    generated.push('PMarzy');
-  } else {
-    skipped.push('PMarzy');
-  }
-
-  return {
-    xml: parts.length > 0 ? parts.join('\n') : '',
-    generated,
-    skipped,
-  };
+function buildOptionalSections(_inv: IssuedInvoiceWithItems): OptionalSectionResult {
+  // NoweSrodkiTransportu and PMarzy are now emitted inside Adnotacje
+  // (they are mandatory children of Adnotacje per FA(3) XSD, not Fa-level elements).
+  // This function is kept for backwards-compatible getOptionalSectionsStatus() calls.
+  return { xml: '', generated: [], skipped: ['NoweSrodkiTransportu', 'PMarzy'] };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -356,7 +357,6 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const faWiersze = buildFaWiersze(invoice);
   const rozliczenie = buildRozliczenie(invoice, summary.p15);
   const platnosc  = buildPlatnosc(invoice);
-  const optionalSections = buildOptionalSections(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
     ? `\n    <P_6>${esc(isoDate(invoice.sale_date))}</P_6>`
@@ -366,8 +366,6 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const rodzaj = KSEF_RODZAJ_FAKTURY[docType] ?? 'VAT';
 
   const korygowana = docType === 'CORRECTION' ? buildCorrectionElements(invoice) : '';
-
-  const optionalXml = optionalSections.xml ? `\n${optionalSections.xml}` : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"
@@ -384,7 +382,7 @@ ${vatSum}
 ${adnotacje}
     <RodzajFaktury>${rodzaj}</RodzajFaktury>${korygowana}
 ${faWiersze}
-${rozliczenie}${optionalXml}
+${rozliczenie}
 ${platnosc}
   </Fa>
 </Faktura>`;

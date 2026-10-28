@@ -60,89 +60,84 @@ function makeBaseInvoice(overrides: Partial<IssuedInvoiceWithItems> = {}): Issue
   } as unknown as IssuedInvoiceWithItems;
 }
 
-describe('Optional sections gating (NoweSrodkiTransportu / PMarzy)', () => {
+describe('Adnotacje mandatory sections (NoweSrodkiTransportu / PMarzy)', () => {
 
-  // ── Test 1: Standard service invoice correction — no optional sections ──
-  it('does not emit NoweSrodkiTransportu or PMarzy for a standard service correction', () => {
+  // ── Test 1: Standard service invoice correction — N markers emitted ──
+  it('emits P_22N and P_PMarzyN markers inside Adnotacje for a standard correction', () => {
     const invoice = makeBaseInvoice();
     const xml = buildFa2Xml(invoice);
 
-    expect(xml).not.toContain('<NoweSrodkiTransportu');
-    expect(xml).not.toContain('<P_22N');
-    expect(xml).not.toContain('<PMarzy');
-    expect(xml).not.toContain('<P_PMarzyN');
+    // NoweSrodkiTransportu and PMarzy are mandatory children of Adnotacje.
+    // For standard invoices, the "N" (not applicable) marker must be used.
+    expect(xml).toContain('<NoweSrodkiTransportu');
+    expect(xml).toContain('<P_22N');
+    expect(xml).toContain('<PMarzy');
+    expect(xml).toContain('<P_PMarzyN');
+    // P_23 is also mandatory between them
+    expect(xml).toContain('<P_23>');
 
     const validation = validateFa3Xml(xml, invoice);
     expect(validation.valid).toBe(true);
 
     const report = generateValidationReport(xml, invoice, validation);
     expect(report.readyForKsef).toBe(true);
-
-    // The optional sections section should show both as skipped
-    const optionalSection = report.sections.find(s => s.name === 'Optional Sections Generated');
-    expect(optionalSection).toBeDefined();
-    expect(optionalSection!.status).toBe('pass');
-
-    const transportCheck = optionalSection!.checks.find(c => c.name === 'NoweSrodkiTransportu');
-    expect(transportCheck!.message).toContain('Skipped');
-
-    const marzyCheck = optionalSection!.checks.find(c => c.name === 'PMarzy');
-    expect(marzyCheck!.message).toContain('Skipped');
   });
 
-  // ── Test 2: Margin scheme invoice — PMarzy emitted ──
-  it('emits PMarzy when specialProcedure.marginScheme is true', () => {
+  // ── Test 2: Margin scheme invoice — P_PMarzy active ──
+  it('emits P_PMarzy (active) when specialProcedure.marginScheme is true', () => {
     const invoice = makeBaseInvoice({
       specialProcedure: { marginScheme: true },
     });
     const xml = buildFa2Xml(invoice);
 
     expect(xml).toContain('<PMarzy');
-    expect(xml).toContain('<P_PMarzyN');
-    expect(xml).not.toContain('<NoweSrodkiTransportu');
+    expect(xml).toContain('<P_PMarzy>1</P_PMarzy>');
+    expect(xml).not.toContain('<P_PMarzyN');
+    // NoweSrodkiTransportu still emitted with N marker
+    expect(xml).toContain('<P_22N');
 
     const validation = validateFa3Xml(xml, invoice);
     const report = generateValidationReport(xml, invoice, validation);
 
     const optionalSection = report.sections.find(s => s.name === 'Optional Sections Generated');
     const marzyCheck = optionalSection!.checks.find(c => c.name === 'PMarzy');
-    expect(marzyCheck!.message).toContain('Emitted');
     expect(marzyCheck!.message).toContain('margin scheme flag active');
   });
 
-  // ── Test 3: New transport vehicle invoice — NoweSrodkiTransportu emitted ──
-  it('emits NoweSrodkiTransportu when specialProcedure.newMeansOfTransport is true', () => {
+  // ── Test 3: New transport vehicle invoice — P_22 active ──
+  it('emits P_22 (active) when specialProcedure.newMeansOfTransport is true', () => {
     const invoice = makeBaseInvoice({
       specialProcedure: { newMeansOfTransport: true },
     });
     const xml = buildFa2Xml(invoice);
 
     expect(xml).toContain('<NoweSrodkiTransportu');
-    expect(xml).toContain('<P_22N');
-    expect(xml).not.toContain('<PMarzy');
+    expect(xml).toContain('<P_22>1</P_22>');
+    expect(xml).not.toContain('<P_22N');
+    // PMarzy still emitted with N marker
+    expect(xml).toContain('<P_PMarzyN');
 
     const validation = validateFa3Xml(xml, invoice);
     const report = generateValidationReport(xml, invoice, validation);
 
     const optionalSection = report.sections.find(s => s.name === 'Optional Sections Generated');
     const transportCheck = optionalSection!.checks.find(c => c.name === 'NoweSrodkiTransportu');
-    expect(transportCheck!.message).toContain('Emitted');
     expect(transportCheck!.message).toContain('new means of transport flag active');
   });
 
-  // ── Test 4: Both flags true — both sections emitted ──
-  it('emits both sections when both flags are true', () => {
+  // ── Test 4: Both flags true — both active forms emitted ──
+  it('emits both P_22 and P_PMarzy (active) when both flags are true', () => {
     const invoice = makeBaseInvoice({
       specialProcedure: { newMeansOfTransport: true, marginScheme: true },
     });
     const xml = buildFa2Xml(invoice);
 
-    expect(xml).toContain('<NoweSrodkiTransportu');
-    expect(xml).toContain('<PMarzy');
+    expect(xml).toContain('<P_22>1</P_22>');
+    expect(xml).toContain('<P_PMarzy>1</P_PMarzy>');
   });
 
-  // ── Test 5: No flags — validation passes and report shows skipped ──
-  it('validation report logs generated/skipped sections correctly for standard invoice', () => {
+  // ── Test 5: Validation report shows correct status for standard invoice ──
+  it('validation report shows marker-emitted status for standard invoice', () => {
     const invoice = makeBaseInvoice();
     const xml = buildFa2Xml(invoice);
     const validation = validateFa3Xml(xml, invoice);
@@ -155,6 +150,6 @@ describe('Optional sections gating (NoweSrodkiTransportu / PMarzy)', () => {
     // Zwolnienie check should always be present
     const zwolnienieCheck = optionalSection!.checks.find(c => c.name === 'Zwolnienie (P_19)');
     expect(zwolnienieCheck).toBeDefined();
-    expect(zwolnienieCheck!.message).toContain('Not emitted');
+    expect(zwolnienieCheck!.message).toContain('P_19N');
   });
 });
