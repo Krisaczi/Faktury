@@ -10,6 +10,8 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import { buildFa2Xml } from './xml-builder';
+import { validateFa3Xml } from './xml-validator';
+import { generateValidationReport } from './validation-report';
 import { signInvoiceXml, type SignedPayload } from './signer';
 import type { KsefPayload } from './index';
 
@@ -212,6 +214,16 @@ export async function buildPlatformKsefPayload(invoiceId: string): Promise<KsefP
   }
 
   const rawXml = buildFa2Xml(invoice);
+
+  // Pre-submission validation gate (same as buildKsefPayload)
+  const xmlValidation = validateFa3Xml(rawXml, invoice);
+  const report = generateValidationReport(rawXml, invoice, xmlValidation);
+
+  if (!report.readyForKsef) {
+    const { KsefValidationBlockError } = await import('./index');
+    throw new KsefValidationBlockError(report);
+  }
+
   const signed: SignedPayload = signInvoiceXml(rawXml);
 
   return {
@@ -225,5 +237,6 @@ export async function buildPlatformKsefPayload(invoiceId: string): Promise<KsefP
       certFingerprint: signed.certFingerprint,
       isMock:          signed.isMock,
     },
+    validationReport: report,
   };
 }

@@ -3,9 +3,14 @@
  *
  * Usage:
  *   const payload = await buildKsefPayload(invoiceId);
- *   // payload.rawXml     — FA(2) XML, unsigned
- *   // payload.signedXml  — FA(2) XML with embedded XAdES-BES <Signature>
+ *   // payload.rawXml     — FA(3) XML, unsigned
+ *   // payload.signedXml  — FA(3) XML with embedded XAdES-BES <Signature>
  *   // payload.isMock     — true in dev/test (no real cert configured)
+ *
+ * Pre-submission validation gate:
+ *   Before signing and returning the payload, the XML is validated against
+ *   the FA(3) schema and business rules. If validation fails, an error is
+ *   thrown with the validation report, BLOCKING submission to KSeF.
  *
  * To send to KSeF after building the payload:
  *   POST https://api(-test).ksef.mf.gov.pl/v2/invoices/send
@@ -17,6 +22,8 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import { buildFa2Xml } from './xml-builder';
+import { validateFa3Xml } from './xml-validator';
+import { generateValidationReport, type PreSubmissionReport } from './validation-report';
 import { signInvoiceXml, type SignedPayload } from './signer';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -26,12 +33,32 @@ export interface KsefPayload {
   invoiceId:    string;
   /** Invoice number (human-readable). */
   invoiceNumber: string;
-  /** Raw (unsigned) FA(2) XML. */
+  /** Raw (unsigned) FA(3) XML. */
   rawXml:       string;
-  /** FA(2) XML with embedded XAdES-BES signature element. */
+  /** FA(3) XML with embedded XAdES-BES signature element. */
   signedXml:    string;
   /** Signature metadata. */
   signing:      Pick<SignedPayload, 'signatureValue' | 'signingTime' | 'certFingerprint' | 'isMock'>;
+  /** Pre-submission validation report (always present when payload is built). */
+  validationReport: PreSubmissionReport;
+}
+
+/**
+ * Error thrown when pre-submission validation fails, blocking KSeF submission.
+ */
+export class KsefValidationBlockError extends Error {
+  readonly report: PreSubmissionReport;
+
+  constructor(report: PreSubmissionReport) {
+    const errorCount = report.xmlValidation.errors.length;
+    const errorSummary = report.xmlValidation.errors
+      .slice(0, 5)
+      .map(e => `[${e.rule}] ${e.message}`)
+      .join('; ');
+    super(`KSeF submission blocked: ${errorCount} validation error(s). ${errorSummary}`);
+    this.name = 'KsefValidationBlockError';
+    this.report = report;
+  }
 }
 
 // ─── DB fetch ──────────────────────────────────────────────────────────────────
@@ -66,8 +93,14 @@ async function fetchInvoiceWithItems(id: string): Promise<IssuedInvoiceWithItems
 /**
  * Build a complete KSeF payload for an issued invoice.
  *
+ * Pre-submission validation is performed automatically. If the generated XML
+ * fails schema or business rule validation, a KsefValidationBlockError is thrown
+ * containing the full validation report. The caller should catch this and
+ * present the diagnostics to the user.
+ *
  * @param invoiceId  UUID of the invoice in the `issued_invoices` table.
- * @returns          KsefPayload containing raw XML, signed XML, and signing metadata.
+ * @returns          KsefPayload containing raw XML, signed XML, signing metadata, and validation report.
+ * @throws           KsefValidationBlockError if pre-submission validation fails.
  * @throws           Error if the invoice does not exist or is not in a submittable status.
  */
 export async function buildKsefPayload(invoiceId: string): Promise<KsefPayload> {
@@ -81,8 +114,19 @@ export async function buildKsefPayload(invoiceId: string): Promise<KsefPayload> 
     throw new Error('Cannot build KSeF payload: invoice is still a draft — issue it first');
   }
 
-  const rawXml  = buildFa2Xml(invoice);
-  const signed  = signInvoiceXml(rawXml);
+  // ── Generate XML ──
+  const rawXml = buildFa2Xml(invoice);
+
+  // ── Pre-submission validation gate ──
+  const xmlValidation = validateFa3Xml(rawXml, invoice);
+  const report = generateValidationReport(rawXml, invoice, xmlValidation);
+
+  if (!report.readyForKsef) {
+    throw new KsefValidationBlockError(report);
+  }
+
+  // ── Sign XML ──
+  const signed = signInvoiceXml(rawXml);
 
   return {
     invoiceId,
@@ -95,12 +139,17 @@ export async function buildKsefPayload(invoiceId: string): Promise<KsefPayload> 
       certFingerprint: signed.certFingerprint,
       isMock:          signed.isMock,
     },
+    validationReport: report,
   };
 }
 
 // ─── Re-exports ────────────────────────────────────────────────────────────────
 
 export { buildFa2Xml }          from './xml-builder';
+export { validateFa3Xml }       from './xml-validator';
+export { generateValidationReport, type PreSubmissionReport } from './validation-report';
+export { computeVatSummary, type VatSummaryResult } from './vat-summary-engine';
+export { FA_ELEMENT_SEQUENCE, P13_FIELDS, VALID_P12_VALUES } from './fa3-schema';
 export { signInvoiceXml,
          signXml,
          signXmlMock,

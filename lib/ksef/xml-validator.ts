@@ -2,12 +2,10 @@
  * KSeF FA(3) XML validation engine.
  *
  * Validates generated FA(3) XML against two layers:
- * 1. Schema structure: checks that the XML is well-formed, has the correct
- *    namespace, root element, and required child elements in the right order.
- * 2. Business rules: checks that summary totals are consistent, VAT mappings
- *    are valid, P_18 annotations match the VAT categories present, negative
- *    values don't appear in fields where FA(3) disallows them, and correction
- *    references are present when RodzajFaktury=KOR.
+ * 1. Schema structure: checks element ordering using the fa3-schema definition
+ *    (single source of truth) rather than ad-hoc position checks.
+ * 2. Business rules: checks summary totals, VAT mapping consistency, annotation
+ *    compatibility, negative value detection, and correction references.
  *
  * Usage:
  *   const result = validateFa3Xml(rawXml, invoice);
@@ -19,6 +17,14 @@
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import type { VatRate, DocumentType } from '@/types/issued-invoice';
 import { KSEF_RODZAJ_FAKTURY } from '@/types/issued-invoice';
+import {
+  FA_ELEMENT_SEQUENCE,
+  ROOT_ELEMENT_SEQUENCE,
+  P13_FIELDS,
+  P14_FIELDS,
+  VALID_P12_VALUES,
+  faElementPosition,
+} from './fa3-schema';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,14 +57,12 @@ export interface XmlValidationResult {
 
 // ─── XML parsing helpers ──────────────────────────────────────────────────────
 
-/** Extract the text content of a single XML element. */
 function extractElement(xml: string, tag: string): string | null {
   const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`);
   const m = xml.match(re);
   return m ? m[1].trim() : null;
 }
 
-/** Extract all occurrences of an element. */
 function extractAllElements(xml: string, tag: string): string[] {
   const results: string[] = [];
   const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'g');
@@ -69,237 +73,121 @@ function extractAllElements(xml: string, tag: string): string[] {
   return results;
 }
 
-/** Check if an element exists (self-closing or with content). */
 function hasElement(xml: string, tag: string): boolean {
   return new RegExp(`<${tag}[\\s/>]`).test(xml);
 }
 
-/** Parse a decimal value from a string, returning null if invalid. */
+/**
+ * Find the byte position of an element's opening tag in the XML string.
+ * Uses a regex that matches the full tag name followed by whitespace, '>',
+ * or '/>' to avoid false matches on prefix tags (e.g. <P_13_1> vs <P_13_10>).
+ * Returns -1 if the element is not present.
+ */
+function elementPosition(xml: string, tag: string): number {
+  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('<' + escaped + '[\\s/>]');
+  const m = xml.match(re);
+  return m ? (m.index ?? -1) : -1;
+}
+
 function parseDecimal(s: string | null): number | null {
   if (s == null) return null;
   const n = parseFloat(s);
   return isNaN(n) ? null : n;
 }
 
-// ─── Required FA(3) element sequences ─────────────────────────────────────────
+// ─── Rate → P_13 mapping (derived from schema, not hardcoded) ─────────────────
 
-const REQUIRED_ROOT_CHILDREN = ['Naglowek', 'Podmiot1', 'Podmiot2', 'Fa'];
+const RATE_TO_P13: Record<string, string> = Object.fromEntries(
+  Object.entries(P13_FIELDS).map(([rate, def]) => [rate, def.element]),
+);
 
-const REQUIRED_FA_CHILDREN_BEFORE_SUMMARY = ['KodWaluty', 'P_1', 'P_2'];
-
-const REQUIRED_FA_CHILDREN_AFTER_SUMMARY = ['P_15', 'Adnotacje', 'RodzajFaktury'];
-
-// ─── VAT rate → P_13 element mapping ──────────────────────────────────────────
-
-const RATE_TO_P13: Record<string, string> = {
-  '23':    'P_13_1',
-  '8':     'P_13_2',
-  '5':     'P_13_3',
-  '0':     'P_13_5',
-  '0_kr':  'P_13_6_1',
-  '0_wdt': 'P_13_6_2',
-  '0_ex':  'P_13_6_3',
-  'zw':    'P_13_7',
-  'np':    'P_13_8',
-  'np_ii': 'P_13_8',
-  'oo':    'P_13_10',
-};
-
-// ─── Schema validation ────────────────────────────────────────────────────────
+// ─── Schema validation (schema-driven) ────────────────────────────────────────
 
 function validateSchema(xml: string): XmlValidationError[] {
   const errors: XmlValidationError[] = [];
 
-  // 1. Check XML declaration
+  // 1. XML declaration
   if (!xml.startsWith('<?xml')) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'xml_declaration',
-      message: 'Missing XML declaration at the start of the document',
-    });
+    errors.push({ category: 'schema', severity: 'error', rule: 'xml_declaration', message: 'Missing XML declaration at the start of the document' });
   }
 
-  // 2. Check root element and namespace
+  // 2. Namespace
   if (!xml.includes('xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"')) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'namespace',
-      message: 'Missing or incorrect FA(3) namespace',
-      detail: 'Expected: http://crd.gov.pl/wzor/2025/06/25/13775/',
-    });
+    errors.push({ category: 'schema', severity: 'error', rule: 'namespace', message: 'Missing or incorrect FA(3) namespace', detail: 'Expected: http://crd.gov.pl/wzor/2025/06/25/13775/' });
   }
 
+  // 3. Root element
   if (!xml.includes('<Faktura')) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'root_element',
-      message: 'Missing <Faktura> root element',
-    });
+    errors.push({ category: 'schema', severity: 'error', rule: 'root_element', message: 'Missing <Faktura> root element' });
   }
 
-  // 3. Check required root children
-  for (const child of REQUIRED_ROOT_CHILDREN) {
-    if (!hasElement(xml, child)) {
-      errors.push({
-        category: 'schema',
-        severity: 'error',
-        rule: 'required_element',
-        element: child,
-        message: `Missing required element <${child}>`,
-      });
+  // 4. Required root children
+  for (const child of ROOT_ELEMENT_SEQUENCE) {
+    if (child.required && !hasElement(xml, child.name)) {
+      errors.push({ category: 'schema', severity: 'error', rule: 'required_element', element: child.name, message: `Missing required element <${child.name}>` });
     }
   }
 
-  // 4. Check required <Fa> children before summary
-  for (const child of REQUIRED_FA_CHILDREN_BEFORE_SUMMARY) {
-    if (!hasElement(xml, child)) {
-      errors.push({
-        category: 'schema',
-        severity: 'error',
-        rule: 'required_element',
-        element: child,
-        message: `Missing required element <${child}> inside <Fa>`,
-      });
+  // 5. Required <Fa> children
+  for (const child of FA_ELEMENT_SEQUENCE) {
+    if (child.required && !hasElement(xml, child.name)) {
+      errors.push({ category: 'schema', severity: 'error', rule: 'required_element', element: child.name, message: `Missing required element <${child.name}> inside <Fa>` });
     }
   }
 
-  // 5. Check required <Fa> children after summary
-  for (const child of REQUIRED_FA_CHILDREN_AFTER_SUMMARY) {
-    if (!hasElement(xml, child)) {
-      errors.push({
-        category: 'schema',
-        severity: 'error',
-        rule: 'required_element',
-        element: child,
-        message: `Missing required element <${child}> inside <Fa>`,
-      });
+  // 6. Element ordering — use schema-driven checks
+  // For each pair of elements in the FA sequence, verify that if both are
+  // present, the earlier-defined element appears before the later one.
+  for (let i = 0; i < FA_ELEMENT_SEQUENCE.length; i++) {
+    for (let j = i + 1; j < FA_ELEMENT_SEQUENCE.length; j++) {
+      const earlier = FA_ELEMENT_SEQUENCE[i].name;
+      const later = FA_ELEMENT_SEQUENCE[j].name;
+      const earlierPos = elementPosition(xml, earlier);
+      const laterPos = elementPosition(xml, later);
+      if (earlierPos !== -1 && laterPos !== -1 && earlierPos > laterPos) {
+        errors.push({
+          category: 'schema',
+          severity: 'error',
+          rule: 'element_order',
+          element: later,
+          message: `<${later}> must appear AFTER <${earlier}> in the FA(3) sequence`,
+        });
+      }
     }
   }
 
-  // 6. Check element ordering: P_13_6_1 must come AFTER P_13_5 and BEFORE P_13_7
-  const p13_5Pos  = xml.indexOf('<P_13_5');
-  const p13_6_1Pos = xml.indexOf('<P_13_6_1');
-  const p13_7Pos  = xml.indexOf('<P_13_7');
-
-  if (p13_5Pos !== -1 && p13_6_1Pos !== -1 && p13_5Pos > p13_6_1Pos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'P_13_6_1',
-      message: 'P_13_6_1 must appear AFTER P_13_5 in the FA(3) sequence',
-    });
-  }
-  if (p13_6_1Pos !== -1 && p13_7Pos !== -1 && p13_6_1Pos > p13_7Pos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'P_13_7',
-      message: 'P_13_7 must appear AFTER P_13_6_1 in the FA(3) sequence',
-    });
-  }
-
-  // 6b. P_13_9 must come AFTER P_13_8 and BEFORE P_13_10
-  const p13_8Pos = xml.indexOf('<P_13_8');
-  const p13_9Pos = xml.indexOf('<P_13_9');
-  const p13_10Pos = xml.indexOf('<P_13_10');
-  const p15Pos = xml.indexOf('<P_15');
-
-  if (p13_8Pos !== -1 && p13_9Pos !== -1 && p13_8Pos > p13_9Pos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'P_13_9',
-      message: 'P_13_9 must appear AFTER P_13_8 in the FA(3) sequence',
-    });
-  }
-
-  if (p13_9Pos !== -1 && p13_10Pos !== -1 && p13_9Pos > p13_10Pos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'P_13_10',
-      message: 'P_13_10 must appear AFTER P_13_9 in the FA(3) sequence',
-    });
-  }
-
-  if (p13_9Pos !== -1 && p15Pos !== -1 && p13_9Pos > p15Pos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'P_15',
-      message: 'P_15 must appear AFTER P_13_9 in the FA(3) sequence',
-    });
-  }
-
-  // 7. Check that Adnotacje comes before RodzajFaktury
-  const adnotacjePos = xml.indexOf('<Adnotacje');
-  const rodzajPos = xml.indexOf('<RodzajFaktury');
-  if (adnotacjePos !== -1 && rodzajPos !== -1 && adnotacjePos > rodzajPos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'Adnotacje',
-      message: 'Adnotacje must appear BEFORE RodzajFaktury in the FA(3) sequence',
-    });
-  }
-
-  // 8. Check that FaWiersz comes after RodzajFaktury (and correction elements)
-  const faWierszPos = xml.indexOf('<FaWiersz');
-  if (rodzajPos !== -1 && faWierszPos !== -1 && rodzajPos > faWierszPos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'FaWiersz',
-      message: 'FaWiersz elements must appear AFTER RodzajFaktury',
-    });
-  }
-
-  // 9. Check that Rozliczenie and Platnosc come after FaWiersz
-  const rozliczeniePos = xml.indexOf('<Rozliczenie');
-  const platnoscPos = xml.indexOf('<Platnosc');
-  if (faWierszPos !== -1 && rozliczeniePos !== -1 && faWierszPos > rozliczeniePos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'Rozliczenie',
-      message: 'Rozliczenie must appear AFTER FaWiersz elements',
-    });
-  }
-  if (faWierszPos !== -1 && platnoscPos !== -1 && faWierszPos > platnoscPos) {
-    errors.push({
-      category: 'schema',
-      severity: 'error',
-      rule: 'element_order',
-      element: 'Platnosc',
-      message: 'Platnosc must appear AFTER FaWiersz elements',
-    });
-  }
-
-  // 10. Check P_12 values in line items are valid FA(3) rate codes
+  // 7. P_12 values valid
   const p12Values = extractAllElements(xml, 'P_12');
-  const validP12 = ['23', '22', '8', '7', '5', '4', '3', '0', '0 KR', '0 WDT', '0 EX', 'zw', 'oo', 'np I', 'np II'];
   for (const p12 of p12Values) {
-    if (!validP12.includes(p12)) {
+    if (!VALID_P12_VALUES.includes(p12)) {
       errors.push({
         category: 'schema',
         severity: 'error',
         rule: 'invalid_vat_rate',
         element: 'P_12',
         message: `Invalid P_12 value "${p12}" — not a valid FA(3) VAT rate code`,
-        detail: `Valid values: ${validP12.join(', ')}`,
+        detail: `Valid values: ${VALID_P12_VALUES.join(', ')}`,
       });
     }
+  }
+
+  // 8. Rozliczenie and Platnosc must come after FaWiersz
+  const faWierszPos = elementPosition(xml, 'FaWiersz');
+  const rozliczeniePos = elementPosition(xml, 'Rozliczenie');
+  const platnoscPos = elementPosition(xml, 'Platnosc');
+  if (faWierszPos !== -1 && rozliczeniePos !== -1 && faWierszPos > rozliczeniePos) {
+    errors.push({ category: 'schema', severity: 'error', rule: 'element_order', element: 'Rozliczenie', message: 'Rozliczenie must appear AFTER FaWiersz elements' });
+  }
+  if (faWierszPos !== -1 && platnoscPos !== -1 && faWierszPos > platnoscPos) {
+    errors.push({ category: 'schema', severity: 'error', rule: 'element_order', element: 'Platnosc', message: 'Platnosc must appear AFTER FaWiersz elements' });
+  }
+
+  // 9. Adnotacje before RodzajFaktury
+  const adnotacjePos = elementPosition(xml, 'Adnotacje');
+  const rodzajPos = elementPosition(xml, 'RodzajFaktury');
+  if (adnotacjePos !== -1 && rodzajPos !== -1 && adnotacjePos > rodzajPos) {
+    errors.push({ category: 'schema', severity: 'error', rule: 'element_order', element: 'Adnotacje', message: 'Adnotacje must appear BEFORE RodzajFaktury in the FA(3) sequence' });
   }
 
   return errors;
@@ -315,29 +203,28 @@ function validateBusinessRules(
   const warnings: XmlValidationError[] = [];
 
   // ── Rule 1: Summary totals consistency ──
-  // P_13_9 = total net = SUM of all P_13_* per-rate net values
-  // P_15 = total gross
-  // For non-taxable/exempt/zero rates, net == gross, so P_13_9 should relate to P_15.
-  // Specifically: P_15 = P_13_9 + SUM(P_14_*) (VAT amounts for taxable rates)
-  const p13Fields = ['P_13_1', 'P_13_2', 'P_13_3', 'P_13_5', 'P_13_6_1', 'P_13_6_2', 'P_13_6_3', 'P_13_7', 'P_13_8', 'P_13_10'];
-  const p14Fields = ['P_14_1', 'P_14_2', 'P_14_3'];
+  // Collect all P_13 per-rate elements (unique, from schema)
+  const perRateElems = new Set<string>();
+  for (const def of Object.values(P13_FIELDS)) {
+    perRateElems.add(def.element);
+  }
 
   let p13Sum = 0;
-  for (const f of p13Fields) {
-    const val = parseDecimal(extractElement(xml, f));
+  for (const elem of Array.from(perRateElems)) {
+    const val = parseDecimal(extractElement(xml, elem));
     if (val != null) p13Sum += val;
   }
 
+  // P_14 elements
   let p14Sum = 0;
-  for (const f of p14Fields) {
-    const val = parseDecimal(extractElement(xml, f));
+  for (const p14Elem of Object.values(P14_FIELDS)) {
+    const val = parseDecimal(extractElement(xml, p14Elem));
     if (val != null) p14Sum += val;
   }
 
   const p13_9 = parseDecimal(extractElement(xml, 'P_13_9')) ?? 0;
   const p15 = parseDecimal(extractElement(xml, 'P_15')) ?? 0;
 
-  // P_13_9 must equal the sum of all P_13 per-rate values
   const p13SumRounded = Math.round(p13Sum * 100) / 100;
   const p13_9Rounded = Math.round(p13_9 * 100) / 100;
   if (p13SumRounded !== p13_9Rounded) {
@@ -347,11 +234,10 @@ function validateBusinessRules(
       rule: 'summary_p13_9_mismatch',
       element: 'P_13_9',
       message: `P_13_9 (${p13_9.toFixed(2)}) does not equal the sum of per-rate P_13 values (${p13Sum.toFixed(2)})`,
-      detail: `Sum of P_13_1..P_13_10 = ${p13Sum.toFixed(2)}, P_13_9 = ${p13_9.toFixed(2)}`,
+      detail: `Sum of P_13_* = ${p13Sum.toFixed(2)}, P_13_9 = ${p13_9.toFixed(2)}`,
     });
   }
 
-  // P_15 must equal P_13_9 + P_14 sum (net + VAT = gross)
   const expectedP15 = Math.round((p13_9 + p14Sum) * 100) / 100;
   const p15Rounded = Math.round(p15 * 100) / 100;
   if (expectedP15 !== p15Rounded) {
@@ -365,16 +251,15 @@ function validateBusinessRules(
     });
   }
 
-  // Cross-check against invoice totals
-  const invNetRounded = Math.round(invoice.net_total * 100) / 100;
-  const invGrossRounded = Math.round(invoice.gross_total * 100) / 100;
+  const invNetRounded = Math.round((invoice.net_total ?? 0) * 100) / 100;
+  const invGrossRounded = Math.round((invoice.gross_total ?? 0) * 100) / 100;
   if (p13_9Rounded !== invNetRounded) {
     errors.push({
       category: 'business',
       severity: 'error',
       rule: 'summary_net_total_mismatch',
       element: 'P_13_9',
-      message: `P_13_9 (${p13_9.toFixed(2)}) does not match invoice net_total (${invoice.net_total.toFixed(2)})`,
+      message: `P_13_9 (${p13_9.toFixed(2)}) does not match invoice net_total (${(invoice.net_total ?? 0).toFixed(2)})`,
     });
   }
   if (p15Rounded !== invGrossRounded) {
@@ -383,7 +268,7 @@ function validateBusinessRules(
       severity: 'error',
       rule: 'summary_gross_total_mismatch',
       element: 'P_15',
-      message: `P_15 (${p15.toFixed(2)}) does not match invoice gross_total (${invoice.gross_total.toFixed(2)})`,
+      message: `P_15 (${p15.toFixed(2)}) does not match invoice gross_total (${(invoice.gross_total ?? 0).toFixed(2)})`,
     });
   }
 
@@ -399,48 +284,45 @@ function validateBusinessRules(
     consistent,
   };
 
-  // ── Rule 2: VAT category mapping — only emit P_13 fields for present rates ──
+  // ── Rule 2: VAT category mapping — only emit P_13 for present rates ──
   const presentRates = new Set<string>();
   for (const item of invoice.items) {
-    // np_ii shares P_13_8 with np — check for either
-    const rate = item.vat_rate as string;
-    if (rate === 'np_ii') {
-      presentRates.add('np');
-      presentRates.add('np_ii');
+    const rate = (item.vat_rate ?? '23') as string;
+    const def = P13_FIELDS[rate];
+    if (def?.aggregatesWith) {
+      presentRates.add(def.aggregatesWith);
+      presentRates.add(rate);
     } else {
       presentRates.add(rate);
     }
   }
 
-  // Check that no spurious P_13 fields are emitted for rates NOT in the invoice
-  // Handle aggregated rates: np and np_ii both map to P_13_8, so P_13_8 is valid
-  // if either np or np_ii is present.
+  const p13ElementsChecked = new Set<string>();
   for (const [rate, p13Elem] of Object.entries(RATE_TO_P13)) {
+    if (p13ElementsChecked.has(p13Elem)) continue;
+    p13ElementsChecked.add(p13Elem);
+
     const ratePresent = presentRates.has(rate);
     const elemPresent = hasElement(xml, p13Elem);
     if (!ratePresent && elemPresent) {
       // For aggregated P_13_8: skip if any rate sharing this element is present
-      if (p13Elem === 'P_13_8' && (presentRates.has('np') || presentRates.has('np_ii'))) continue;
+      const sharingRates = Object.entries(P13_FIELDS)
+        .filter(([, def]) => def.element === p13Elem)
+        .map(([r]) => r);
+      if (sharingRates.some(r => presentRates.has(r))) continue;
+
       errors.push({
         category: 'business',
         severity: 'error',
         rule: 'spurious_p13_field',
         element: p13Elem,
-        message: `${p13Elem} is present in XML but no line items have VAT rate "${rate}"`,
+        message: `${p13Elem} is present in XML but no line items have a rate mapping to it`,
       });
     }
   }
 
   // ── Rule 2b: No zero-value P_13 fields ──
-  // A P_13 field with value 0.00 is meaningless and indicates a reversed-away
-  // category that was not filtered out. For correction invoices changing VAT
-  // category (e.g. oo → zw), the reversed-away rate nets to zero and must not
-  // appear in the summary.
-  // Use a Set to avoid duplicate checks for aggregated P_13_8 (np + np_ii).
-  const p13ElementsChecked = new Set<string>();
-  for (const p13Elem of Object.values(RATE_TO_P13)) {
-    if (p13ElementsChecked.has(p13Elem)) continue;
-    p13ElementsChecked.add(p13Elem);
+  for (const p13Elem of Array.from(perRateElems)) {
     const val = parseDecimal(extractElement(xml, p13Elem));
     if (val != null && Math.round(val * 100) / 100 === 0) {
       errors.push({
@@ -448,16 +330,12 @@ function validateBusinessRules(
         severity: 'error',
         rule: 'zero_value_p13_field',
         element: p13Elem,
-        message: `${p13Elem} has value 0.00 — zero-value summary fields must not be emitted (reversed-away VAT categories should be omitted)`,
+        message: `${p13Elem} has value 0.00 — zero-value summary fields must not be emitted`,
       });
     }
   }
 
-  // ── Rule 2c: Contradictory VAT summary categories ──
-  // VAT exemption (P_13_7/zw) and reverse charge (P_13_10/oo) cannot both have
-  // POSITIVE values in the same invoice. In correction invoices, a negative P_13
-  // value represents a reversal (not an active category), so P_13_7=-1000 and
-  // P_13_10=+500 are not contradictory — they represent a category change.
+  // ── Rule 2c: Contradictory VAT categories ──
   const p13_7Val = parseDecimal(extractElement(xml, 'P_13_7'));
   const p13_10Val = parseDecimal(extractElement(xml, 'P_13_10'));
   const hasPositiveExempt = p13_7Val != null && p13_7Val > 0;
@@ -468,7 +346,7 @@ function validateBusinessRules(
       severity: 'error',
       rule: 'contradictory_vat_categories',
       element: 'P_13_7/P_13_10',
-      message: 'VAT exemption (P_13_7) and reverse charge (P_13_10) cannot both have positive values — they represent different, mutually exclusive VAT mechanisms',
+      message: 'VAT exemption (P_13_7) and reverse charge (P_13_10) cannot both have positive values',
       detail: `P_13_7=${p13_7Val?.toFixed(2)}, P_13_10=${p13_10Val?.toFixed(2)}`,
     });
   }
@@ -476,197 +354,93 @@ function validateBusinessRules(
   // ── Rule 3: P_18 annotation correctness ──
   const p18 = extractElement(xml, 'P_18');
   const p19 = extractElement(xml, 'P_19');
-  const hasReverseCharge = hasPositiveReverseCharge;
-  const hasExempt = hasPositiveExempt;
 
-  if (p18 === '1' && !hasReverseCharge) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'invalid_p18_reverse_charge',
-      element: 'P_18',
-      message: 'P_18=1 (reverse charge) but no positive reverse charge (oo) summary is present',
-      detail: 'P_18=1 must only be set when reverse charge (oo) has a positive net total',
-    });
+  if (p18 === '1' && !hasPositiveReverseCharge) {
+    errors.push({ category: 'business', severity: 'error', rule: 'invalid_p18_reverse_charge', element: 'P_18', message: 'P_18=1 (reverse charge) but no positive reverse charge (oo) summary is present' });
   }
-
-  if (p18 === '1' && hasExempt && !hasReverseCharge) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'invalid_p18_exempt_reverse_charge',
-      element: 'P_18',
-      message: 'P_18=1 (reverse charge) is invalid for a VAT exempt (zw) invoice — VAT exemption (art. 113) is not reverse charge',
-    });
+  if (p18 === '1' && hasExempt(hasPositiveExempt, hasPositiveReverseCharge)) {
+    errors.push({ category: 'business', severity: 'error', rule: 'invalid_p18_exempt_reverse_charge', element: 'P_18', message: 'P_18=1 is invalid for a VAT exempt invoice' });
   }
-
-  // P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist
   if (p18 === '1' && p19 === '1') {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'p18_p19_conflict',
-      element: 'P_18/P_19',
-      message: 'P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist — reverse charge and VAT exemption are mutually exclusive mechanisms',
-    });
+    errors.push({ category: 'business', severity: 'error', rule: 'p18_p19_conflict', element: 'P_18/P_19', message: 'P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist' });
+  }
+  if (p18 === '2' && hasPositiveReverseCharge && !hasPositiveExempt) {
+    errors.push({ category: 'business', severity: 'error', rule: 'missing_p18_reverse_charge', element: 'P_18', message: 'P_18=2 but positive reverse charge (oo) is present — P_18 should be 1' });
   }
 
-  if (p18 === '2' && hasReverseCharge && !hasExempt) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'missing_p18_reverse_charge',
-      element: 'P_18',
-      message: 'P_18=2 (not applicable) but positive reverse charge (oo) is present — P_18 should be 1',
-    });
-  }
-
-  // ── Rule 4: No negative P_9A (unit net price) ──
+  // ── Rule 4: No negative P_9A ──
   const p9aValues = extractAllElements(xml, 'P_9A');
   p9aValues.forEach((val, idx) => {
     const n = parseDecimal(val);
     if (n != null && n < 0) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'negative_p9a',
-        element: `FaWiersz[${idx}]/P_9A`,
-        message: `P_9A contains invalid negative value ${val} — FA(3) does not allow negative unit net prices`,
-        detail: 'For correction invoices, keep P_9A positive and reflect the correction via P_11 (net amount)',
-      });
+      errors.push({ category: 'business', severity: 'error', rule: 'negative_p9a', element: `FaWiersz[${idx}]/P_9A`, message: `P_9A contains invalid negative value ${val}` });
     }
   });
 
-  // ── Rule 5: Correction invoice must have required references ──
+  // ── Rule 5: Correction invoice references ──
   const docType = (invoice.document_type ?? 'STANDARD') as DocumentType;
   const rodzaj = extractElement(xml, 'RodzajFaktury');
 
   if (rodzaj === 'KOR' || docType === 'CORRECTION') {
     if (!hasElement(xml, 'PrzyczynaKorekty')) {
-      warnings.push({
-        category: 'business',
-        severity: 'warning',
-        rule: 'missing_correction_reason',
-        element: 'PrzyczynaKorekty',
-        message: 'Correction invoice (KOR) should include PrzyczynaKorekty (correction reason)',
-      });
+      warnings.push({ category: 'business', severity: 'warning', rule: 'missing_correction_reason', element: 'PrzyczynaKorekty', message: 'Correction invoice should include PrzyczynaKorekty' });
     }
     if (!hasElement(xml, 'DaneFaKorygowanej')) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'missing_corrected_invoice_ref',
-        element: 'DaneFaKorygowanej',
-        message: 'Correction invoice (KOR) must include DaneFaKorygowanej (corrected invoice reference)',
-      });
+      errors.push({ category: 'business', severity: 'error', rule: 'missing_corrected_invoice_ref', element: 'DaneFaKorygowanej', message: 'Correction invoice must include DaneFaKorygowanej' });
     }
     if (!hasElement(xml, 'NrFaKorygowanej')) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'missing_corrected_invoice_number',
-        element: 'NrFaKorygowanej',
-        message: 'Correction invoice (KOR) must include NrFaKorygowanej (corrected invoice number)',
-      });
+      errors.push({ category: 'business', severity: 'error', rule: 'missing_corrected_invoice_number', element: 'NrFaKorygowanej', message: 'Correction invoice must include NrFaKorygowanej' });
     }
-    // Original issue date must be present and valid
     const origDate = extractElement(xml, 'DataWystFaKorygowanej');
     if (!origDate) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'missing_corrected_invoice_date',
-        element: 'DataWystFaKorygowanej',
-        message: 'Correction invoice (KOR) must include DataWystFaKorygowanej (corrected invoice issue date)',
-      });
+      errors.push({ category: 'business', severity: 'error', rule: 'missing_corrected_invoice_date', element: 'DataWystFaKorygowanej', message: 'Correction invoice must include DataWystFaKorygowanej' });
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(origDate)) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'invalid_corrected_invoice_date',
-        element: 'DataWystFaKorygowanej',
-        message: `Corrected invoice date "${origDate}" is not in YYYY-MM-DD format`,
-      });
+      errors.push({ category: 'business', severity: 'error', rule: 'invalid_corrected_invoice_date', element: 'DataWystFaKorygowanej', message: `Corrected invoice date "${origDate}" is not in YYYY-MM-DD format` });
     }
   }
 
-  // ── Rule 6: Due date valid if present ──
+  // ── Rule 6: Due date format ──
   const termin = extractElement(xml, 'Termin');
   if (termin && !/^\d{4}-\d{2}-\d{2}$/.test(termin)) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'invalid_due_date',
-      element: 'Termin',
-      message: `Due date "${termin}" is not in YYYY-MM-DD format`,
-    });
+    errors.push({ category: 'business', severity: 'error', rule: 'invalid_due_date', element: 'Termin', message: `Due date "${termin}" is not in YYYY-MM-DD format` });
   }
 
-  // ── Rule 7: P_1 (issue date) must be valid ──
+  // ── Rule 7: P_1 date format ──
   const p1 = extractElement(xml, 'P_1');
   if (p1 && !/^\d{4}-\d{2}-\d{2}$/.test(p1)) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'invalid_issue_date',
-      element: 'P_1',
-      message: `Issue date "${p1}" is not in YYYY-MM-DD format`,
-    });
+    errors.push({ category: 'business', severity: 'error', rule: 'invalid_issue_date', element: 'P_1', message: `Issue date "${p1}" is not in YYYY-MM-DD format` });
   }
 
-  // ── Rule 8: Currency must be 3-letter ISO code ──
+  // ── Rule 8: Currency ──
   const kodWaluty = extractElement(xml, 'KodWaluty');
   if (kodWaluty && !/^[A-Z]{3}$/.test(kodWaluty)) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'invalid_currency',
-      element: 'KodWaluty',
-      message: `Currency "${kodWaluty}" is not a valid 3-letter ISO 4217 code`,
-    });
+    errors.push({ category: 'business', severity: 'error', rule: 'invalid_currency', element: 'KodWaluty', message: `Currency "${kodWaluty}" is not a valid 3-letter ISO code` });
   }
 
-  // ── Rule 9: Rozliczenie must match P_15 ──
+  // ── Rule 9: Rozliczenie matches P_15 ──
   const doZaplaty = parseDecimal(extractElement(xml, 'DoZaplaty'));
   const doRozliczenia = parseDecimal(extractElement(xml, 'DoRozliczenia'));
   if (doZaplaty != null) {
-    const doZaplatyRounded = Math.round(doZaplaty * 100) / 100;
-    if (doZaplatyRounded !== p15Rounded) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'rozliczenie_mismatch',
-        element: 'DoZaplaty',
-        message: `DoZaplaty (${doZaplaty.toFixed(2)}) does not match P_15 (${p15.toFixed(2)})`,
-      });
+    if (Math.round(doZaplaty * 100) / 100 !== p15Rounded) {
+      errors.push({ category: 'business', severity: 'error', rule: 'rozliczenie_mismatch', element: 'DoZaplaty', message: `DoZaplaty (${doZaplaty.toFixed(2)}) does not match P_15 (${p15.toFixed(2)})` });
     }
   }
   if (doRozliczenia != null) {
-    const doRozliczeniaRounded = Math.round(doRozliczenia * 100) / 100;
     const expectedAbsP15 = Math.round(Math.abs(p15) * 100) / 100;
-    if (doRozliczeniaRounded !== expectedAbsP15) {
-      errors.push({
-        category: 'business',
-        severity: 'error',
-        rule: 'rozliczenie_mismatch',
-        element: 'DoRozliczenia',
-        message: `DoRozliczenia (${doRozliczenia.toFixed(2)}) does not match |P_15| (${expectedAbsP15.toFixed(2)})`,
-      });
+    if (Math.round(doRozliczenia * 100) / 100 !== expectedAbsP15) {
+      errors.push({ category: 'business', severity: 'error', rule: 'rozliczenie_mismatch', element: 'DoRozliczenia', message: `DoRozliczenia (${doRozliczenia.toFixed(2)}) does not match |P_15| (${expectedAbsP15.toFixed(2)})` });
     }
   }
 
   return { errors, warnings, summaryCheck };
 }
 
+function hasExempt(exempt: boolean, reverseCharge: boolean): boolean {
+  return exempt && !reverseCharge;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Validate FA(3) XML against schema structure and business rules.
- *
- * @param xml      The raw (unsigned) FA(3) XML string.
- * @param invoice  The source invoice data (for cross-checking totals).
- * @returns        XmlValidationResult with errors, warnings, and summary check.
- */
 export function validateFa3Xml(
   xml: string,
   invoice: IssuedInvoiceWithItems,
