@@ -68,6 +68,31 @@ interface DebugLogEntry {
   createdAt: string;
 }
 
+interface XmlValidationError {
+  category: 'schema' | 'business';
+  severity: 'error' | 'warning';
+  rule: string;
+  element?: string;
+  message: string;
+  detail?: string;
+}
+
+interface XmlValidationResult {
+  valid: boolean;
+  errors: XmlValidationError[];
+  warnings: XmlValidationError[];
+  schemaErrors: XmlValidationError[];
+  businessErrors: XmlValidationError[];
+  summaryCheck?: {
+    p13Sum: number;
+    p15: number;
+    p13_9: number;
+    netTotal: number;
+    grossTotal: number;
+    consistent: boolean;
+  } | null;
+}
+
 interface DiagnosticsData {
   valid: boolean;
   missingFields: string[];
@@ -84,6 +109,7 @@ interface DiagnosticsData {
   submissionId: string | null;
   responsePayload: Record<string, unknown> | null;
   debugLogs: DebugLogEntry[];
+  xmlValidation: XmlValidationResult | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -177,6 +203,124 @@ function XmlViewer({ xml, invoiceId }: { xml: string; invoiceId: string }) {
         className="overflow-auto max-h-96 text-xs font-mono p-3 bg-slate-900 text-slate-100 leading-relaxed"
         dangerouslySetInnerHTML={{ __html: syntaxHighlightXml(xml) }}
       />
+    </div>
+  );
+}
+
+// ─── XML Validation View ─────────────────────────────────────────────────────
+
+function XmlValidationView({ result }: { result: XmlValidationResult }) {
+  const [open, setOpen] = useState(!result.valid);
+
+  return (
+    <div className={cn(
+      'rounded-lg border transition-colors',
+      result.valid
+        ? 'border-emerald-200 dark:border-emerald-800/50'
+        : 'border-red-200 dark:border-red-800/50',
+    )}>
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+          Walidacja FA(3) XML
+        </span>
+        {result.valid
+          ? <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 gap-1"><CheckCircle className="w-3 h-3" /> Passed</Badge>
+          : <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 gap-1"><XCircle className="w-3 h-3" /> Failed</Badge>}
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-3">
+          {result.summaryCheck && (
+            <div className={cn(
+              'rounded-md px-3 py-2 text-xs',
+              result.summaryCheck.consistent
+                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
+            )}>
+              <div className="flex items-center gap-1.5 font-semibold mb-1">
+                {result.summaryCheck.consistent
+                  ? <CheckCircle className="w-3.5 h-3.5" />
+                  : <XCircle className="w-3.5 h-3.5" />}
+                Summary Calculation
+              </div>
+              <div className="font-mono text-[10px] space-y-0.5 ml-5">
+                <div>SUM(P_13_*) = {result.summaryCheck.p13Sum.toFixed(2)}</div>
+                <div>P_13_9 = {result.summaryCheck.p13_9.toFixed(2)}</div>
+                <div>P_15 = {result.summaryCheck.p15.toFixed(2)}</div>
+                <div>net_total = {result.summaryCheck.netTotal.toFixed(2)}</div>
+                <div>gross_total = {result.summaryCheck.grossTotal.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
+
+          {result.schemaErrors.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                <FileCode2 className="w-3.5 h-3.5" />
+                Schema Errors ({result.schemaErrors.length})
+              </div>
+              {result.schemaErrors.map((err, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 ml-5">
+                  <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="font-mono text-[10px] text-red-400">[{err.rule}]</span> {err.message}
+                    {err.element && <code className="ml-1 text-[10px] font-mono text-red-400">{err.element}</code>}
+                    {err.detail && <div className="text-[10px] text-red-400 mt-0.5">{err.detail}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {result.businessErrors.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                <ShieldX className="w-3.5 h-3.5" />
+                Business Rule Errors ({result.businessErrors.length})
+              </div>
+              {result.businessErrors.map((err, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 ml-5">
+                  <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="font-mono text-[10px] text-red-400">[{err.rule}]</span> {err.message}
+                    {err.element && <code className="ml-1 text-[10px] font-mono text-red-400">{err.element}</code>}
+                    {err.detail && <div className="text-[10px] text-red-400 mt-0.5">{err.detail}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {result.warnings.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Warnings ({result.warnings.length})
+              </div>
+              {result.warnings.map((err, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 ml-5">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="font-mono text-[10px] text-amber-400">[{err.rule}]</span> {err.message}
+                    {err.element && <code className="ml-1 text-[10px] font-mono text-amber-400">{err.element}</code>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {result.valid && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 ml-5">
+              <CheckCircle className="w-3.5 h-3.5" />
+              All schema and business rule checks passed.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -479,6 +623,11 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
             </p>
           </div>
         </div>
+
+        {/* ── FA(3) XML Validation Results ── */}
+        {data.xmlValidation && (
+          <XmlValidationView result={data.xmlValidation} />
+        )}
 
         {/* ── Validation Groups ── */}
         {data.validation.groups.map((group) => (

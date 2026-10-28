@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef, type KsefStatus } from '@/lib/ksef/submit';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
+import { buildKsefPayload } from '@/lib/ksef';
+import { validateFa3Xml } from '@/lib/ksef/xml-validator';
 import { KsefDebugLogger, validateKsefSubmission } from '@/lib/ksef/diagnostics';
 
 /**
@@ -159,6 +161,43 @@ export async function POST(
     return NextResponse.json({
       error: `Błąd budowania XML: ${(err as Error).message}`,
     }, { status: 500 });
+  }
+
+  // FA(3) XML validation — block submission if schema or business rules fail
+  if (rawXmlForDebug) {
+    // Rebuild the mapped invoice for validation context
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const meta = (invoice as any).metadata ?? {};
+    const mappedItems = meta.items ?? [];
+    const mappedInvoice = {
+      net_total: meta.net_total ?? 0,
+      gross_total: meta.gross_total ?? 0,
+      vat_total: meta.vat_total ?? 0,
+      document_type: meta.document_type ?? 'STANDARD',
+      items: mappedItems,
+    } as unknown as import('@/types/issued-invoice').IssuedInvoiceWithItems;
+
+    const xmlValidation = validateFa3Xml(rawXmlForDebug, mappedInvoice);
+    if (!xmlValidation.valid) {
+      const errorDetails = xmlValidation.errors.map(e => ({
+        rule: e.rule,
+        element: e.element,
+        message: e.message,
+        detail: e.detail,
+      }));
+      await dbgLogger.log('VALIDATION_FAILED', 'failed',
+        `FA(3) XML validation failed: ${xmlValidation.errors.length} error(s)`,
+        { errors: errorDetails, summaryCheck: xmlValidation.summaryCheck });
+      return NextResponse.json({
+        ok: false,
+        error: 'FA(3) XML validation failed — submission blocked',
+        xmlValidation,
+        message: xmlValidation.errors.map(e => e.message).join('; '),
+      }, { status: 422 });
+    }
+    await dbgLogger.log('VALIDATION_PASSED', 'passed', 'FA(3) XML validation passed', {
+      summaryCheck: xmlValidation.summaryCheck,
+    });
   }
 
   const idempotencyKey = generateIdempotencyKey(params.id);

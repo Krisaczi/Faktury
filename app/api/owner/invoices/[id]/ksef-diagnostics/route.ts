@@ -3,6 +3,8 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 import { buildKsefPayload } from '@/lib/ksef';
 import { validateKsefSubmission, buildFieldMappings, type KsefDebugLogEntry } from '@/lib/ksef/diagnostics';
+import { validateFa3Xml, type XmlValidationResult } from '@/lib/ksef/xml-validator';
+import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 
 /**
  * GET /api/owner/invoices/[id]/ksef-diagnostics
@@ -189,6 +191,16 @@ export async function GET(
     const validation = validateKsefSubmission(validationInput as never);
     const fieldMappings = buildFieldMappings(validationInput as never);
 
+    // ── FA(3) XML validation (schema + business rules) ──
+    let xmlValidation: XmlValidationResult | null = null;
+    if (rawXml) {
+      try {
+        xmlValidation = validateFa3Xml(rawXml, validationInput as unknown as IssuedInvoiceWithItems);
+      } catch {
+        // If validation itself throws, don't block diagnostics display
+      }
+    }
+
     // ── Fetch debug logs (works for both invoice types) ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: rawLogs } = await (supabase as any)
@@ -235,6 +247,7 @@ export async function GET(
       submissionId:         invAny.ksef_submission_id ?? null,
       responsePayload:      invAny.ksef_response ?? invAny.ksef_error_message ?? null,
       debugLogs,
+      xmlValidation,
     });
   } catch (err) {
     return NextResponse.json({

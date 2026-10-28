@@ -19,7 +19,7 @@
  *   [seq: P_13_4, P_14_4, [P_14_4W]],
  *   [seq: P_13_5, [P_14_5]],
  *   [P_13_6_1], [P_13_6_2], [P_13_6_3],
- *   [P_13_7], [P_13_8], [P_13_9], [P_13_10], [P_13_11],
+ *   [P_13_7], [P_13_8], P_13_9, [P_13_10], [P_13_11],
  *   P_15, [KursWalutyZ], Adnotacje, RodzajFaktury,
  *   [PrzyczynaKorekty], [TypKorekty], [DaneFaKorygowanej*], ... [KursWalutyZK],
  *   [ZaliczkaCzesciowa*], [FakturaZaliczkowa*], [DodatkowyOpis],
@@ -63,19 +63,18 @@ function dec4(n: number): string {
  * FA(3) P_12 (TStawkaPodatku) allowed values:
  *   23, 22, 8, 7, 5, 4, 3, 0 KR, 0 WDT, 0 EX, zw, oo, np I, np II
  *
- * P_13/P_14 element mapping per VAT rate. The XSD wraps each taxable rate
- * (23%, 8%, 5%, 4%, taxi) in an optional <sequence>, so we only emit the
- * sequences for rates that appear on the invoice.
- *
- * Suffix assignments (per FA(3) official information sheet):
+ * P_13 element mapping per VAT rate:
  *   1 = 23%      (P_13_1 / P_14_1)
  *   2 = 8%       (P_13_2 / P_14_2)
  *   3 = 5%       (P_13_3 / P_14_3)
  *   4 = taxi flat (P_13_4 / P_14_4) — not used
  *   5 = 0%       (P_13_5 / P_14_5)
- *   6_1 = 0% excluding WDT/export (P_13_6_1)
+ *   6_1 = 0% excluding WDT/export (P_13_6_1) — not used
  *   7 = "zw"     (P_13_7)    — VAT exempt (zwolnione od podatku)
- *   8 = "np"/"oo" (P_13_8)   — non-taxable / out of scope (nie podlega)
+ *   8 = "np I"/"np II" (P_13_8)  — non-taxable (nie podlega)
+ *   9 = total net (P_13_9)  — sum of all P_13_* fields
+ *   10 = "oo"    (P_13_10)  — domestic reverse charge (odwrotne obciążenie)
+ *   11 = art.119 / art.120 (P_13_11) — not used
  */
 interface VatRateMapping {
   p12:           string;
@@ -92,7 +91,7 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
   'zw': { p12: 'zw', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
   'np': { p12: 'np I', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
-  'oo': { p12: 'oo',   p13Element: 'P_13_10',  p14Element: null,   hasVat: false, order: 9 },
+  'oo': { p12: 'oo',   p13Element: 'P_13_10',  p14Element: null,   hasVat: false, order: 10 },
 };
 
 // FA(3) FormaPlatnosci codes (per official FA(3) documentation):
@@ -256,17 +255,22 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
 /**
  * Build the P_13/P_14 VAT summary + P_15 per the FA(3) XSD.
  *
- * Each taxable rate (23%, 8%, 5%, taxi, 0%) is wrapped in an optional <sequence>.
- * We only emit the sequences for rates that appear on the invoice.
+ * XSD element order within <Fa> after P_2/[P_6]:
+ *   [P_13_1, P_14_1]   23% sequence
+ *   [P_13_2, P_14_2]   8% sequence
+ *   [P_13_3, P_14_3]   5% sequence
+ *   [P_13_5, P_14_5]   0% sequence
+ *   [P_13_7]           VAT exempt (zw)
+ *   [P_13_8]           non-taxable (np)
+ *   P_13_9             total net — SUM of all P_13_* above (required)
+ *   [P_13_10]          reverse charge (oo)
+ *   [P_13_11]          art.119/120 (not used)
+ *   P_15               total gross (required)
  *
- * After those sequences, the XSD has standalone optional elements:
- *   P_13_6_1 (0% non-WDT/non-export), P_13_6_2, P_13_6_3,
- *   P_13_7 (zw — exempt), P_13_8 (np/oo — non-taxable),
- *   P_13_9, P_13_10, P_13_11 — all optional
- *
- * Then P_15 (total gross) is required.
- *
- * Note: FA(3) does NOT have P_14_9 (total VAT). The total net is P_13_9.
+ * Only P_13 tags for rates actually present on the invoice are emitted.
+ * P_13_9 is computed as the sum of all per-rate net totals (not taken from
+ * inv.net_total directly, to avoid drift).
+ * P_15 uses inv.gross_total.
  */
 function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
   const rateMap = new Map<VatRate, VatGroup>();
@@ -300,27 +304,27 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
   }
 
-  // P_13_7 = VAT exempt (zwolnione od podatku)
+  // P_13_7 = VAT exempt (zwolnione od podatku) — only if zw is present
   if (rateMap.has('zw')) {
     lines.push(`    <P_13_7>${dec2(get('zw', 'netTotal'))}</P_13_7>`);
   }
 
-  // P_13_8 = non-taxable / out of scope (nie podlega) — only np (np I / np II)
-  // Emit even for negative amounts (corrections)
+  // P_13_8 = non-taxable (nie podlega) — only if np is present
   if (rateMap.has('np')) {
     lines.push(`    <P_13_8>${dec2(get('np', 'netTotal'))}</P_13_8>`);
   }
 
-  // P_13_9 = total net across all rates
-  lines.push(`    <P_13_9>${dec2(inv.net_total)}</P_13_9>`);
+  // P_13_9 = total net — sum of all per-rate net totals (required)
+  // Computed from the group totals, not inv.net_total, to guarantee consistency
+  const computedNetTotal = vatGroups.reduce((sum, g) => sum + g.netTotal, 0);
+  lines.push(`    <P_13_9>${dec2(computedNetTotal)}</P_13_9>`);
 
-  // P_13_10 = domestic reverse charge (oo) — sales under reverse charge procedure
-  // Emit even for negative amounts (corrections)
+  // P_13_10 = domestic reverse charge (oo) — only if oo is present
   if (rateMap.has('oo')) {
     lines.push(`    <P_13_10>${dec2(get('oo', 'netTotal'))}</P_13_10>`);
   }
 
-  // P_15 = total gross (required)
+  // P_15 = total gross (required) — uses inv.gross_total
   lines.push(`    <P_15>${dec2(inv.gross_total)}</P_15>`);
 
   return lines.join('\n');
@@ -330,13 +334,18 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
  * Build the Adnotacje block.
  *
  * Element order: P_16 → P_17 → P_18 → P_18A → Zwolnienie → NoweSrodkiTransportu → P_23 → PMarzy
- * All eight are required (minOccurs=1).
+ *
+ * P_18 values:
+ *   1 = reverse charge (odwrotne obciążenie) — only when oo (reverse charge) lines present
+ *   2 = not applicable
+ *
+ * P_18=1 must NEVER be set for VAT exempt (zw) invoices — VAT exemption (art. 113)
+ * is not reverse charge. It is a different mechanism entirely.
  */
 function buildAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
   const hasExempt = vatGroups.some(g => g.rate === 'zw');
   const hasReverseCharge = vatGroups.some(g => g.rate === 'oo');
 
-  // P_18=1 means reverse charge (odwrotne obciążenie); P_18=2 means not applicable
   const p18 = hasReverseCharge ? '1' : '2';
   const exemptionReason = inv.notes?.trim()
     ? inv.notes.trim()
@@ -366,6 +375,14 @@ ${zwolnienie}
     </Adnotacje>`;
 }
 
+/**
+ * Build FaWiersz (line items) for FA(3).
+ *
+ * P_9A = unit net price. FA(3) requires P_9A to be non-negative (the XSD
+ * restricts it to a positive decimal). For correction invoices with negative
+ * line amounts, keep P_9A positive (the original unit price) and reflect the
+ * correction direction via P_11 (net amount), which CAN be negative.
+ */
 function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
   return inv.items.map((item) => {
     const rate    = item.vat_rate as VatRate;
@@ -376,12 +393,18 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
     const discountLine = discountPct && discountPct > 0
       ? `\n      <P_10>${dec2(discountPct)}</P_10>`
       : '';
+
+    // P_9A must be non-negative per FA(3) XSD. For corrections where
+    // unit_price_net is negative (indicating a reversal), use the absolute
+    // value; the correction amount is reflected in P_11 (net amount).
+    const p9a = Math.abs(item.unit_price_net);
+
     return `    <FaWiersz>
       <NrWierszaFa>${item.position}</NrWierszaFa>
       <P_7>${esc(item.name)}</P_7>
       <P_8A>${esc(item.unit)}</P_8A>
-      <P_8B>${dec4(item.quantity)}</P_8B>
-      <P_9A>${dec2(item.unit_price_net)}</P_9A>${discountLine}
+      <P_8B>${dec4(Math.abs(item.quantity))}</P_8B>
+      <P_9A>${dec2(p9a)}</P_9A>${discountLine}
       <P_11>${dec2(item.net_amount)}</P_11>
       <P_12>${esc(mapping.p12)}</P_12>
     </FaWiersz>`;
