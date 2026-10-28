@@ -93,6 +93,12 @@ interface XmlValidationResult {
   } | null;
 }
 
+interface CorrectionInfo {
+  type: string;
+  label: string;
+  details: string[];
+}
+
 interface DiagnosticsData {
   valid: boolean;
   missingFields: string[];
@@ -110,6 +116,10 @@ interface DiagnosticsData {
   responsePayload: Record<string, unknown> | null;
   debugLogs: DebugLogEntry[];
   xmlValidation: XmlValidationResult | null;
+  correctionInfo: CorrectionInfo | null;
+  correctedInvoiceNumber: string | null;
+  correctedInvoiceDate: string | null;
+  correctedInvoiceKsefNo: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -627,6 +637,49 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
         {/* ── FA(3) XML Validation Results ── */}
         {data.xmlValidation && (
           <XmlValidationView result={data.xmlValidation} />
+        )}
+
+        {/* ── Correction Invoice Info ── */}
+        {data.correctionInfo && (
+          <div className="rounded-lg border border-blue-200 dark:border-blue-800/50 px-3 py-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
+              <FileCode2 className="w-3.5 h-3.5" />
+              Korekta Faktury
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Typ korekty:</span>
+                <Badge className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">
+                  {data.correctionInfo.label}
+                </Badge>
+              </div>
+              {data.correctedInvoiceNumber && (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Faktura korygowana:</span>
+                  <code className="font-mono text-slate-600 dark:text-slate-400">{data.correctedInvoiceNumber}</code>
+                </div>
+              )}
+              {data.correctedInvoiceDate && (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Data wyst.:</span>
+                  <code className="font-mono text-slate-600 dark:text-slate-400">{data.correctedInvoiceDate}</code>
+                </div>
+              )}
+              {data.correctedInvoiceKsefNo && (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Nr KSeF:</span>
+                  <code className="font-mono text-slate-600 dark:text-slate-400">{data.correctedInvoiceKsefNo}</code>
+                </div>
+              )}
+            </div>
+            {data.correctionInfo.details.length > 0 && (
+              <ul className="text-[10px] text-slate-500 dark:text-slate-400 ml-5 space-y-0.5">
+                {data.correctionInfo.details.map((d, i) => (
+                  <li key={i}>• {d}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         {/* ── Validation Groups ── */}

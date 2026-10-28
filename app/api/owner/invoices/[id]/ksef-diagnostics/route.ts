@@ -4,6 +4,7 @@ import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
 import { buildKsefPayload } from '@/lib/ksef';
 import { validateKsefSubmission, buildFieldMappings, type KsefDebugLogEntry } from '@/lib/ksef/diagnostics';
 import { validateFa3Xml, type XmlValidationResult } from '@/lib/ksef/xml-validator';
+import { detectCorrectionType, type CorrectionTypeInfo } from '@/lib/ksef/correction-serializer';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 
 /**
@@ -201,6 +202,17 @@ export async function GET(
       }
     }
 
+    // ── Correction invoice diagnostics ──
+    let correctionInfo: CorrectionTypeInfo | null = null;
+    const docTypeForCorrection = (validationInput as { document_type?: string }).document_type;
+    if (docTypeForCorrection === 'CORRECTION') {
+      try {
+        correctionInfo = detectCorrectionType(validationInput as unknown as IssuedInvoiceWithItems);
+      } catch {
+        // Non-critical — don't block diagnostics
+      }
+    }
+
     // ── Fetch debug logs (works for both invoice types) ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: rawLogs } = await (supabase as any)
@@ -248,6 +260,10 @@ export async function GET(
       responsePayload:      invAny.ksef_response ?? invAny.ksef_error_message ?? null,
       debugLogs,
       xmlValidation,
+      correctionInfo,
+      correctedInvoiceNumber: (validationInput as { corrected_invoice_number?: string | null }).corrected_invoice_number ?? null,
+      correctedInvoiceDate:   (validationInput as { corrected_invoice_date?: string | null }).corrected_invoice_date ?? null,
+      correctedInvoiceKsefNo: (validationInput as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no ?? null,
     });
   } catch (err) {
     return NextResponse.json({

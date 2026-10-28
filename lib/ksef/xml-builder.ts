@@ -466,10 +466,14 @@ function buildCorrectionElements(inv: IssuedInvoiceWithItems): string {
   const przyczynaLine = przyczyna
     ? `\n    <PrzyczynaKorekty>${esc(przyczyna)}</PrzyczynaKorekty>`
     : '';
+  const ksefNo = (inv as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no?.trim();
+  const ksefNoLine = ksefNo
+    ? `\n      <NrKSeFN>${esc(ksefNo)}</NrKSeFN>`
+    : '';
   return `${przyczynaLine}
     <DaneFaKorygowanej>
       <DataWystFaKorygowanej>${esc(isoDate(origDate))}</DataWystFaKorygowanej>
-      <NrFaKorygowanej>${esc(inv.corrected_invoice_number)}</NrFaKorygowanej>
+      <NrFaKorygowanej>${esc(inv.corrected_invoice_number)}</NrFaKorygowanej>${ksefNoLine}
     </DaneFaKorygowanej>`;
 }
 

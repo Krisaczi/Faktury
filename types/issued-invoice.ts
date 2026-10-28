@@ -119,6 +119,7 @@ export const IssuedInvoiceSchema = z.object({
   correction_reason:      z.string().max(1000).nullable().optional(),
   corrected_invoice_number: z.string().max(100).nullable().optional(),
   corrected_invoice_date:  z.string().date().nullable().optional(),
+  corrected_invoice_ksef_no: z.string().max(64).nullable().optional(),
 
   // Advance invoice fields
   advance_amount:      z.number().min(0).nullable().optional(),

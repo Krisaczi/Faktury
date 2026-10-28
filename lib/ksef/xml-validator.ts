@@ -526,6 +526,25 @@ function validateBusinessRules(
         message: 'Correction invoice (KOR) must include NrFaKorygowanej (corrected invoice number)',
       });
     }
+    // Original issue date must be present and valid
+    const origDate = extractElement(xml, 'DataWystFaKorygowanej');
+    if (!origDate) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'missing_corrected_invoice_date',
+        element: 'DataWystFaKorygowanej',
+        message: 'Correction invoice (KOR) must include DataWystFaKorygowanej (corrected invoice issue date)',
+      });
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(origDate)) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'invalid_corrected_invoice_date',
+        element: 'DataWystFaKorygowanej',
+        message: `Corrected invoice date "${origDate}" is not in YYYY-MM-DD format`,
+      });
+    }
   }
 
   // ── Rule 6: Due date valid if present ──
@@ -562,6 +581,35 @@ function validateBusinessRules(
       element: 'KodWaluty',
       message: `Currency "${kodWaluty}" is not a valid 3-letter ISO 4217 code`,
     });
+  }
+
+  // ── Rule 9: Rozliczenie must match P_15 ──
+  const doZaplaty = parseDecimal(extractElement(xml, 'DoZaplaty'));
+  const doRozliczenia = parseDecimal(extractElement(xml, 'DoRozliczenia'));
+  if (doZaplaty != null) {
+    const doZaplatyRounded = Math.round(doZaplaty * 100) / 100;
+    if (doZaplatyRounded !== p15Rounded) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'rozliczenie_mismatch',
+        element: 'DoZaplaty',
+        message: `DoZaplaty (${doZaplaty.toFixed(2)}) does not match P_15 (${p15.toFixed(2)})`,
+      });
+    }
+  }
+  if (doRozliczenia != null) {
+    const doRozliczeniaRounded = Math.round(doRozliczenia * 100) / 100;
+    const expectedAbsP15 = Math.round(Math.abs(p15) * 100) / 100;
+    if (doRozliczeniaRounded !== expectedAbsP15) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'rozliczenie_mismatch',
+        element: 'DoRozliczenia',
+        message: `DoRozliczenia (${doRozliczenia.toFixed(2)}) does not match |P_15| (${expectedAbsP15.toFixed(2)})`,
+      });
+    }
   }
 
   return { errors, warnings, summaryCheck };
