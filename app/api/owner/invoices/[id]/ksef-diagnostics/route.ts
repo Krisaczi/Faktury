@@ -6,6 +6,7 @@ import { validateKsefSubmission, buildFieldMappings, type KsefDebugLogEntry } fr
 import { validateFa3Xml, type XmlValidationResult } from '@/lib/ksef/xml-validator';
 import { computeVatSummary, getActiveCategories } from '@/lib/ksef/vat-summary-engine';
 import { detectCorrectionType, type CorrectionTypeInfo } from '@/lib/ksef/correction-serializer';
+import { parseKsefRejection, type KsefRejectionDetails } from '@/lib/ksef/rejection-parser';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 
 /**
@@ -22,6 +23,10 @@ import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
  * - KSeF submission status, reference number, response payload
  * - Historical debug logs from ksef_debug_logs table
  */
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } },
@@ -248,6 +253,13 @@ export async function GET(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invAny = invoice as any;
 
+    // ── Parse the KSeF response into structured rejection details ──
+    const responsePayload = invAny.ksef_response ?? invAny.ksef_error_message ?? null;
+    const rejectionDetails: KsefRejectionDetails = parseKsefRejection(
+      isObject(responsePayload) ? responsePayload : null,
+      invAny.ksef_status ?? null,
+    );
+
     return NextResponse.json({
       invoiceId:           params.id,
       invoiceNumber:       invoice.invoice_number ?? null,
@@ -271,7 +283,8 @@ export async function GET(
       lastAttemptDate:      invAny.ksef_last_attempt_at ?? invAny.ksef_sent_at ?? null,
       lastAttempt:          invAny.ksef_last_attempt_at ?? invAny.ksef_sent_at ?? null,
       submissionId:         invAny.ksef_submission_id ?? null,
-      responsePayload:      invAny.ksef_response ?? invAny.ksef_error_message ?? null,
+      responsePayload,
+      rejectionDetails,
       debugLogs,
       xmlValidation,
       preSubmissionReport,

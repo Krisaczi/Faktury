@@ -18,6 +18,8 @@ import {
   Clock,
   Hash,
   Calculator,
+  AlertOctagon,
+  Code2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -157,6 +159,29 @@ interface PreSubmissionReport {
   readyForKsef: boolean;
 }
 
+interface KsefValidationError {
+  xpath?: string;
+  element?: string;
+  message?: string;
+  errorCode?: string;
+  expectedValue?: string;
+  actualValue?: string;
+}
+
+interface KsefRejectionDetails {
+  rejected: boolean;
+  status: string;
+  referenceNumber: string | null;
+  processingCode: number | null;
+  processingDescription: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  errorPath: string | null;
+  validationErrors: KsefValidationError[];
+  rawResponse: Record<string, unknown> | null;
+  rejectionStage: 'send' | 'session' | 'auth' | 'unknown';
+}
+
 interface DiagnosticsData {
   valid: boolean;
   missingFields: string[];
@@ -172,6 +197,7 @@ interface DiagnosticsData {
   lastAttempt: string | null;
   submissionId: string | null;
   responsePayload: Record<string, unknown> | null;
+  rejectionDetails: KsefRejectionDetails | null;
   debugLogs: DebugLogEntry[];
   xmlValidation: XmlValidationResult | null;
   preSubmissionReport: PreSubmissionReport | null;
@@ -790,6 +816,162 @@ function DebugLogTimeline({ logs }: { logs: DebugLogEntry[] }) {
   );
 }
 
+// ─── KSeF Rejection Details View ─────────────────────────────────────────────
+
+function RejectionDetailsView({ details }: { details: KsefRejectionDetails }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const stageLabel = details.rejectionStage === 'send'
+    ? 'Invoice send (HTTP 400/422)'
+    : details.rejectionStage === 'session'
+      ? 'Session processing'
+      : details.rejectionStage === 'auth'
+        ? 'Authentication'
+        : 'Unknown';
+
+  return (
+    <div className="rounded-lg border border-red-200 dark:border-red-800/60 overflow-hidden">
+      <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800/60 flex items-center gap-2">
+        <AlertOctagon className="w-4 h-4 text-red-600 dark:text-red-400" />
+        <span className="text-sm font-semibold text-red-700 dark:text-red-400">
+          Why KSeF rejected this document
+        </span>
+        <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-0 ml-auto">
+          {stageLabel}
+        </Badge>
+      </div>
+
+      <div className="px-3 py-3 space-y-3">
+        {/* Key rejection fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <DetailRow label="Status" value={details.status} />
+          <DetailRow label="Reference Number" value={details.referenceNumber} mono />
+          <DetailRow label="Processing Code" value={details.processingCode != null ? String(details.processingCode) : null} mono />
+          <DetailRow label="Error Code" value={details.errorCode} mono highlight={!!details.errorCode} />
+          <DetailRow label="Processing Description" value={details.processingDescription} />
+          <DetailRow label="Rejection Stage" value={stageLabel} />
+        </div>
+
+        {/* Error message — the most important piece */}
+        {details.errorMessage && (
+          <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-3 py-2">
+            <div className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1">
+              Exact Error Message from KSeF
+            </div>
+            <p className="text-sm text-red-800 dark:text-red-300 font-mono break-all">
+              {details.errorMessage}
+            </p>
+          </div>
+        )}
+
+        {/* XML element / XPath causing the failure */}
+        {details.errorPath && (
+          <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 px-3 py-2">
+            <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">
+              XML Element Causing Rejection
+            </div>
+            <code className="text-xs font-mono text-amber-800 dark:text-amber-300 break-all">
+              {details.errorPath}
+            </code>
+          </div>
+        )}
+
+        {/* Validation errors with full detail */}
+        {details.validationErrors.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+              <Code2 className="w-3.5 h-3.5" />
+              Validation Errors from KSeF ({details.validationErrors.length})
+            </div>
+            <div className="space-y-1.5">
+              {details.validationErrors.map((ve, i) => (
+                <div key={i} className="rounded-md border border-red-100 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10 px-2.5 py-2 space-y-1">
+                  {ve.errorCode && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-400 font-medium">Code:</span>
+                      <code className="font-mono text-red-600 dark:text-red-400">{ve.errorCode}</code>
+                    </div>
+                  )}
+                  {ve.message && (
+                    <div className="text-xs text-red-700 dark:text-red-400 break-words">
+                      {ve.message}
+                    </div>
+                  )}
+                  {ve.xpath && (
+                    <div className="flex items-start gap-2 text-[10px]">
+                      <span className="text-slate-400 font-medium mt-0.5">XPath:</span>
+                      <code className="font-mono text-amber-700 dark:text-amber-400 break-all">{ve.xpath}</code>
+                    </div>
+                  )}
+                  {ve.element && (
+                    <div className="flex items-start gap-2 text-[10px]">
+                      <span className="text-slate-400 font-medium mt-0.5">Element:</span>
+                      <code className="font-mono text-amber-700 dark:text-amber-400 break-all">{ve.element}</code>
+                    </div>
+                  )}
+                  {(ve.expectedValue || ve.actualValue) && (
+                    <div className="grid grid-cols-2 gap-2 text-[10px] pt-0.5">
+                      {ve.expectedValue && (
+                        <div>
+                          <span className="text-slate-400">Expected: </span>
+                          <code className="font-mono text-emerald-700 dark:text-emerald-400">{ve.expectedValue}</code>
+                        </div>
+                      )}
+                      {ve.actualValue && (
+                        <div>
+                          <span className="text-slate-400">Actual: </span>
+                          <code className="font-mono text-red-600 dark:text-red-400">{ve.actualValue}</code>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Raw KSeF response — collapsible */}
+        {details.rawResponse && (
+          <div>
+            <button
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left"
+              onClick={() => setShowRaw(!showRaw)}
+            >
+              {showRaw
+                ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+              <Info className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 flex-1">Raw KSeF Response</span>
+            </button>
+            {showRaw && (
+              <pre className="mt-1.5 overflow-auto max-h-64 text-[10px] font-mono p-3 bg-slate-900 text-slate-100 rounded-md">
+                {JSON.stringify(details.rawResponse, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono, highlight }: { label: string; value: string | null; mono?: boolean; highlight?: boolean }) {
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span className="text-slate-400 font-medium min-w-[120px] flex-shrink-0">{label}:</span>
+      <span
+        className={cn(
+          'text-slate-700 dark:text-slate-300 break-words',
+          mono && 'font-mono',
+          highlight && 'text-red-600 dark:text-red-400 font-semibold',
+        )}
+      >
+        {value ?? '—'}
+      </span>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
@@ -982,6 +1164,11 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
             </p>
           </div>
         </div>
+
+        {/* ── KSeF Rejection Details ── */}
+        {data.rejectionDetails?.rejected && (
+          <RejectionDetailsView details={data.rejectionDetails} />
+        )}
 
         {/* ── Ready/Blocked banner ── */}
         {data.preSubmissionReport && (

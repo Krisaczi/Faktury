@@ -292,16 +292,17 @@ async function listFailedSessionInvoices(
   baseUrl: string,
   accessToken: string,
   sessionRef: string,
-): Promise<Array<Record<string, unknown>>> {
+): Promise<{ invoices: Array<Record<string, unknown>>; raw: Record<string, unknown> | null }> {
   try {
     const res = await fetch(`${baseUrl}/sessions/${sessionRef}/invoices/failed`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     });
-    if (!res.ok) return [];
-    const data = await res.json() as { invoices?: Array<Record<string, unknown>> };
-    return data.invoices ?? [];
+    if (!res.ok) return { invoices: [], raw: null };
+    const data = await res.json() as Record<string, unknown>;
+    const invoices = (data.invoices as Array<Record<string, unknown>>) ?? [];
+    return { invoices, raw: data };
   } catch {
-    return [];
+    return { invoices: [], raw: null };
   }
 }
 
@@ -550,7 +551,7 @@ export async function submitToKsef(params: {
     if (sessionStatus.code >= 400 && sessionStatus.code < 500) {
       const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
       const matched = invoices[0];
-      const failedInvoices = await listFailedSessionInvoices(baseUrl, accessToken, sessionRef);
+      const failedResult = await listFailedSessionInvoices(baseUrl, accessToken, sessionRef);
       return {
         success:   false,
         status:    'rejected',
@@ -563,7 +564,8 @@ export async function submitToKsef(params: {
           closeStatus:        closeResult.status,
           closeBody:          closeResult.body,
           pollLog,
-          failedInvoices,
+          failedInvoices:     failedResult.invoices,
+          failedInvoicesRaw:  failedResult.raw,
         },
         error:     `KSeF session failed: ${sessionStatus.description ?? `code ${sessionStatus.code}`}`,
         transient: false,
