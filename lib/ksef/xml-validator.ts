@@ -432,6 +432,109 @@ function validateBusinessRules(
     }
   }
 
+  // ── Rule 10: P_22 (new means of transport) validation ──
+  const p22 = extractElement(xml, 'P_22');
+  if (p22 === '1') {
+    // P_22=1 means this is a new means of transport invoice.
+    // Check that at least one line item references transport (P_108A or similar).
+    // In practice, the invoice should have relevant transport-related fields.
+    const hasTransportIndicator = hasElement(xml, 'P_108A') || hasElement(xml, 'StawkaVatNaTowar');
+    if (!hasTransportIndicator) {
+      warnings.push({
+        category: 'business',
+        severity: 'warning',
+        rule: 'p22_without_transport_data',
+        element: 'P_22',
+        message: 'P_22=1 (new means of transport) but no transport-specific line item data detected',
+        detail: 'Verify that invoice concerns new means of transport and includes required transport fields',
+      });
+    }
+    // P_22 and margin scheme (PMarzy) are mutually exclusive
+    const pMarzy = extractElement(xml, 'PMarzy');
+    if (pMarzy === '1') {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'p22_pmarzy_conflict',
+        element: 'P_22/PMarzy',
+        message: 'P_22=1 (new means of transport) and PMarzy=1 (margin scheme) cannot coexist',
+        detail: 'New means of transport procedure and margin scheme are mutually exclusive tax procedures',
+      });
+    }
+    // P_22 and VAT exemption (P_19) are incompatible
+    if (p19 === '1') {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'p22_p19_conflict',
+        element: 'P_22/P_19',
+        message: 'P_22=1 (new means of transport) and P_19=1 (VAT exemption) cannot coexist',
+        detail: 'New means of transport procedure requires VAT taxation; exemption is incompatible',
+      });
+    }
+  }
+
+  // ── Rule 11: PMarzy (margin scheme) validation ──
+  const pMarzy = extractElement(xml, 'PMarzy');
+  if (pMarzy === '1') {
+    // Margin scheme is only valid for specific transaction types (used goods, art, antiques)
+    // Check that the invoice doesn't also claim reverse charge or standard VAT rates
+    if (p18 === '1') {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'pmarzy_reverse_charge_conflict',
+        element: 'PMarzy/P_18',
+        message: 'PMarzy=1 (margin scheme) and P_18=1 (reverse charge) cannot coexist',
+        detail: 'Margin scheme and reverse charge are mutually exclusive tax procedures',
+      });
+    }
+    // Margin scheme should not have standard VAT rate P_13 fields (P_13_1 through P_13_4)
+    const hasStandardVat = hasElement(xml, 'P_13_1') || hasElement(xml, 'P_13_2') ||
+                           hasElement(xml, 'P_13_3') || hasElement(xml, 'P_13_4');
+    if (hasStandardVat) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'pmarzy_with_standard_vat',
+        element: 'PMarzy',
+        message: 'PMarzy=1 (margin scheme) but standard VAT rate P_13 fields are present',
+        detail: 'Margin scheme invoices should not include standard-rate VAT summary fields',
+      });
+    }
+    // Margin scheme should not have VAT amount P_14 fields
+    const hasVatAmounts = hasElement(xml, 'P_14_1') || hasElement(xml, 'P_14_2') ||
+                          hasElement(xml, 'P_14_3') || hasElement(xml, 'P_14_4');
+    if (hasVatAmounts) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'pmarzy_with_vat_amounts',
+        element: 'PMarzy',
+        message: 'PMarzy=1 (margin scheme) but P_14 VAT amount fields are present',
+        detail: 'Margin scheme does not include separate VAT amounts',
+      });
+    }
+  }
+
+  // ── Rule 12: Incompatible tax procedures ──
+  // Check for simultaneous presence of multiple special procedure flags
+  const specialProcedures: string[] = [];
+  if (p22 === '1') specialProcedures.push('P_22 (new means of transport)');
+  if (pMarzy === '1') specialProcedures.push('PMarzy (margin scheme)');
+  if (p18 === '1') specialProcedures.push('P_18 (reverse charge)');
+  if (p19 === '1') specialProcedures.push('P_19 (VAT exemption)');
+  if (specialProcedures.length > 2) {
+    errors.push({
+      category: 'business',
+      severity: 'error',
+      rule: 'too_many_special_procedures',
+      element: 'Adnotacje',
+      message: `Multiple incompatible tax procedures detected: ${specialProcedures.join(', ')}`,
+      detail: 'At most one special tax procedure (reverse charge OR exemption OR margin OR transport) should be active',
+    });
+  }
+
   return { errors, warnings, summaryCheck };
 }
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
-import { buildKsefPayload } from '@/lib/ksef';
+import { buildKsefPayload, generateValidationReport, type PreSubmissionReport } from '@/lib/ksef';
 import { validateKsefSubmission, buildFieldMappings, type KsefDebugLogEntry } from '@/lib/ksef/diagnostics';
 import { validateFa3Xml, type XmlValidationResult } from '@/lib/ksef/xml-validator';
+import { computeVatSummary, getActiveCategories } from '@/lib/ksef/vat-summary-engine';
 import { detectCorrectionType, type CorrectionTypeInfo } from '@/lib/ksef/correction-serializer';
 import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
 
@@ -194,13 +195,26 @@ export async function GET(
 
     // ── FA(3) XML validation (schema + business rules) ──
     let xmlValidation: XmlValidationResult | null = null;
+    let preSubmissionReport: PreSubmissionReport | null = null;
     if (rawXml) {
       try {
         xmlValidation = validateFa3Xml(rawXml, validationInput as unknown as IssuedInvoiceWithItems);
+        preSubmissionReport = generateValidationReport(
+          rawXml,
+          validationInput as unknown as IssuedInvoiceWithItems,
+          xmlValidation,
+        );
       } catch {
         // If validation itself throws, don't block diagnostics display
       }
     }
+
+    // ── VAT summary for display (computed from items) ──
+    const itemsForSummary = (validationInput as { items?: unknown[] }).items ?? [];
+    const vatSummary = itemsForSummary.length > 0
+      ? computeVatSummary(itemsForSummary as never)
+      : null;
+    const activeCategories = vatSummary ? getActiveCategories(vatSummary.groups) : null;
 
     // ── Correction invoice diagnostics ──
     let correctionInfo: CorrectionTypeInfo | null = null;
@@ -260,6 +274,9 @@ export async function GET(
       responsePayload:      invAny.ksef_response ?? invAny.ksef_error_message ?? null,
       debugLogs,
       xmlValidation,
+      preSubmissionReport,
+      vatSummary,
+      activeCategories,
       correctionInfo,
       correctedInvoiceNumber: (validationInput as { corrected_invoice_number?: string | null }).corrected_invoice_number ?? null,
       correctedInvoiceDate:   (validationInput as { corrected_invoice_date?: string | null }).corrected_invoice_date ?? null,

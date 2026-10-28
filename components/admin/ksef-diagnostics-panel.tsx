@@ -17,6 +17,7 @@ import {
   Info,
   Clock,
   Hash,
+  Calculator,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,6 +100,63 @@ interface CorrectionInfo {
   details: string[];
 }
 
+interface ValidationSectionCheck {
+  name: string;
+  status: 'pass' | 'fail' | 'warning';
+  message: string;
+  detail?: string;
+}
+
+interface ValidationSection {
+  name: string;
+  status: 'pass' | 'fail' | 'warning';
+  checks: ValidationSectionCheck[];
+}
+
+interface VatSummaryGroup {
+  rate: string;
+  p12Value: string;
+  p13Element: string;
+  p14Element: string | null;
+  netTotal: number;
+  vatTotal: number;
+  grossTotal: number;
+  order: number;
+}
+
+interface VatSummary {
+  groups: VatSummaryGroup[];
+  p13_9: number;
+  p15: number;
+  p13Sum: number;
+  p14Sum: number;
+  emittedP13Fields: string[];
+  emittedP14Fields: string[];
+  detectedRates: string[];
+}
+
+interface ActiveCategories {
+  hasExempt: boolean;
+  hasReverseCharge: boolean;
+  hasNonTaxable: boolean;
+  hasZero: boolean;
+}
+
+interface PreSubmissionReport {
+  overallStatus: 'ready' | 'blocked' | 'warning';
+  sections: ValidationSection[];
+  generatedXml: string;
+  detectedVatCategories: string[];
+  emittedP13Fields: string[];
+  emittedP14Fields: string[];
+  computedP13_9: number;
+  computedP15: number;
+  invoiceNetTotal: number;
+  invoiceGrossTotal: number;
+  mathConsistent: boolean;
+  readyForKsef: boolean;
+}
+
 interface DiagnosticsData {
   valid: boolean;
   missingFields: string[];
@@ -116,6 +174,9 @@ interface DiagnosticsData {
   responsePayload: Record<string, unknown> | null;
   debugLogs: DebugLogEntry[];
   xmlValidation: XmlValidationResult | null;
+  preSubmissionReport: PreSubmissionReport | null;
+  vatSummary: VatSummary | null;
+  activeCategories: ActiveCategories | null;
   correctionInfo: CorrectionInfo | null;
   correctedInvoiceNumber: string | null;
   correctedInvoiceDate: string | null;
@@ -213,6 +274,267 @@ function XmlViewer({ xml, invoiceId }: { xml: string; invoiceId: string }) {
         className="overflow-auto max-h-96 text-xs font-mono p-3 bg-slate-900 text-slate-100 leading-relaxed"
         dangerouslySetInnerHTML={{ __html: syntaxHighlightXml(xml) }}
       />
+    </div>
+  );
+}
+
+// ─── Validation Report View (6 sections) ─────────────────────────────────────
+
+function ValidationReportView({ report }: { report: PreSubmissionReport }) {
+  const [open, setOpen] = useState(!report.readyForKsef);
+
+  const overallColor = report.overallStatus === 'ready'
+    ? 'border-emerald-200 dark:border-emerald-800/50'
+    : report.overallStatus === 'warning'
+      ? 'border-amber-200 dark:border-amber-800/50'
+      : 'border-red-200 dark:border-red-800/50';
+
+  return (
+    <div className={cn('rounded-lg border transition-colors', overallColor)}>
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+          Validation Report ({report.sections.length} sections)
+        </span>
+        {report.overallStatus === 'ready'
+          ? <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 gap-1"><CheckCircle className="w-3 h-3" /> Ready</Badge>
+          : report.overallStatus === 'warning'
+            ? <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 gap-1"><AlertTriangle className="w-3 h-3" /> Warning</Badge>
+            : <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 gap-1"><XCircle className="w-3 h-3" /> Blocked</Badge>}
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-3">
+          {/* Ready for KSeF banner */}
+          <div className={cn(
+            'rounded-md px-3 py-2 text-sm font-semibold flex items-center gap-2',
+            report.readyForKsef
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
+          )}>
+            {report.readyForKsef
+              ? <><CheckCircle className="w-4 h-4" /> Ready for KSeF submission</>
+              : <><XCircle className="w-4 h-4" /> Blocked — fix errors before submitting to KSeF</>}
+          </div>
+
+          {/* Section status grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {report.sections.map((section) => (
+              <div
+                key={section.name}
+                className={cn(
+                  'rounded-md px-2 py-1.5 text-xs flex items-center gap-1.5',
+                  section.status === 'pass'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                    : section.status === 'warning'
+                      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
+                )}
+              >
+                {section.status === 'pass'
+                  ? <CheckCircle className="w-3 h-3" />
+                  : section.status === 'warning'
+                    ? <AlertTriangle className="w-3 h-3" />
+                    : <XCircle className="w-3 h-3" />}
+                <span className="font-medium">{section.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Detailed checks per section */}
+          <div className="space-y-2 mt-2">
+            {report.sections.map((section) => (
+              <div key={section.name} className="border border-slate-100 dark:border-slate-800 rounded-md">
+                <div className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                  {section.status === 'pass'
+                    ? <CheckCircle className="w-3 h-3 text-emerald-500" />
+                    : section.status === 'warning'
+                      ? <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      : <XCircle className="w-3 h-3 text-red-500" />}
+                  {section.name}
+                </div>
+                <div className="px-2.5 py-2 space-y-1">
+                  {section.checks.map((check) => (
+                    <div key={check.name} className="flex items-start gap-1.5 text-xs">
+                      {check.status === 'pass'
+                        ? <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                        : check.status === 'warning'
+                          ? <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                          : <XCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />}
+                      <div className="min-w-0">
+                        <span className="text-slate-600 dark:text-slate-400">{check.name}:</span>{' '}
+                        <span className={cn(
+                          check.status === 'pass' ? 'text-slate-500 dark:text-slate-400' : '',
+                          check.status === 'warning' ? 'text-amber-600 dark:text-amber-500' : '',
+                          check.status === 'fail' ? 'text-red-600 dark:text-red-400' : '',
+                        )}>{check.message}</span>
+                        {check.detail && <div className="text-[10px] text-slate-400 mt-0.5">{check.detail}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── VAT Audit View (P_13 fields, P_15 calculation) ──────────────────────────
+
+function VatAuditView({
+  summary,
+  report,
+  activeCategories,
+}: {
+  summary: VatSummary;
+  report: PreSubmissionReport | null;
+  activeCategories: ActiveCategories | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const p15Diff = report ? Math.round((report.computedP15 - report.invoiceGrossTotal) * 100) / 100 : 0;
+
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+        <Calculator className="w-3.5 h-3.5 text-slate-500" />
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+          VAT Summary Audit
+        </span>
+        <Badge className="text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-0">
+          {summary.emittedP13Fields.length} P_13 fields
+        </Badge>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-3">
+          {/* Detected VAT categories */}
+          <div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+              Detected VAT Categories
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {summary.detectedRates.map((rate) => (
+                <Badge key={rate} className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">
+                  {rate}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Active categories */}
+          {activeCategories && (
+            <div>
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                Active Annotations
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {activeCategories.hasReverseCharge && <Badge className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-0">Reverse Charge (P_18=1)</Badge>}
+                {activeCategories.hasExempt && <Badge className="text-[10px] bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-0">VAT Exempt (P_19=1)</Badge>}
+                {activeCategories.hasNonTaxable && <Badge className="text-[10px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-0">Non-taxable (NP)</Badge>}
+                {activeCategories.hasZero && <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">0% VAT</Badge>}
+                {!activeCategories.hasReverseCharge && !activeCategories.hasExempt && !activeCategories.hasNonTaxable && !activeCategories.hasZero && (
+                  <span className="text-xs text-slate-400">Standard VAT rates only</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* P_13 field table */}
+          <div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+              Generated P_13 Summary Fields
+            </div>
+            <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
+                    <th className="text-left px-2 py-1.5 font-medium">Element</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Rate</th>
+                    <th className="text-right px-2 py-1.5 font-medium">Net</th>
+                    <th className="text-right px-2 py-1.5 font-medium">VAT</th>
+                    <th className="text-right px-2 py-1.5 font-medium">Gross</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {summary.groups.map((group) => (
+                    <tr key={group.p13Element} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400">{group.p13Element}</td>
+                      <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400">{group.p12Value}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-600 dark:text-slate-400">{group.netTotal.toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-500 dark:text-slate-400">
+                        {group.p14Element ? group.vatTotal.toFixed(2) : '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-slate-600 dark:text-slate-400">{group.grossTotal.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* P_15 calculation breakdown */}
+          <div className={cn(
+            'rounded-md px-3 py-2 text-xs',
+            report?.mathConsistent
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
+          )}>
+            <div className="flex items-center gap-1.5 font-semibold mb-1.5">
+              {report?.mathConsistent
+                ? <CheckCircle className="w-3.5 h-3.5" />
+                : <XCircle className="w-3.5 h-3.5" />}
+              P_15 Calculation
+            </div>
+            <div className="font-mono text-[10px] space-y-0.5 ml-5">
+              <div>SUM(P_13_*) = {summary.p13Sum.toFixed(2)}</div>
+              <div>P_13_9 = {summary.p13_9.toFixed(2)}</div>
+              <div>SUM(P_14_*) = {summary.p14Sum.toFixed(2)}</div>
+              <div className="border-t border-current/20 pt-0.5 mt-0.5">
+                P_15 = P_13_9 + SUM(P_14_*) = {(summary.p13_9 + summary.p14Sum).toFixed(2)}
+              </div>
+              <div>Computed P_15 = {summary.p15.toFixed(2)}</div>
+              {report && (
+                <>
+                  <div>Invoice gross_total = {report.invoiceGrossTotal.toFixed(2)}</div>
+                  {p15Diff !== 0 && (
+                    <div className="text-red-500 font-semibold">Difference = {p15Diff.toFixed(2)}</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Emitted field lists */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <div className="text-slate-400 mb-1">Emitted P_13 fields:</div>
+              <div className="font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                {summary.emittedP13Fields.length > 0
+                  ? summary.emittedP13Fields.join(', ')
+                  : '(none)'}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400 mb-1">Emitted P_14 fields:</div>
+              <div className="font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                {summary.emittedP14Fields.length > 0
+                  ? summary.emittedP14Fields.join(', ')
+                  : '(none)'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -506,31 +828,58 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
 
+  function logValidationReport(report: DiagnosticsData) {
+    const rpt = report.preSubmissionReport;
+    // eslint-disable-next-line no-console
+    console.group('[KSeF Validation]');
+    // eslint-disable-next-line no-console
+    console.log('Schema Status:', report.xmlValidation ? (report.xmlValidation.schemaErrors.length === 0 ? 'PASS' : 'FAIL') : 'N/A');
+    // eslint-disable-next-line no-console
+    console.log('Business Validation:', report.xmlValidation ? (report.xmlValidation.businessErrors.length === 0 ? 'PASS' : 'FAIL') : 'N/A');
+    // eslint-disable-next-line no-console
+    console.log('Summary Consistency:', rpt ? (rpt.mathConsistent ? 'PASS' : 'FAIL') : 'N/A');
+    // eslint-disable-next-line no-console
+    console.log('Correction Consistency:', rpt
+      ? (rpt.sections.find(s => s.name === 'Correction Validation')?.status === 'pass' ? 'PASS' : rpt.sections.find(s => s.name === 'Correction Validation')?.status ?? 'N/A')
+      : 'N/A');
+    // eslint-disable-next-line no-console
+    console.log('Ready For KSeF:', rpt ? (rpt.readyForKsef ? 'YES' : 'NO') : 'NO');
+    if (rpt) {
+      // eslint-disable-next-line no-console
+      console.log('Overall:', rpt.overallStatus.toUpperCase());
+      // eslint-disable-next-line no-console
+      console.log('Detected VAT Categories:', rpt.detectedVatCategories);
+      // eslint-disable-next-line no-console
+      console.log('Emitted P_13 Fields:', rpt.emittedP13Fields);
+      // eslint-disable-next-line no-console
+      console.log('Computed P_13_9:', rpt.computedP13_9.toFixed(2));
+      // eslint-disable-next-line no-console
+      console.log('Computed P_15:', rpt.computedP15.toFixed(2));
+      if (!rpt.mathConsistent) {
+        // eslint-disable-next-line no-console
+        console.error('Math mismatch: P_15 =', rpt.computedP15.toFixed(2), 'but gross_total =', rpt.invoiceGrossTotal.toFixed(2));
+      }
+      if (report.xmlValidation && report.xmlValidation.errors.length > 0) {
+        // eslint-disable-next-line no-console
+        console.group('Errors');
+        report.xmlValidation.errors.forEach(e => {
+          // eslint-disable-next-line no-console
+          console.error(`[${e.rule}] ${e.message}`, e.detail ?? '');
+        });
+        // eslint-disable-next-line no-console
+        console.groupEnd();
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }
+
   async function handleValidate() {
     setValidating(true);
     await fetchDiagnostics();
     setValidating(false);
-    // Log to browser console
     if (data) {
-      // eslint-disable-next-line no-console
-      console.group('[KSeF Validation]');
-      // eslint-disable-next-line no-console
-      console.log('Invoice:', data.rawXml ? 'XML Generated' : 'No XML');
-      if (data.valid) {
-        // eslint-disable-next-line no-console
-        console.log('Result: PASSED');
-        // eslint-disable-next-line no-console
-        console.log('Ready for submission');
-      } else {
-        // eslint-disable-next-line no-console
-        console.log('Result: FAILED');
-        // eslint-disable-next-line no-console
-        console.log('Missing Fields:', data.missingFields);
-        // eslint-disable-next-line no-console
-        console.log('Warnings:', data.warnings);
-      }
-      // eslint-disable-next-line no-console
-      console.groupEnd();
+      logValidationReport(data);
     }
   }
 
@@ -599,7 +948,7 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
               {validating
                 ? <RefreshCw className="w-3 h-3 animate-spin" />
                 : <ShieldCheck className="w-3 h-3" />}
-              Waliduj KSeF
+              Validate XML
             </Button>
           </div>
         </div>
@@ -633,6 +982,53 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
             </p>
           </div>
         </div>
+
+        {/* ── Ready/Blocked banner ── */}
+        {data.preSubmissionReport && (
+          <div className={cn(
+            'rounded-lg px-4 py-3 flex items-center gap-3',
+            data.preSubmissionReport.readyForKsef
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800',
+          )}>
+            {data.preSubmissionReport.readyForKsef
+              ? <CheckCircle className="w-5 h-5" />
+              : <XCircle className="w-5 h-5" />}
+            <div className="flex-1">
+              <div className="text-sm font-semibold">
+                {data.preSubmissionReport.readyForKsef
+                  ? 'Validation Passed — Ready for KSeF'
+                  : `Validation Failed — ${data.xmlValidation?.errors.length ?? 0} error(s) must be fixed`}
+              </div>
+              {!data.preSubmissionReport.readyForKsef && data.xmlValidation && (
+                <div className="text-xs mt-0.5 space-y-0.5">
+                  {data.xmlValidation.errors.slice(0, 3).map((e, i) => (
+                    <div key={i} className="font-mono text-[10px]">
+                      Location: {e.element ?? 'Fa/P_13_*'} — {e.message}
+                    </div>
+                  ))}
+                  {data.xmlValidation.errors.length > 3 && (
+                    <div className="text-[10px] italic">+{data.xmlValidation.errors.length - 3} more errors...</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Validation Report (6 sections) ── */}
+        {data.preSubmissionReport && (
+          <ValidationReportView report={data.preSubmissionReport} />
+        )}
+
+        {/* ── VAT Summary Audit ── */}
+        {data.vatSummary && (
+          <VatAuditView
+            summary={data.vatSummary}
+            report={data.preSubmissionReport}
+            activeCategories={data.activeCategories}
+          />
+        )}
 
         {/* ── FA(3) XML Validation Results ── */}
         {data.xmlValidation && (
