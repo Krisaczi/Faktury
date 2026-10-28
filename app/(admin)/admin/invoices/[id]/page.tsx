@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { ArrowLeft, Building2, Calendar, CreditCard, FileText, Hash, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Circle as XCircle, Loader, Ban, Receipt, Download } from 'lucide-react';
 import { KsefPanel } from '@/components/admin/ksef-panel';
+import { KsefDiagnosticsPanel } from '@/components/admin/ksef-diagnostics-panel';
 import { canWriteInvoice, canSendToKsef, type AppRole } from '@/lib/permissions';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { Badge } from '@/components/ui/badge';
@@ -344,6 +345,11 @@ export default async function AdminInvoiceDetailPage({
           canSendToKsef={canSendToKsef(role, packageType)}
         />
       </Card>
+
+      {/* KSeF Diagnostics */}
+      {canSendToKsef(role, packageType) && (
+        <KsefDiagnosticsPanel invoiceId={invoice.id} />
+      )}
 
       {/* Notes */}
       {invoice.notes && (

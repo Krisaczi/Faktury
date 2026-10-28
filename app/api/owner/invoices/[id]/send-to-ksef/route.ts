@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 import { generateIdempotencyKey, submitToKsef, type KsefStatus } from '@/lib/ksef/submit';
 import { buildPlatformKsefPayload } from '@/lib/ksef/platform-submit';
+import { KsefDebugLogger, validateKsefSubmission } from '@/lib/ksef/diagnostics';
 
 /**
  * POST /api/owner/invoices/[id]/send-to-ksef
@@ -107,6 +108,44 @@ export async function POST(
     }, { status: 400 });
   }
 
+  // Pre-submission validation
+  const dbgLogger = new KsefDebugLogger(supabase, params.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const meta = (invoice as any).metadata ?? {};
+  const sellerAddress = [company?.name, company?.nip].filter(Boolean).join(' ');
+  const validationInput = {
+    invoice_number: invoice.invoice_number,
+    issue_date: invoice.invoice_date,
+    due_date: invoice.due_date,
+    payment_method: invoice.payment_method,
+    currency: meta.currency ?? 'PLN',
+    document_type: meta.document_type ?? 'STANDARD',
+    seller_name: sellerAddress || null,
+    seller_nip: company?.nip ?? null,
+    seller_bank_account: meta.seller_bank_account ?? null,
+    buyer_name: meta.buyer_name ?? null,
+    buyer_nip: meta.buyer_nip ?? null,
+    net_total: meta.net_total ?? null,
+    gross_total: meta.gross_total ?? null,
+    items: meta.items ?? null,
+    corrected_invoice_number: meta.corrected_invoice_number ?? null,
+    corrected_invoice_date: meta.corrected_invoice_date ?? null,
+    correction_reason: meta.correction_reason ?? null,
+  };
+  const validation = validateKsefSubmission(validationInput);
+  if (!validation.valid) {
+    await dbgLogger.log('VALIDATION_FAILED', 'failed',
+      `Pre-submission validation failed: ${validation.errors.length} error(s)`,
+      { errors: validation.errors.map(e => ({ field: e.field, message: e.message, ksefField: e.ksefField })) });
+    return NextResponse.json({
+      ok: false,
+      error: 'KSeF validation failed',
+      validation,
+      message: `Missing or invalid fields: ${validation.errors.map(e => e.label).join(', ')}`,
+    }, { status: 422 });
+  }
+  await dbgLogger.log('VALIDATION_PASSED', 'passed', 'All required fields present');
+
   // Build the KSeF XML payload
   let signedXml: string;
   let rawXmlForDebug: string | null = null;
@@ -114,7 +153,9 @@ export async function POST(
     const payload = await buildPlatformKsefPayload(params.id);
     signedXml = payload.signedXml;
     rawXmlForDebug = payload.rawXml;
+    await dbgLogger.log('XML_GENERATED', 'info', `XML generated (${rawXmlForDebug.length} chars)`, { xmlSize: rawXmlForDebug.length });
   } catch (err) {
+    await dbgLogger.log('XML_GENERATED', 'failed', `XML build error: ${(err as Error).message}`);
     return NextResponse.json({
       error: `Błąd budowania XML: ${(err as Error).message}`,
     }, { status: 500 });
@@ -146,6 +187,12 @@ export async function POST(
     .eq('id', params.id);
 
   // Submit to KSeF
+  await dbgLogger.log('SUBMISSION_STARTED', 'started', `Submitting invoice ${invoice.invoice_number} to KSeF`, {
+    invoiceId: params.id,
+    invoiceNumber: invoice.invoice_number,
+    xmlSize: signedXml.length,
+    timestamp: nowIso,
+  });
   const result = await submitToKsef({
     invoiceId:          params.id,
     signedXml,
@@ -224,6 +271,20 @@ export async function POST(
     error_message:        result.error ?? null,
     ip:                   ownerIp,
   });
+
+  // Log the result
+  if (result.success && result.status === 'accepted') {
+    await dbgLogger.log('SUBMISSION_ACCEPTED', 'accepted',
+      `KSeF accepted invoice. KSeF number: ${result.ksefNumber ?? 'pending'}`,
+      { ksefNumber: result.ksefNumber, submissionId: result.submissionId });
+  } else if (!result.success) {
+    await dbgLogger.log('SUBMISSION_REJECTED', 'rejected',
+      `KSeF rejected: ${result.error ?? 'Unknown error'}`,
+      { error: result.error, response: result.response });
+  }
+  await dbgLogger.log('RESPONSE_RECEIVED', result.success ? 'accepted' : 'rejected',
+    `KSeF response: status=${result.status}`,
+    { status: result.status, ksefNumber: result.ksefNumber, error: result.error, response: result.response });
 
   if (result.transient) {
     return NextResponse.json({
