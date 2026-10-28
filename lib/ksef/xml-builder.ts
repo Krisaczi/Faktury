@@ -91,8 +91,8 @@ const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
   '5':  { p12: '5',  p13Element: 'P_13_3', p14Element: 'P_14_3', hasVat: true,  order: 3 },
   '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
   'zw': { p12: 'zw', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
-  'np': { p12: 'np', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
-  'oo': { p12: 'oo', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
+  'np': { p12: 'np I', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
+  'oo': { p12: 'oo',   p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
 };
 
 // FA(3) FormaPlatnosci codes (per official FA(3) documentation):
@@ -306,8 +306,9 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
   }
 
   // P_13_8 = non-taxable / out of scope (nie podlega) — np and oo share this field
-  const nonTaxableTotal = get('np', 'netTotal') + get('oo', 'netTotal');
-  if (nonTaxableTotal > 0) {
+  // Emit whenever np or oo rates are present, even for negative amounts (corrections)
+  if (rateMap.has('np') || rateMap.has('oo')) {
+    const nonTaxableTotal = get('np', 'netTotal') + get('oo', 'netTotal');
     lines.push(`    <P_13_8>${dec2(nonTaxableTotal)}</P_13_8>`);
   }
 
@@ -443,8 +444,13 @@ function buildAdvanceReferences(inv: IssuedInvoiceWithItems): string {
  * DoZaplaty = P_15 + charges - deductions. With no charges/deductions, it equals P_15.
  */
 function buildRozliczenie(inv: IssuedInvoiceWithItems): string {
-  return `    <Rozliczenie>
+  if (inv.gross_total >= 0) {
+    return `    <Rozliczenie>
       <DoZaplaty>${dec2(inv.gross_total)}</DoZaplaty>
+    </Rozliczenie>`;
+  }
+  return `    <Rozliczenie>
+      <DoRozliczenia>${dec2(Math.abs(inv.gross_total))}</DoRozliczenia>
     </Rozliczenie>`;
 }
 
