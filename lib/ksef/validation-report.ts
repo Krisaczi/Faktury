@@ -268,6 +268,80 @@ export function generateValidationReport(
     checks: paymentChecks,
   });
 
+  // ── Section 6.5: KSeF Semantic Validation ──
+  const semanticChecks: ValidationDetailCheck[] = [];
+
+  // P_12 → P_13 cross-check
+  semanticChecks.push({
+    name: 'P_12 line totals match P_13 summary',
+    status: bizErrors.some(e => e.rule === 'p12_p13_mismatch') ? 'fail' : 'pass',
+    message: bizErrors.some(e => e.rule === 'p12_p13_mismatch')
+      ? `Mismatch: line item net totals per VAT rate do not match P_13 summary fields`
+      : 'Line item totals per VAT rate match P_13 summary fields',
+  });
+
+  // Orphan P_13 fields
+  semanticChecks.push({
+    name: 'No orphan P_13 fields',
+    status: bizErrors.some(e => e.rule === 'orphan_p13_field') ? 'fail' : 'pass',
+    message: bizErrors.some(e => e.rule === 'orphan_p13_field')
+      ? 'P_13 fields exist with no corresponding line items'
+      : 'All P_13 fields have corresponding line items',
+  });
+
+  // Correction linkage — NrKSeFN
+  if (docType === 'CORRECTION') {
+    const correctedKsefNo = (invoice as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no;
+    const hasKsefRef = !!correctedKsefNo?.trim();
+    semanticChecks.push({
+      name: 'Original KSeF Number (NrKSeFN)',
+      status: bizErrors.some(e => e.rule === 'missing_nr_ksef_corrected' || e.rule === 'nr_ksef_mismatch') ? 'fail'
+        : bizWarnings.some(w => w.rule === 'missing_corrected_ksef_no') ? 'warning'
+        : hasKsefRef ? 'pass' : 'warning',
+      message: hasKsefRef
+        ? `Referenced: ${correctedKsefNo}`
+        : 'No KSeF number for corrected invoice — KSeF may reject if original was submitted',
+    });
+
+    // Correction category transition
+    const negWarnings = bizWarnings.filter(w => w.rule === 'negative_p13_correction');
+    semanticChecks.push({
+      name: 'Correction VAT Category Transition',
+      status: negWarnings.length > 0 ? 'warning' : 'pass',
+      message: negWarnings.length > 0
+        ? `${negWarnings.length} category reversal(s) detected — verify original had these categories`
+        : 'No category reversals requiring attention',
+    });
+  }
+
+  // VAT mapping traceability — each P_13 field has traceable source
+  const allTraceable = summary.groups.every(g => g.lineTraces.length > 0);
+  semanticChecks.push({
+    name: 'VAT Mapping Traceability',
+    status: allTraceable ? 'pass' : 'fail',
+    message: allTraceable
+      ? `All ${summary.groups.length} P_13 field(s) have traceable line-item sources`
+      : 'Some P_13 fields lack line-item traces',
+  });
+
+  // OSS / P_13_5 review
+  const hasP13_5 = summary.emittedP13Fields.includes('P_13_5');
+  const zeroGroup = summary.groups.find(g => g.p13Element === 'P_13_5');
+  if (hasP13_5 && zeroGroup) {
+    semanticChecks.push({
+      name: 'P_13_5 (0% domestic) Justification',
+      status: 'pass',
+      message: `P_13_5 emitted for 0% domestic rate — net: ${zeroGroup.netTotal.toFixed(2)}`,
+      detail: zeroGroup.businessReason,
+    });
+  }
+
+  sections.push({
+    name: 'KSeF Semantic Validation',
+    status: semanticChecks.some(c => c.status === 'fail') ? 'fail' : semanticChecks.some(c => c.status === 'warning') ? 'warning' : 'pass',
+    checks: semanticChecks,
+  });
+
   // ── Section 7: Optional Sections (NoweSrodkiTransportu / PMarzy) ──
   const optionalChecks: ValidationDetailCheck[] = [];
   const flags = invoice.specialProcedure;

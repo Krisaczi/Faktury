@@ -21,20 +21,21 @@ export interface P13FieldDef {
   hasVat:          boolean;
   order:           number;
   aggregatesWith?: string;
+  businessReason:  string;
 }
 
 export const P13_FIELDS: Record<string, P13FieldDef> = {
-  '23':    { element: 'P_13_1',   p12Value: '23',    hasVat: true,  order: 1 },
-  '8':     { element: 'P_13_2',   p12Value: '8',     hasVat: true,  order: 2 },
-  '5':     { element: 'P_13_3',   p12Value: '5',     hasVat: true,  order: 3 },
-  '0':     { element: 'P_13_5',   p12Value: '0',     hasVat: false, order: 5 },
-  '0_kr':  { element: 'P_13_6_1', p12Value: '0 KR',  hasVat: false, order: 6 },
-  '0_wdt': { element: 'P_13_6_2', p12Value: '0 WDT', hasVat: false, order: 6 },
-  '0_ex':  { element: 'P_13_6_3', p12Value: '0 EX',  hasVat: false, order: 6 },
-  'zw':    { element: 'P_13_7',   p12Value: 'zw',    hasVat: false, order: 7 },
-  'np':    { element: 'P_13_8',   p12Value: 'np I',  hasVat: false, order: 8 },
-  'np_ii': { element: 'P_13_8',   p12Value: 'np II', hasVat: false, order: 8, aggregatesWith: 'np' },
-  'oo':    { element: 'P_13_10',  p12Value: 'oo',    hasVat: false, order: 10 },
+  '23':    { element: 'P_13_1',   p12Value: '23',    hasVat: true,  order: 1,  businessReason: 'Standard 23% VAT rate' },
+  '8':     { element: 'P_13_2',   p12Value: '8',     hasVat: true,  order: 2,  businessReason: 'Reduced 8% VAT rate' },
+  '5':     { element: 'P_13_3',   p12Value: '5',     hasVat: true,  order: 3,  businessReason: 'Reduced 5% VAT rate' },
+  '0':     { element: 'P_13_5',   p12Value: '0',     hasVat: false, order: 5,  businessReason: 'Zero-rated domestic transaction (0% VAT)' },
+  '0_kr':  { element: 'P_13_6_1', p12Value: '0 KR',  hasVat: false, order: 6,  businessReason: 'Zero-rated intra-community supply (WDT)' },
+  '0_wdt': { element: 'P_13_6_2', p12Value: '0 WDT', hasVat: false, order: 6,  businessReason: 'Zero-rated intra-community acquisition (WNT)' },
+  '0_ex':  { element: 'P_13_6_3', p12Value: '0 EX',  hasVat: false, order: 6,  businessReason: 'Zero-rated export transaction' },
+  'zw':    { element: 'P_13_7',   p12Value: 'zw',    hasVat: false, order: 7,  businessReason: 'VAT-exempt transaction (Art. 43 ust. 1)' },
+  'np':    { element: 'P_13_8',   p12Value: 'np I',  hasVat: false, order: 8,  businessReason: 'Not subject to VAT — outside scope (np I)' },
+  'np_ii': { element: 'P_13_8',   p12Value: 'np II', hasVat: false, order: 8,  businessReason: 'Not subject to VAT — outside scope (np II)', aggregatesWith: 'np' },
+  'oo':    { element: 'P_13_10',  p12Value: 'oo',    hasVat: false, order: 10, businessReason: 'Reverse charge transaction (odwrotne obciążenie)' },
 };
 
 /** P_14 element for each taxable rate. */

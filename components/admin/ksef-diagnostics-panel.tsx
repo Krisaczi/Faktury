@@ -21,6 +21,8 @@ import {
   AlertOctagon,
   Code2,
   GitCompare,
+  Search,
+  FileSearch,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -116,6 +118,14 @@ interface ValidationSection {
   checks: ValidationSectionCheck[];
 }
 
+interface VatLineTrace {
+  linePosition: number;
+  lineName: string;
+  rawRate: string;
+  netAmount: number;
+  vatAmount: number;
+}
+
 interface VatSummaryGroup {
   rate: string;
   p12Value: string;
@@ -125,6 +135,8 @@ interface VatSummaryGroup {
   vatTotal: number;
   grossTotal: number;
   order: number;
+  businessReason: string;
+  lineTraces: VatLineTrace[];
 }
 
 interface VatSummary {
@@ -308,6 +320,147 @@ function XmlViewer({ xml, invoiceId }: { xml: string; invoiceId: string }) {
 }
 
 // ─── Validation Report View (6 sections) ─────────────────────────────────────
+
+// ─── KSeF Semantic Validation View ───────────────────────────────────────────
+
+function SemanticValidationView({
+  report,
+  vatSummary,
+  correctionInfo,
+  correctedInvoiceNumber,
+  correctedInvoiceDate,
+  correctedInvoiceKsefNo,
+}: {
+  report: PreSubmissionReport;
+  vatSummary: VatSummary | null;
+  correctionInfo: CorrectionInfo | null;
+  correctedInvoiceNumber: string | null;
+  correctedInvoiceDate: string | null;
+  correctedInvoiceKsefNo: string | null;
+}) {
+  const [open, setOpen] = useState(true);
+
+  const semanticSection = report.sections.find(s => s.name === 'KSeF Semantic Validation');
+  if (!semanticSection) return null;
+
+  const hasFail = semanticSection.status === 'fail';
+  const hasWarning = semanticSection.status === 'warning';
+
+  return (
+    <div className={cn(
+      'rounded-lg border transition-colors',
+      hasFail
+        ? 'border-red-200 dark:border-red-800/50'
+        : hasWarning
+          ? 'border-amber-200 dark:border-amber-800/50'
+          : 'border-emerald-200 dark:border-emerald-800/50',
+    )}>
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+        <ShieldCheck className="w-4 h-4 text-slate-500" />
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+          KSeF Semantic Validation
+        </span>
+        {hasFail
+          ? <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 gap-1"><XCircle className="w-3 h-3" /> Issues</Badge>
+          : hasWarning
+            ? <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 gap-1"><AlertTriangle className="w-3 h-3" /> Warnings</Badge>
+            : <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 gap-1"><CheckCircle className="w-3 h-3" /> Passed</Badge>}
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-3">
+
+          {/* Semantic checks */}
+          <div className="space-y-1.5">
+            {semanticSection.checks.map((check) => (
+              <div key={check.name} className="flex items-start gap-2 text-xs">
+                {check.status === 'pass'
+                  ? <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  : check.status === 'warning'
+                    ? <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                    : <XCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />}
+                <div className="min-w-0 flex-1">
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">{check.name}:</span>{' '}
+                  <span className={cn(
+                    check.status === 'pass' ? 'text-slate-500 dark:text-slate-400' : '',
+                    check.status === 'warning' ? 'text-amber-600 dark:text-amber-500' : '',
+                    check.status === 'fail' ? 'text-red-600 dark:text-red-400' : '',
+                  )}>{check.message}</span>
+                  {check.detail && <div className="text-[10px] text-slate-400 mt-0.5">{check.detail}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Correction linkage review */}
+          {correctionInfo && (
+            <div className="rounded-md border border-slate-100 dark:border-slate-800 px-2.5 py-2">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                <FileSearch className="w-3.5 h-3.5" />
+                Correction Linkage Review
+              </div>
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 w-32">Original Number:</span>
+                  <code className="font-mono text-slate-600 dark:text-slate-400">{correctedInvoiceNumber ?? '—'}</code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 w-32">Original Date:</span>
+                  <code className="font-mono text-slate-600 dark:text-slate-400">{correctedInvoiceDate ?? '—'}</code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 w-32">Original KSeF No:</span>
+                  {correctedInvoiceKsefNo ? (
+                    <code className="font-mono text-emerald-600 dark:text-emerald-400">{correctedInvoiceKsefNo}</code>
+                  ) : (
+                    <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Missing — KSeF may reject
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 w-32">Reference Status:</span>
+                  {correctedInvoiceKsefNo
+                    ? <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">Linked</Badge>
+                    : <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0">Unlinked</Badge>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Debug mode: VAT Category → P_13 Field → Amount → Reason */}
+          <div className="rounded-md border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/30 text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+              <Terminal className="w-3.5 h-3.5" />
+              Debug: VAT Category → P_13 → Amount → Reason
+            </div>
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
+              {(vatSummary?.groups ?? []).map((group) => (
+                <div key={`debug-${group.p13Element}`} className="px-2.5 py-1.5 text-[10px] font-mono">
+                  <span className="text-blue-600 dark:text-blue-400">{group.p12Value}</span>
+                  <span className="text-slate-400"> → </span>
+                  <span className="text-amber-700 dark:text-amber-400">{group.p13Element}</span>
+                  <span className="text-slate-400"> → </span>
+                  <span className={cn(
+                    group.netTotal < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400',
+                  )}>{group.netTotal.toFixed(2)}</span>
+                  <span className="text-slate-400"> → </span>
+                  <span className="text-slate-500 dark:text-slate-400">{group.businessReason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ValidationReportView({ report }: { report: PreSubmissionReport }) {
   const [open, setOpen] = useState(!report.readyForKsef);
@@ -508,6 +661,77 @@ function VatAuditView({
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* VAT Mapping Trace — per-line-item traceability */}
+          <div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <Search className="w-3.5 h-3.5" />
+              VAT Mapping Trace (per line item)
+            </div>
+            <div className="space-y-1.5">
+              {summary.groups.map((group) => (
+                <div key={`trace-${group.p13Element}`} className="rounded-md border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  <div className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/30 text-xs flex items-center gap-2">
+                    <code className="font-mono text-slate-600 dark:text-slate-400">{group.p13Element}</code>
+                    <Badge className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">{group.p12Value}</Badge>
+                    <span className="text-slate-400 ml-auto">{group.lineTraces.length} line(s)</span>
+                  </div>
+                  <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                    {group.lineTraces.map((lt, i) => (
+                      <div key={i} className="px-2.5 py-1.5 grid grid-cols-1 sm:grid-cols-4 gap-1.5 text-[10px]">
+                        <div>
+                          <span className="text-slate-400">Line:</span>
+                          <code className="font-mono text-slate-600 dark:text-slate-400 ml-1">#{lt.linePosition}</code>
+                          <span className="text-slate-400 ml-1.5 truncate">{lt.lineName}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">VAT Rate:</span>
+                          <code className="font-mono text-slate-600 dark:text-slate-400 ml-1">{lt.rawRate}</code>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Mapped To:</span>
+                          <code className="font-mono text-amber-700 dark:text-amber-400 ml-1">{group.p13Element}</code>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400">Net:</span>
+                          <code className="font-mono text-slate-600 dark:text-slate-400 ml-1">{lt.netAmount.toFixed(2)}</code>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mapping Audit — category to P_13 with reason */}
+          <div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <FileSearch className="w-3.5 h-3.5" />
+              Mapping Audit (category → P_13 field with reason)
+            </div>
+            <div className="space-y-2">
+              {summary.groups.map((group) => (
+                <div key={`audit-${group.p13Element}`} className="rounded-md border border-slate-100 dark:border-slate-800 px-2.5 py-2">
+                  <div className="flex items-center gap-2 text-xs mb-1">
+                    <span className="text-slate-400 font-medium">Detected:</span>
+                    <Badge className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">{group.p12Value}</Badge>
+                    <span className="text-slate-400">→</span>
+                    <span className="text-slate-400 font-medium">Generated:</span>
+                    <code className="font-mono text-amber-700 dark:text-amber-400">{group.p13Element}</code>
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="text-slate-400 font-medium">Reason: </span>
+                    {group.businessReason}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    <span className="font-medium">Amount: </span>
+                    <code className="font-mono">{group.netTotal.toFixed(2)}</code>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1402,6 +1626,18 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
               </ul>
             )}
           </div>
+        )}
+
+        {/* ── KSeF Semantic Validation ── */}
+        {data.preSubmissionReport && (
+          <SemanticValidationView
+            report={data.preSubmissionReport}
+            vatSummary={data.vatSummary}
+            correctionInfo={data.correctionInfo}
+            correctedInvoiceNumber={data.correctedInvoiceNumber}
+            correctedInvoiceDate={data.correctedInvoiceDate}
+            correctedInvoiceKsefNo={data.correctedInvoiceKsefNo}
+          />
         )}
 
         {/* ── Validation Groups ── */}

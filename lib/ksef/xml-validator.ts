@@ -397,6 +397,149 @@ function validateBusinessRules(
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(origDate)) {
       errors.push({ category: 'business', severity: 'error', rule: 'invalid_corrected_invoice_date', element: 'DataWystFaKorygowanej', message: `Corrected invoice date "${origDate}" is not in YYYY-MM-DD format` });
     }
+    // ── Rule 5a: NrKSeFN required when original invoice was submitted to KSeF ──
+    const correctedKsefNo = (invoice as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no;
+    if (correctedKsefNo && correctedKsefNo.trim()) {
+      if (!hasElement(xml, 'NrKSeFN')) {
+        errors.push({
+          category: 'business',
+          severity: 'error',
+          rule: 'missing_nr_ksef_corrected',
+          element: 'NrKSeFN',
+          message: 'Corrected invoice has a KSeF number (corrected_invoice_ksef_no) but NrKSeFN is missing from XML',
+          detail: `Expected NrKSeFN = ${correctedKsefNo}`,
+        });
+      } else {
+        const xmlKsefNo = extractElement(xml, 'NrKSeFN');
+        if (xmlKsefNo !== correctedKsefNo.trim()) {
+          errors.push({
+            category: 'business',
+            severity: 'error',
+            rule: 'nr_ksef_mismatch',
+            element: 'NrKSeFN',
+            message: `NrKSeFN in XML ("${xmlKsefNo}") does not match corrected_invoice_ksef_no ("${correctedKsefNo}")`,
+          });
+        }
+      }
+    }
+    // ── Rule 5b: Warn if correction has no KSeF number for original ──
+    if (!correctedKsefNo || !correctedKsefNo.trim()) {
+      warnings.push({
+        category: 'business',
+        severity: 'warning',
+        rule: 'missing_corrected_ksef_no',
+        element: 'NrKSeFN',
+        message: 'Correction invoice does not reference the original KSeF number — KSeF may reject if the original was submitted to KSeF',
+        detail: 'If the original invoice was submitted to KSeF, NrKSeFN (NrKSeFFaKorygowanej) is required',
+      });
+    }
+  }
+
+  // ── Rule 14: P_12 line-item totals must match P_13 summary fields ──
+  // KSeF semantic validation checks that the sum of net amounts per VAT rate
+  // in FaWiersz elements equals the corresponding P_13_* summary field.
+  const p12ValuesInXml = extractAllElements(xml, 'P_12');
+  const netValuesInXml = extractAllElements(xml, 'P_11');
+  if (p12ValuesInXml.length > 0 && netValuesInXml.length > 0) {
+    const rateTotals = new Map<string, number>();
+    for (let i = 0; i < p12ValuesInXml.length; i++) {
+      const p12 = p12ValuesInXml[i];
+      const net = parseDecimal(netValuesInXml[i]) ?? 0;
+      const def = P13_FIELDS[p12];
+      if (!def) continue;
+      const groupKey = def.aggregatesWith ?? p12;
+      const existing = rateTotals.get(groupKey) ?? 0;
+      rateTotals.set(groupKey, existing + net);
+    }
+    for (const [rate, lineSum] of Array.from(rateTotals.entries())) {
+      const def = P13_FIELDS[rate];
+      if (!def) continue;
+      const p13Val = parseDecimal(extractElement(xml, def.element));
+      if (p13Val != null) {
+        const lineSumR = Math.round(lineSum * 100) / 100;
+        const p13ValR = Math.round(p13Val * 100) / 100;
+        if (lineSumR !== p13ValR) {
+          errors.push({
+            category: 'business',
+            severity: 'error',
+            rule: 'p12_p13_mismatch',
+            element: def.element,
+            message: `${def.element} (${p13Val.toFixed(2)}) does not match sum of P_11 net values for rate ${def.p12Value} (${lineSum.toFixed(2)})`,
+            detail: `Line items with P_12="${def.p12Value}" sum to ${lineSum.toFixed(2)}, but ${def.element} = ${p13Val.toFixed(2)}`,
+          });
+        }
+      }
+    }
+  }
+
+  // ── Rule 15: Correction VAT category transition validation ──
+  // When a correction changes a line item's VAT category (e.g. np → zw),
+  // KSeF requires that BOTH the negative (reversal of old) and positive
+  // (new category) values appear correctly in the P_13 summary.
+  // The engine handles this via line items with negative amounts, but we
+  // verify the result is semantically valid.
+  if (docType === 'CORRECTION') {
+    const itemsByRate = new Map<string, number>();
+    for (const item of invoice.items) {
+      const rate = (item.vat_rate ?? '23') as string;
+      const def = P13_FIELDS[rate];
+      if (!def) continue;
+      const groupKey = def.aggregatesWith ?? rate;
+      const existing = itemsByRate.get(groupKey) ?? 0;
+      itemsByRate.set(groupKey, existing + (item.net_amount ?? 0));
+    }
+    // Check for mixed-sign groups (both positive and negative within same rate)
+    const positiveRates: string[] = [];
+    const negativeRates: string[] = [];
+    for (const [rate, total] of Array.from(itemsByRate.entries())) {
+      const totalR = Math.round(total * 100) / 100;
+      if (totalR > 0) positiveRates.push(rate);
+      if (totalR < 0) negativeRates.push(rate);
+    }
+    // If a rate has negative net total (reversal) but zero net after aggregation,
+    // it should NOT produce a P_13 field (already checked by Rule 2b).
+    // If a rate has negative net, it means the correction is reducing that category.
+    for (const rate of negativeRates) {
+      const def = P13_FIELDS[rate];
+      if (!def) continue;
+      const p13Val = parseDecimal(extractElement(xml, def.element));
+      if (p13Val != null && p13Val < 0) {
+        warnings.push({
+          category: 'business',
+          severity: 'warning',
+          rule: 'negative_p13_correction',
+          element: def.element,
+          message: `${def.element} has negative value ${p13Val.toFixed(2)} — correction reverses ${def.p12Value} category`,
+          detail: 'This is valid for corrections but verify the original invoice had this VAT category',
+        });
+      }
+    }
+  }
+
+  // ── Rule 16: P_13 field present without corresponding line items ──
+  // (Already partially covered by Rule 2, but this catches edge cases where
+  // a P_13 field exists but no P_12 line items map to it)
+  for (const p13Elem of Array.from(perRateElems)) {
+    if (hasElement(xml, p13Elem)) {
+      const ratesForElement = Object.entries(P13_FIELDS)
+        .filter(([, def]) => def.element === p13Elem)
+        .map(([r]) => r);
+      const hasMatchingLines = invoice.items.some(item => {
+        const rate = (item.vat_rate ?? '23') as string;
+        const def = P13_FIELDS[rate];
+        if (!def) return false;
+        return def.element === p13Elem || (def.aggregatesWith && P13_FIELDS[def.aggregatesWith]?.element === p13Elem);
+      });
+      if (!hasMatchingLines && !ratesForElement.some(r => presentRates.has(r))) {
+        errors.push({
+          category: 'business',
+          severity: 'error',
+          rule: 'orphan_p13_field',
+          element: p13Elem,
+          message: `${p13Elem} present in XML but no line items map to it (no P_12 values produce this summary field)`,
+        });
+      }
+    }
   }
 
   // ── Rule 6: Due date format ──

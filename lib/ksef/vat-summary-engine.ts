@@ -19,6 +19,19 @@ import { P13_FIELDS, P14_FIELDS, perRateP13Elements, faElementPosition } from '.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface VatLineTrace {
+  /** 1-based position of the source invoice line item. */
+  linePosition:    number;
+  /** Name/description of the source line item. */
+  lineName:        string;
+  /** Raw vat_rate value from the line item. */
+  rawRate:         string;
+  /** Net amount from this line. */
+  netAmount:       number;
+  /** VAT amount from this line. */
+  vatAmount:       number;
+}
+
 export interface VatCategoryGroup {
   /** Internal rate code (e.g. '23', '8', '0_kr', 'np'). */
   rate:        string;
@@ -36,6 +49,10 @@ export interface VatCategoryGroup {
   grossTotal:  number;
   /** Position in the FA(3) element sequence. */
   order:       number;
+  /** Business reason this category maps to its P_13 field. */
+  businessReason:  string;
+  /** Per-line-item traces that were aggregated into this group. */
+  lineTraces:  VatLineTrace[];
 }
 
 export interface VatSummaryResult {
@@ -71,7 +88,8 @@ function aggregateItems(
 ): Map<string, VatCategoryGroup> {
   const map = new Map<string, VatCategoryGroup>();
 
-  for (const item of items) {
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
     const rawRate = (item.vat_rate ?? '23') as string;
     const def = P13_FIELDS[rawRate];
     if (!def) continue;
@@ -80,21 +98,32 @@ function aggregateItems(
     const groupKey = def.aggregatesWith ?? rawRate;
     const groupDef = P13_FIELDS[groupKey] ?? def;
 
+    const lineTrace: VatLineTrace = {
+      linePosition: item.position ?? idx + 1,
+      lineName:     item.name ?? `Line ${idx + 1}`,
+      rawRate,
+      netAmount:    item.net_amount,
+      vatAmount:    item.vat_amount,
+    };
+
     const existing = map.get(groupKey);
     if (existing) {
       existing.netTotal   += item.net_amount;
       existing.vatTotal   += item.vat_amount;
       existing.grossTotal += item.gross_amount;
+      existing.lineTraces.push(lineTrace);
     } else {
       map.set(groupKey, {
-        rate:       groupKey,
-        p12Value:   groupDef.p12Value,
-        p13Element: groupDef.element,
-        p14Element: P14_FIELDS[groupKey] ?? null,
-        netTotal:   item.net_amount,
-        vatTotal:   item.vat_amount,
-        grossTotal: item.gross_amount,
-        order:      groupDef.order,
+        rate:           groupKey,
+        p12Value:       groupDef.p12Value,
+        p13Element:     groupDef.element,
+        p14Element:     P14_FIELDS[groupKey] ?? null,
+        netTotal:       item.net_amount,
+        vatTotal:       item.vat_amount,
+        grossTotal:     item.gross_amount,
+        order:          groupDef.order,
+        businessReason: groupDef.businessReason,
+        lineTraces:     [lineTrace],
       });
     }
   }
