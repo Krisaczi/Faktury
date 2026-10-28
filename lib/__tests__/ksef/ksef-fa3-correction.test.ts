@@ -131,27 +131,16 @@ describe('FA(3) — VAT Exempt Correction Invoice', () => {
     assert.ok(result.summaryCheck!.consistent, `Summary should be consistent: ${JSON.stringify(result.summaryCheck)}`);
   });
 
-  it('P_13_9 comes after P_13_7 in the XML', () => {
+  it('does NOT emit P_13_9 (conditional field) for zw-only correction', () => {
     const xml = buildFa2Xml(exemptCorrection);
-    const p13_7Pos = xml.indexOf('<P_13_7');
-    const p13_9Pos = xml.indexOf('<P_13_9');
-    assert.ok(p13_7Pos > -1, 'P_13_7 should be present');
-    assert.ok(p13_9Pos > -1, 'P_13_9 should be present');
-    assert.ok(p13_7Pos < p13_9Pos, 'P_13_7 must come before P_13_9');
-  });
-
-  it('P_15 comes after P_13_9 in the XML', () => {
-    const xml = buildFa2Xml(exemptCorrection);
-    const p13_9Pos = xml.indexOf('<P_13_9');
-    const p15Pos = xml.indexOf('<P_15');
-    assert.ok(p13_9Pos < p15Pos, 'P_13_9 must come before P_15');
+    assert.ok(!xml.includes('<P_13_9'), 'P_13_9 should not be emitted (conditional field for Art. 100 services)');
   });
 });
 
 // ─── Summary Consistency Checks ───────────────────────────────────────────────
 
 describe('FA(3) — Summary consistency validation', () => {
-  it('passes validation when SUM(P_13_*) === P_13_9 === P_15 for 23% invoice', () => {
+  it('passes validation when SUM(P_13_*) === P_15 for 23% invoice', () => {
     const inv = makeInvoice();
     const xml = buildFa2Xml(inv);
     const result = validateFa3Xml(xml, inv);
@@ -201,7 +190,8 @@ describe('FA(3) — Summary consistency validation', () => {
     });
     const xml = buildFa2Xml(inv);
     const result = validateFa3Xml(xml, inv);
-    // P_13_9 is computed from line items (1000) but inv.net_total is 1500
+    // P_13_9 is no longer emitted as total net; P_15 is computed from line items
+    // inv.net_total is 1500 but line items sum to 1000 — must fail
     assert.ok(!result.valid, 'Should fail validation when net_total mismatch');
     assert.ok(
       result.errors.some(e => e.rule === 'summary_net_total_mismatch'),
@@ -383,7 +373,7 @@ describe('FA(3) — spurious P_13 field detection', () => {
     const inv = makeInvoice(); // 23% invoice
     const xml = buildFa2Xml(inv);
     // Inject a spurious P_13_8
-    const tamperedXml = xml.replace('<P_13_9>', '<P_13_8>100.00</P_13_8>\n    <P_13_9>');
+    const tamperedXml = xml.replace('<P_15>', '<P_13_8>100.00</P_13_8>\n    <P_15>');
     const result = validateFa3Xml(tamperedXml, inv);
     assert.ok(
       result.errors.some(e => e.rule === 'spurious_p13_field' && e.element === 'P_13_8'),
@@ -475,10 +465,8 @@ describe('FA(3) — element ordering', () => {
     });
     const xml = buildFa2Xml(inv);
     const p13_8Pos = xml.indexOf('<P_13_8');
-    const p13_9Pos = xml.indexOf('<P_13_9');
     const p13_10Pos = xml.indexOf('<P_13_10');
-    assert.ok(p13_8Pos < p13_9Pos, 'P_13_8 must come before P_13_9');
-    assert.ok(p13_9Pos < p13_10Pos, 'P_13_9 must come before P_13_10');
+    assert.ok(p13_8Pos < p13_10Pos, 'P_13_8 must come before P_13_10');
   });
 });
 

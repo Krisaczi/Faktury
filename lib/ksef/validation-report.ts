@@ -44,7 +44,7 @@ export interface PreSubmissionReport {
   detectedVatCategories: string[];
   emittedP13Fields:     string[];
   emittedP14Fields:     string[];
-  computedP13_9:        number;
+  computedTotalNet:     number;
   computedP15:          number;
   invoiceNetTotal:      number;
   invoiceGrossTotal:    number;
@@ -160,20 +160,15 @@ export function generateValidationReport(
   const p15Diff = Math.round((summary.p15 - (invoice.gross_total ?? 0)) * 100) / 100;
 
   mathChecks.push({
-    name: 'SUM(P_13_*) = P_13_9',
-    status: xmlValidation.errors.some(e => e.rule === 'summary_p13_9_mismatch') ? 'fail' : 'pass',
-    message: `SUM(P_13_*) = ${summary.p13Sum.toFixed(2)}, P_13_9 = ${summary.p13_9.toFixed(2)}`,
-  });
-  mathChecks.push({
-    name: 'P_15 = P_13_9 + SUM(P_14_*)',
+    name: 'P_15 = SUM(P_13_*) + SUM(P_14_*)',
     status: xmlValidation.errors.some(e => e.rule === 'summary_p15_mismatch') ? 'fail' : 'pass',
-    message: `P_15 = ${summary.p15.toFixed(2)}, P_13_9 + P_14 = ${(summary.p13_9 + summary.p14Sum).toFixed(2)}`,
-    detail: `P_13_9=${summary.p13_9.toFixed(2)}, SUM(P_14_*)=${summary.p14Sum.toFixed(2)}`,
+    message: `P_15 = ${summary.p15.toFixed(2)}, SUM(P_13_*) + SUM(P_14_*) = ${(summary.totalNet + summary.p14Sum).toFixed(2)}`,
+    detail: `SUM(P_13_*)=${summary.totalNet.toFixed(2)}, SUM(P_14_*)=${summary.p14Sum.toFixed(2)}`,
   });
   mathChecks.push({
-    name: 'P_13_9 matches invoice net_total',
+    name: 'SUM(P_13_*) matches invoice net_total',
     status: xmlValidation.errors.some(e => e.rule === 'summary_net_total_mismatch') ? 'fail' : 'pass',
-    message: `P_13_9 = ${summary.p13_9.toFixed(2)}, net_total = ${(invoice.net_total ?? 0).toFixed(2)}`,
+    message: `SUM(P_13_*) = ${summary.totalNet.toFixed(2)}, net_total = ${(invoice.net_total ?? 0).toFixed(2)}`,
   });
   mathChecks.push({
     name: 'P_15 matches invoice gross_total',
@@ -384,7 +379,6 @@ export function generateValidationReport(
   const hasWarning = sections.some(s => s.status === 'warning');
   const overallStatus: 'ready' | 'blocked' | 'warning' = hasFail ? 'blocked' : hasWarning ? 'warning' : 'ready';
   const mathConsistent = !xmlValidation.errors.some(e =>
-    e.rule === 'summary_p13_9_mismatch' ||
     e.rule === 'summary_p15_mismatch' ||
     e.rule === 'summary_net_total_mismatch' ||
     e.rule === 'summary_gross_total_mismatch',
@@ -399,7 +393,7 @@ export function generateValidationReport(
     detectedVatCategories: summary.detectedRates,
     emittedP13Fields: summary.emittedP13Fields,
     emittedP14Fields: summary.emittedP14Fields,
-    computedP13_9: summary.p13_9,
+    computedTotalNet: summary.totalNet,
     computedP15: summary.p15,
     invoiceNetTotal: invoice.net_total ?? 0,
     invoiceGrossTotal: invoice.gross_total ?? 0,

@@ -92,7 +92,7 @@ export const FA_ELEMENT_SEQUENCE: FaElementDef[] = [
   { name: 'P_13_6_3',  required: false, after: ['P_13_6_2'] },
   { name: 'P_13_7',    required: false, after: ['P_13_6_3'] },
   { name: 'P_13_8',    required: false, after: ['P_13_7'] },
-  { name: 'P_13_9',    required: true,  after: ['P_13_8'] },
+  { name: 'P_13_9',    required: false, after: ['P_13_8'] },
   { name: 'P_13_10',   required: false, after: ['P_13_9'] },
   { name: 'P_13_11',   required: false, after: ['P_13_10'] },
   { name: 'P_15',      required: true,  after: ['P_13_11'] },

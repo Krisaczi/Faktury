@@ -227,7 +227,7 @@ describe('Correction serializer — original invoice references', () => {
     assert.ok(xml.includes('<NrFaKorygowanej>FV/2026/09/001</NrFaKorygowanej>'), 'Must include original number');
   });
 
-  it('includes NrKSeFN when corrected_invoice_ksef_no is available', () => {
+  it('includes NrKSeF + NrKSeFFaKorygowanej when corrected_invoice_ksef_no is available', () => {
     const inv = makeCorrection({
       corrected_invoice_ksef_no: 'KSeF-2026-09-001',
       net_total: -100, vat_total: -23, gross_total: -123,
@@ -238,10 +238,12 @@ describe('Correction serializer — original invoice references', () => {
       ] as never,
     });
     const xml = buildFa2Xml(inv);
-    assert.ok(xml.includes('<NrKSeFN>KSeF-2026-09-001</NrKSeFN>'), 'Must include NrKSeFN when available');
+    assert.ok(xml.includes('<NrKSeF>1</NrKSeF>'), 'Must include NrKSeF=1 marker');
+    assert.ok(xml.includes('<NrKSeFFaKorygowanej>KSeF-2026-09-001</NrKSeFFaKorygowanej>'), 'Must include NrKSeFFaKorygowanej with KSeF number');
+    assert.ok(!xml.includes('<NrKSeFN'), 'NrKSeFN must not appear when KSeF number is available');
   });
 
-  it('does not include NrKSeFN when not available', () => {
+  it('emits NrKSeFN=1 when corrected_invoice_ksef_no is not available (original outside KSeF)', () => {
     const inv = makeCorrection({
       corrected_invoice_ksef_no: null,
       net_total: -100, vat_total: -23, gross_total: -123,
@@ -252,7 +254,8 @@ describe('Correction serializer — original invoice references', () => {
       ] as never,
     });
     const xml = buildFa2Xml(inv);
-    assert.ok(!xml.includes('<NrKSeFN'), 'NrKSeFN should not appear when not available');
+    assert.ok(xml.includes('<NrKSeFN>1</NrKSeFN>'), 'Must include NrKSeFN=1 when original was outside KSeF');
+    assert.ok(!xml.includes('<NrKSeFFaKorygowanej'), 'NrKSeFFaKorygowanej must not appear without KSeF number');
   });
 
   it('validator rejects correction without DaneFaKorygowanej', () => {
@@ -456,7 +459,7 @@ describe('Correction serializer — unit price rules', () => {
 // ─── Summary Validation: SUM(P_13) = P_15 ─────────────────────────────────────
 
 describe('Correction serializer — summary validation', () => {
-  it('SUM(P_13_*) = P_13_9 = P_15 for a value correction', () => {
+  it('SUM(P_13_*) = P_15 for a value correction', () => {
     const inv = makeCorrection({
       net_total: 200, vat_total: 46, gross_total: 246,
       items: [

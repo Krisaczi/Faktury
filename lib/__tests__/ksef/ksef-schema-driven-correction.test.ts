@@ -7,7 +7,7 @@
  * 3. NP corrections (np I and np II, with aggregation)
  * 4. Reverse charge corrections
  * 5. Mixed category corrections (multi-category reversal)
- * 6. Mathematical consistency (P_15 = P_13_9 + SUM(P_14_*))
+ * 6. Mathematical consistency (P_15 = SUM(P_13_*) + SUM(P_14_*))
  * 7. Business rule validation (contradictory categories, annotations)
  * 8. VAT summary engine (dynamic P_13 generation)
  * 9. Validation report generation
@@ -277,7 +277,7 @@ describe('Schema-driven FA(3) — mixed category corrections', () => {
     assert.ok(xml.includes('<P_13_6_1>-50.00</P_13_6_1>'), 'P_13_6_1 for 0_kr reversal');
     assert.ok(xml.includes('<P_13_8>-50.00</P_13_8>'), 'P_13_8 for np_ii reversal');
     assert.ok(xml.includes('<P_13_7>50.00</P_13_7>'), 'P_13_7 for zw');
-    assert.ok(xml.includes('<P_13_9>-50.00</P_13_9>'), 'P_13_9 = -50');
+    assert.ok(!xml.includes('<P_13_9'), 'P_13_9 should not be emitted (conditional field)');
     assert.ok(xml.includes('<P_15>-50.00</P_15>'), 'P_15 = -50');
     const result = validateFa3Xml(xml, inv);
     assert.ok(result.valid, `Should be valid: ${result.errors.map(e => e.message).join('; ')}`);
@@ -320,7 +320,7 @@ describe('Schema-driven FA(3) — mixed category corrections', () => {
 // ─── 6. Mathematical Consistency ──────────────────────────────────────────────
 
 describe('Schema-driven FA(3) — mathematical consistency', () => {
-  it('P_15 = P_13_9 + SUM(P_14_*) for 23% invoice', () => {
+  it('P_15 = SUM(P_13_*) + SUM(P_14_*) for 23% invoice', () => {
     const inv = makeInvoice({
       net_total: 1000, vat_total: 230, gross_total: 1230,
       items: [makeItem('23', 1000, 230, 1230)],
@@ -344,7 +344,7 @@ describe('Schema-driven FA(3) — mathematical consistency', () => {
     const summary = computeVatSummary([
       makeItem('23', 1000, 230, 1230),
     ]);
-    assert.equal(summary.p13_9, 1000);
+    assert.equal(summary.totalNet, 1000);
     assert.equal(summary.p15, 1230);
   });
 
@@ -431,8 +431,8 @@ describe('Schema-driven FA(3) — VAT summary engine', () => {
     const lines = buildVatSummaryXml(summary);
     assert.ok(lines.some(l => l.includes('<P_13_1>1000.00</P_13_1>')), 'P_13_1 line');
     assert.ok(lines.some(l => l.includes('<P_14_1>230.00</P_14_1>')), 'P_14_1 line');
-    assert.ok(lines.some(l => l.includes('<P_13_9>1000.00</P_13_9>')), 'P_13_9 line');
     assert.ok(lines.some(l => l.includes('<P_15>1230.00</P_15>')), 'P_15 line');
+    assert.ok(!lines.some(l => l.includes('<P_13_9')), 'No P_13_9 line (conditional field)');
   });
 
   it('detectedRates lists all categories from line items', () => {
@@ -450,6 +450,7 @@ describe('Schema-driven FA(3) — VAT summary engine', () => {
 describe('Schema-driven FA(3) — validation report', () => {
   it('generates a ready report for valid invoice', () => {
     const inv = makeInvoice({
+      document_type: 'INVOICE',
       net_total: 1000, vat_total: 230, gross_total: 1230,
       items: [makeItem('23', 1000, 230, 1230)],
     });
@@ -535,7 +536,7 @@ describe('Schema-driven FA(3) — schema definition', () => {
 
   it('perRateP13Elements returns unique elements in order', () => {
     const elems = perRateP13Elements();
-    // Should not include P_13_9 (it's the total, not per-rate)
+    // Should not include P_13_9 (conditional field, not per-rate)
     assert.ok(!elems.includes('P_13_9'), 'No P_13_9 in per-rate');
     // Should be in ascending order
     for (let i = 1; i < elems.length; i++) {

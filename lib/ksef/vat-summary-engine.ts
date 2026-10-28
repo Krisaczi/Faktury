@@ -5,9 +5,16 @@
  * This module is the single source of truth for:
  * - Which P_13_* fields are emitted (only categories that actually exist)
  * - Which P_14_* fields are emitted (only taxable rates with VAT amounts)
- * - P_13_9 (total net) = sum of all per-rate net totals
- * - P_15 (total gross) = P_13_9 + sum of all P_14_* VAT amounts
+ * - P_15 (total gross) = sum of all per-rate net totals + sum of all P_14_* VAT amounts
  * - Zero-net categories are never emitted
+ *
+ * P_13_9 is NOT the invoice total net. Per the FA(3) specification, P_13_9 is
+ * a conditional field: "Total value of the provision of services referred to in
+ * Article 100 sec. 1 item 4 of the Act" (cross-border services). It is only
+ * emitted when line items with the 'art100' VAT category are present.
+ *
+ * The invoice total net (for internal validation against invoice.net_total) is
+ * computed as `totalNet` — the sum of all active group net totals.
  *
  * No P_13 field is hardcoded — every field is derived from the line items
  * via the P13_FIELDS schema definition.
@@ -58,13 +65,13 @@ export interface VatCategoryGroup {
 export interface VatSummaryResult {
   /** Active categories (non-zero net), sorted by FA(3) element order. */
   groups:          VatCategoryGroup[];
-  /** P_13_9 = total net = sum of all group netTotal. */
-  p13_9:           number;
-  /** P_15 = total gross = p13_9 + sum of all group vatTotal. */
+  /** Total net = sum of all active group net totals (internal validation only). */
+  totalNet:        number;
+  /** P_15 = total gross = totalNet + sum of all group vatTotal. */
   p15:             number;
-  /** Sum of per-rate P_13 values (for validation: must equal p13_9). */
+  /** Sum of per-rate P_13 net values (for validation: must equal totalNet). */
   p13Sum:          number;
-  /** Sum of per-rate P_14 values (for validation: must equal total VAT). */
+  /** Sum of per-rate P_14 VAT values. */
   p14Sum:          number;
   /** List of P_13 element names that will be emitted, in order. */
   emittedP13Fields: string[];
@@ -139,13 +146,13 @@ function aggregateItems(
  *
  * 1. Aggregates line items by VAT category (with np/np_ii aggregation)
  * 2. Filters out zero-net categories (reversed-away rates produce no P_13 field)
- * 3. Computes P_13_9 = sum of all active group net totals
- * 4. Computes P_15 = P_13_9 + sum of all active group VAT totals
+ * 3. Computes totalNet = sum of all active group net totals
+ * 4. Computes P_15 = totalNet + sum of all active group VAT totals
  * 5. Returns the ordered list of P_13/P_14 fields to emit
  *
  * P_15 is computed from line items, NOT taken from inv.gross_total.
  * This guarantees mathematical consistency: P_15 always equals
- * P_13_9 + SUM(P_14_*).
+ * SUM(P_13_*) + SUM(P_14_*).
  */
 export function computeVatSummary(
   items: IssuedInvoiceWithItems['items'],
@@ -157,17 +164,17 @@ export function computeVatSummary(
     .filter(g => Math.round(g.netTotal * 100) / 100 !== 0)
     .sort((a, b) => a.order - b.order);
 
-  // P_13_9 = total net = sum of all active group net totals
-  const p13_9 = activeGroups.reduce((sum, g) => sum + g.netTotal, 0);
+  // Total net = sum of all active group net totals (internal validation only)
+  const totalNet = activeGroups.reduce((sum, g) => sum + g.netTotal, 0);
 
   // P_14 sum = total VAT = sum of all active group VAT totals
   const p14Sum = activeGroups.reduce((sum, g) => sum + g.vatTotal, 0);
 
-  // P_15 = P_13_9 + P_14 sum (net + VAT = gross)
-  const p15 = p13_9 + p14Sum;
+  // P_15 = totalNet + P_14 sum (net + VAT = gross)
+  const p15 = totalNet + p14Sum;
 
-  // P_13 sum = sum of per-rate P_13 values (must equal P_13_9)
-  const p13Sum = p13_9;
+  // P_13 sum = sum of per-rate P_13 values (must equal totalNet)
+  const p13Sum = totalNet;
 
   // Emitted P_13 fields in canonical order
   const emittedP13Fields: string[] = [];
@@ -195,7 +202,7 @@ export function computeVatSummary(
 
   return {
     groups:          activeGroups,
-    p13_9:           Math.round(p13_9 * 100) / 100,
+    totalNet:        Math.round(totalNet * 100) / 100,
     p15:             Math.round(p15 * 100) / 100,
     p13Sum:          Math.round(p13Sum * 100) / 100,
     p14Sum:          Math.round(p14Sum * 100) / 100,
@@ -209,11 +216,12 @@ export function computeVatSummary(
  * Generate the P_13/P_14/P_15 XML lines from a VAT summary.
  *
  * Each line is a complete XML element string (e.g. "    <P_13_1>1000.00</P_13_1>").
- * P_13_9 and P_15 are always emitted (required by FA(3)).
+ * P_15 is always emitted (required by FA(3)).
+ * P_13_9 is NOT emitted here — it is a conditional field for Art. 100 services,
+ * not the invoice total net.
  */
 export function buildVatSummaryXml(summary: VatSummaryResult): string[] {
   // Build all elements with their FA(3) sequence position, then sort.
-  // This ensures P_13_10 (oo) appears AFTER P_13_9, per the FA(3) XSD.
   const elements: { pos: number; line: string }[] = [];
 
   for (const group of summary.groups) {
@@ -228,12 +236,6 @@ export function buildVatSummaryXml(summary: VatSummaryResult): string[] {
       });
     }
   }
-
-  // P_13_9 = total net (required)
-  elements.push({
-    pos: faElementPosition('P_13_9'),
-    line: `    <P_13_9>${summary.p13_9.toFixed(2)}</P_13_9>`,
-  });
 
   // P_15 = total gross (required)
   elements.push({

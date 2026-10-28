@@ -92,7 +92,6 @@ interface XmlValidationResult {
   summaryCheck?: {
     p13Sum: number;
     p15: number;
-    p13_9: number;
     netTotal: number;
     grossTotal: number;
     consistent: boolean;
@@ -141,7 +140,7 @@ interface VatSummaryGroup {
 
 interface VatSummary {
   groups: VatSummaryGroup[];
-  p13_9: number;
+  totalNet: number;
   p15: number;
   p13Sum: number;
   p14Sum: number;
@@ -164,7 +163,7 @@ interface PreSubmissionReport {
   detectedVatCategories: string[];
   emittedP13Fields: string[];
   emittedP14Fields: string[];
-  computedP13_9: number;
+  computedTotalNet: number;
   computedP15: number;
   invoiceNetTotal: number;
   invoiceGrossTotal: number;
@@ -750,10 +749,9 @@ function VatAuditView({
             </div>
             <div className="font-mono text-[10px] space-y-0.5 ml-5">
               <div>SUM(P_13_*) = {summary.p13Sum.toFixed(2)}</div>
-              <div>P_13_9 = {summary.p13_9.toFixed(2)}</div>
               <div>SUM(P_14_*) = {summary.p14Sum.toFixed(2)}</div>
               <div className="border-t border-current/20 pt-0.5 mt-0.5">
-                P_15 = P_13_9 + SUM(P_14_*) = {(summary.p13_9 + summary.p14Sum).toFixed(2)}
+                P_15 = SUM(P_13_*) + SUM(P_14_*) = {(summary.totalNet + summary.p14Sum).toFixed(2)}
               </div>
               <div>Computed P_15 = {summary.p15.toFixed(2)}</div>
               {report && (
@@ -834,7 +832,6 @@ function XmlValidationView({ result }: { result: XmlValidationResult }) {
               </div>
               <div className="font-mono text-[10px] space-y-0.5 ml-5">
                 <div>SUM(P_13_*) = {result.summaryCheck.p13Sum.toFixed(2)}</div>
-                <div>P_13_9 = {result.summaryCheck.p13_9.toFixed(2)}</div>
                 <div>P_15 = {result.summaryCheck.p15.toFixed(2)}</div>
                 <div>net_total = {result.summaryCheck.netTotal.toFixed(2)}</div>
                 <div>gross_total = {result.summaryCheck.grossTotal.toFixed(2)}</div>
@@ -1365,7 +1362,7 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
       // eslint-disable-next-line no-console
       console.log('Emitted P_13 Fields:', rpt.emittedP13Fields);
       // eslint-disable-next-line no-console
-      console.log('Computed P_13_9:', rpt.computedP13_9.toFixed(2));
+      console.log('Computed Total Net:', rpt.computedTotalNet.toFixed(2));
       // eslint-disable-next-line no-console
       console.log('Computed P_15:', rpt.computedP15.toFixed(2));
       if (!rpt.mathConsistent) {

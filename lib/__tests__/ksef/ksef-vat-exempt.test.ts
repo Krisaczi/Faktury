@@ -89,9 +89,9 @@ describe('KSeF XML builder — VAT exempt (zw) invoices', () => {
     assert.ok(!xml.includes('P_13_6_1'), 'P_13_6_1 must not appear for zw invoices');
   });
 
-  it('includes P_13_9 (total net) for VAT exempt invoices', () => {
+  it('does NOT emit P_13_9 (conditional field) for VAT exempt invoices', () => {
     const xml = buildFa2Xml(exemptInvoice);
-    assert.ok(xml.includes('<P_13_9>50.00</P_13_9>'), 'P_13_9 (total net) should be present');
+    assert.ok(!xml.includes('<P_13_9'), 'P_13_9 should not be emitted (conditional field for Art. 100 services)');
   });
 
   it('sets P_18 to 2 (not applicable) for VAT exempt invoices, NOT 1 (reverse charge)', () => {

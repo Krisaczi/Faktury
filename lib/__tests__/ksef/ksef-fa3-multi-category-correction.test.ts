@@ -54,7 +54,7 @@ function makeInvoice(overrides: Partial<IssuedInvoiceWithItems> = {}): IssuedInv
  * - Line 2: reversal of a np II line (np_ii rate, negative net)
  * - Line 3: new zw line (zw rate, positive net)
  *
- * Expected P_13 fields: P_13_6_1=-50, P_13_8=-50, P_13_7=50, P_13_9=-50, P_15=-50
+ * Expected P_13 fields: P_13_6_1=-50, P_13_8=-50, P_13_7=50, P_15=-50
  * P_18=2, P_19=1 (zw is the only active positive category)
  */
 const multiCategoryCorrection = makeInvoice({
@@ -171,7 +171,7 @@ describe('FA(3) — multi-category reversal (0 KR + np II → zw)', () => {
     assert.ok(xml.includes('<P_13_6_1>-50.00</P_13_6_1>'), 'P_13_6_1 should be -50.00 (0 KR reversal)');
     assert.ok(xml.includes('<P_13_8>-50.00</P_13_8>'), 'P_13_8 should be -50.00 (np II reversal)');
     assert.ok(xml.includes('<P_13_7>50.00</P_13_7>'), 'P_13_7 should be 50.00 (zw new line)');
-    assert.ok(xml.includes('<P_13_9>-50.00</P_13_9>'), 'P_13_9 should be -50.00 (sum: -50-50+50)');
+    assert.ok(!xml.includes('<P_13_9'), 'P_13_9 should not be emitted (conditional field)');
     assert.ok(xml.includes('<P_15>-50.00</P_15>'), 'P_15 should be -50.00');
   });
 
@@ -194,9 +194,11 @@ describe('FA(3) — multi-category reversal (0 KR + np II → zw)', () => {
     assert.ok(!xml.includes('<DoZaplaty>'), 'Must NOT use DoZaplaty for negative gross');
   });
 
-  it('includes NrKSeFN from corrected_invoice_ksef_no', () => {
+  it('includes NrKSeF + NrKSeFFaKorygowanej from corrected_invoice_ksef_no', () => {
     const xml = buildFa2Xml(multiCategoryCorrection);
-    assert.ok(xml.includes('<NrKSeFN>1</NrKSeFN>'), 'Must include NrKSeFN with value "1"');
+    assert.ok(xml.includes('<NrKSeF>1</NrKSeF>'), 'Must include NrKSeF=1 marker');
+    assert.ok(xml.includes('<NrKSeFFaKorygowanej>1</NrKSeFFaKorygowanej>'), 'Must include NrKSeFFaKorygowanej with value "1"');
+    assert.ok(!xml.includes('<NrKSeFN'), 'NrKSeFN must not appear when KSeF number is available');
   });
 
   it('includes RodzajFaktury=KOR and PrzyczynaKorekty', () => {
@@ -223,7 +225,7 @@ describe('FA(3) — multi-category reversal (0 KR + np II → zw)', () => {
     assert.ok(xml.includes('<P_9A>50.00</P_9A>'), 'P_9A should be 50.00');
   });
 
-  it('summary is consistent: P_13_6_1 + P_13_8 + P_13_7 = P_13_9 = P_15', () => {
+  it('summary is consistent: P_13_6_1 + P_13_8 + P_13_7 = P_15', () => {
     const xml = buildFa2Xml(multiCategoryCorrection);
     const result = validateFa3Xml(xml, multiCategoryCorrection);
     assert.ok(result.summaryCheck, 'Summary check should be present');

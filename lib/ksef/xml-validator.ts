@@ -48,7 +48,6 @@ export interface XmlValidationResult {
   summaryCheck?:  {
     p13Sum:        number;
     p15:           number;
-    p13_9:         number;
     netTotal:      number;
     grossTotal:    number;
     consistent:    boolean;
@@ -222,23 +221,12 @@ function validateBusinessRules(
     if (val != null) p14Sum += val;
   }
 
-  const p13_9 = parseDecimal(extractElement(xml, 'P_13_9')) ?? 0;
   const p15 = parseDecimal(extractElement(xml, 'P_15')) ?? 0;
 
   const p13SumRounded = Math.round(p13Sum * 100) / 100;
-  const p13_9Rounded = Math.round(p13_9 * 100) / 100;
-  if (p13SumRounded !== p13_9Rounded) {
-    errors.push({
-      category: 'business',
-      severity: 'error',
-      rule: 'summary_p13_9_mismatch',
-      element: 'P_13_9',
-      message: `P_13_9 (${p13_9.toFixed(2)}) does not equal the sum of per-rate P_13 values (${p13Sum.toFixed(2)})`,
-      detail: `Sum of P_13_* = ${p13Sum.toFixed(2)}, P_13_9 = ${p13_9.toFixed(2)}`,
-    });
-  }
 
-  const expectedP15 = Math.round((p13_9 + p14Sum) * 100) / 100;
+  // P_15 must equal SUM(P_13_*) + SUM(P_14_*)
+  const expectedP15 = Math.round((p13SumRounded + p14Sum) * 100) / 100;
   const p15Rounded = Math.round(p15 * 100) / 100;
   if (expectedP15 !== p15Rounded) {
     errors.push({
@@ -246,20 +234,20 @@ function validateBusinessRules(
       severity: 'error',
       rule: 'summary_p15_mismatch',
       element: 'P_15',
-      message: `P_15 (${p15.toFixed(2)}) does not equal P_13_9 + VAT amounts (${expectedP15.toFixed(2)})`,
-      detail: `P_13_9=${p13_9.toFixed(2)}, SUM(P_14_*)=${p14Sum.toFixed(2)}, expected P_15=${expectedP15.toFixed(2)}, actual P_15=${p15.toFixed(2)}`,
+      message: `P_15 (${p15.toFixed(2)}) does not equal SUM(P_13_*) + SUM(P_14_*) (${expectedP15.toFixed(2)})`,
+      detail: `SUM(P_13_*)=${p13Sum.toFixed(2)}, SUM(P_14_*)=${p14Sum.toFixed(2)}, expected P_15=${expectedP15.toFixed(2)}, actual P_15=${p15.toFixed(2)}`,
     });
   }
 
   const invNetRounded = Math.round((invoice.net_total ?? 0) * 100) / 100;
   const invGrossRounded = Math.round((invoice.gross_total ?? 0) * 100) / 100;
-  if (p13_9Rounded !== invNetRounded) {
+  if (p13SumRounded !== invNetRounded) {
     errors.push({
       category: 'business',
       severity: 'error',
       rule: 'summary_net_total_mismatch',
-      element: 'P_13_9',
-      message: `P_13_9 (${p13_9.toFixed(2)}) does not match invoice net_total (${(invoice.net_total ?? 0).toFixed(2)})`,
+      element: 'P_13',
+      message: `SUM(P_13_*) (${p13SumRounded.toFixed(2)}) does not match invoice net_total (${(invoice.net_total ?? 0).toFixed(2)})`,
     });
   }
   if (p15Rounded !== invGrossRounded) {
@@ -272,13 +260,12 @@ function validateBusinessRules(
     });
   }
 
-  const consistent = p13SumRounded === p13_9Rounded && expectedP15 === p15Rounded
-    && p13_9Rounded === invNetRounded && p15Rounded === invGrossRounded;
+  const consistent = expectedP15 === p15Rounded
+    && p13SumRounded === invNetRounded && p15Rounded === invGrossRounded;
 
   const summaryCheck: XmlValidationResult['summaryCheck'] = {
     p13Sum: p13SumRounded,
     p15: p15Rounded,
-    p13_9: p13_9Rounded,
     netTotal: invNetRounded,
     grossTotal: invGrossRounded,
     consistent,
