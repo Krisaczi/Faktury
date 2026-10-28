@@ -199,13 +199,7 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
       <P_18>${p18}</P_18>
       <P_18A>2</P_18A>
 ${zwolnienie}
-      <NoweSrodkiTransportu>
-        <P_22N>1</P_22N>
-      </NoweSrodkiTransportu>
-      <P_23>2</P_23>
-      <PMarzy>
-        <P_PMarzyN>1</P_PMarzyN>
-      </PMarzy>
+      
     </Adnotacje>`;
 }
 
