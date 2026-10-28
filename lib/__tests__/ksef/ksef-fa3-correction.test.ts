@@ -481,3 +481,385 @@ describe('FA(3) — element ordering', () => {
     assert.ok(p13_9Pos < p13_10Pos, 'P_13_9 must come before P_13_10');
   });
 });
+
+// ─── VAT Category Correction: oo → zw ─────────────────────────────────────────
+
+describe('FA(3) — VAT category correction (oo → zw)', () => {
+  // Original invoice had reverse charge (oo) at 1000 PLN net.
+  // Correction reverses the oo line (-1000) and adds a zw line (+1000).
+  // Net effect: oo nets to 0 (reversed away), zw nets to 1000.
+  // The XML must only show P_13_7 (zw) in the summary, NOT P_13_10 (oo).
+  // P_18 must be 2 (no reverse charge) and P_19=1 (VAT exemption).
+  const ooToZwCorrection = makeInvoice({
+    document_type: 'CORRECTION',
+    invoice_number: 'FK/2026/11/001',
+    net_total: 0,           // -1000 (oo reversal) + 1000 (zw new) = 0
+    vat_total: 0,
+    gross_total: 0,
+    corrected_invoice_number: 'FV/2026/09/001',
+    corrected_invoice_date: '2026-09-20',
+    correction_reason: 'Zmiana stawki VAT z odwrotnego obciążenia na zwolnienie podmiotowe',
+    items: [
+      {
+        id: '00000000-0000-0000-0000-000000000010',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 1,
+        name: 'Korekta: odwrócone obciążenie (reversal)',
+        unit: 'szt.',
+        quantity: -1,
+        unit_price_net: 1000,
+        vat_rate: 'oo',
+        net_amount: -1000,
+        vat_amount: 0,
+        gross_amount: -1000,
+        discount_pct: null,
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000011',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 2,
+        name: 'Korekta: zwolnienie podmiotowe (new)',
+        unit: 'szt.',
+        quantity: 1,
+        unit_price_net: 1000,
+        vat_rate: 'zw',
+        net_amount: 1000,
+        vat_amount: 0,
+        gross_amount: 1000,
+        discount_pct: null,
+      },
+    ],
+  });
+
+  it('generates valid FA(3) XML that passes full validation', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    const result = validateFa3Xml(xml, ooToZwCorrection);
+    assert.ok(result.valid, `XML should be valid, errors: ${result.errors.map(e => e.message).join('; ')}`);
+  });
+
+  it('emits P_13_10 (oo) with NEGATIVE value — reversal is shown in summary', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(xml.includes('<P_13_10>'), 'P_13_10 must be present for oo reversal');
+    assert.ok(xml.includes('<P_13_10>-1000.00</P_13_10>'), 'P_13_10 must show -1000.00 (reversal amount)');
+  });
+
+  it('does NOT emit P_13_10 with a zero value', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(!xml.includes('<P_13_10>0.00</P_13_10>'), 'P_13_10 must not appear with zero value');
+  });
+
+  it('emits P_13_7 (zw) with the correct positive net total', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(xml.includes('<P_13_7>'), 'P_13_7 must be present for zw category');
+    assert.ok(xml.includes('<P_13_7>1000.00</P_13_7>'), 'P_13_7 must show 1000.00 (new category amount)');
+  });
+
+  it('does NOT set P_18=1 (reverse charge) — oo has negative net, not active', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(!xml.includes('<P_18>1</P_18>'), 'P_18 must NOT be 1 — reverse charge is reversed away (negative net)');
+    assert.ok(xml.includes('<P_18>2</P_18>'), 'P_18 should be 2 (not applicable)');
+  });
+
+  it('sets P_19=1 (VAT exemption) for the zw category', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(xml.includes('<P_19>1</P_19>'), 'P_19 must be 1 for VAT exempt (zw) category');
+  });
+
+  it('P_18=1 and P_19=1 do NOT coexist', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    const hasP18_1 = xml.includes('<P_18>1</P_18>');
+    const hasP19_1 = xml.includes('<P_19>1</P_19>');
+    assert.ok(!(hasP18_1 && hasP19_1), 'P_18=1 (reverse charge) and P_19=1 (exemption) must not coexist');
+  });
+
+  it('has no contradictory P_13 fields — P_13_7 is positive, P_13_10 is negative (reversal)', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    // P_13_10 is present but negative (reversal) — not contradictory with positive P_13_7
+    assert.ok(xml.includes('<P_13_10>-1000.00</P_13_10>'), 'P_13_10 should be negative (reversal)');
+    assert.ok(xml.includes('<P_13_7>1000.00</P_13_7>'), 'P_13_7 should be positive (new category)');
+    // Validator should NOT flag this as contradictory
+    const result = validateFa3Xml(xml, ooToZwCorrection);
+    assert.ok(!result.errors.some(e => e.rule === 'contradictory_vat_categories'), 'Should not flag negative+positive as contradictory');
+  });
+
+  it('validator catches contradictory P_13_7 + P_13_10 if both POSITIVE', () => {
+    // Manually craft XML with both P_13_7 and P_13_10 positive — contradictory
+    const badXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">
+  <Naglowek><KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Seller</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>0987654321</NIP><Nazwa>Buyer</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_1>2026-09-20</P_1>
+    <P_2>FV/001</P_2>
+    <P_13_7>1000.00</P_13_7>
+    <P_13_10>500.00</P_13_10>
+    <P_13_9>1500.00</P_13_9>
+    <P_15>1500.00</P_15>
+    <Adnotacje><P_16>2</P_16><P_17>2</P_17><P_18>2</P_18A>2</P_18A><Zwolnienie><P_19>1</P_19><P_19A>zwolnienie</P_19A></Zwolnienie></Adnotacje>
+    <RodzajFaktury>KOR</RodzajFaktury>
+    <PrzyczynaKorekty>test</PrzyczynaKorekty>
+    <DaneFaKorygowanej><DataWystFaKorygowanej>2026-09-20</DataWystFaKorygowanej><NrFaKorygowanej>FV/001</NrFaKorygowanej></DaneFaKorygowanej>
+    <FaWiersz>
+      <NrWierszaFa>1</NrWierszaFa>
+      <P_7>Test</P_7>
+      <P_8A>szt.</P_8A>
+      <P_8B>1.0000</P_8B>
+      <P_9A>1000.00</P_9A>
+      <P_11>1000.00</P_11>
+      <P_12>zw</P_12>
+    </FaWiersz>
+    <Rozliczenie><DoRozliczenia>1500.00</DoRozliczenia></Rozliczenie>
+    <Platnosc><FormaPlatnosci>6</FormaPlatnosci></Platnosc>
+  </Fa>
+</Faktura>`;
+    const inv = makeInvoice({
+      net_total: 1500, vat_total: 0, gross_total: 1500,
+      document_type: 'CORRECTION',
+      corrected_invoice_number: 'FV/001',
+      items: [
+        {
+          id: '00000000-0000-0000-0000-000000000010',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          position: 1, name: 'ZW', unit: 'szt.',
+          quantity: 1, unit_price_net: 1000, vat_rate: 'zw',
+          net_amount: 1000, vat_amount: 0, gross_amount: 1000, discount_pct: null,
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000011',
+          invoice_id: '00000000-0000-0000-0000-000000000001',
+          position: 2, name: 'OO', unit: 'szt.',
+          quantity: 1, unit_price_net: 500, vat_rate: 'oo',
+          net_amount: 500, vat_amount: 0, gross_amount: 500, discount_pct: null,
+        },
+      ],
+    });
+    const result = validateFa3Xml(badXml, inv);
+    assert.ok(
+      result.errors.some(e => e.rule === 'contradictory_vat_categories'),
+      'Should detect contradictory P_13_7 + P_13_10 both positive',
+    );
+  });
+
+  it('validator catches P_18=1 + P_19=1 coexistence', () => {
+    const badXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">
+  <Naglowek><KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Seller</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>0987654321</NIP><Nazwa>Buyer</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_1>2026-09-20</P_1>
+    <P_2>FV/001</P_2>
+    <P_13_7>1000.00</P_13_7>
+    <P_13_9>1000.00</P_13_9>
+    <P_15>1000.00</P_15>
+    <Adnotacje><P_16>2</P_16><P_17>2</P_17><P_18>1</P_18><P_18A>2</P_18A><Zwolnienie><P_19>1</P_19><P_19A>zwolnienie</P_19A></Zwolnienie></Adnotacje>
+    <RodzajFaktury>KOR</RodzajFaktury>
+    <PrzyczynaKorekty>test</PrzyczynaKorekty>
+    <DaneFaKorygowanej><DataWystFaKorygowanej>2026-09-20</DataWystFaKorygowanej><NrFaKorygowanej>FV/001</NrFaKorygowanej></DaneFaKorygowanej>
+    <FaWiersz>
+      <NrWierszaFa>1</NrWierszaFa>
+      <P_7>Test</P_7>
+      <P_8A>szt.</P_8A>
+      <P_8B>1.0000</P_8B>
+      <P_9A>1000.00</P_9A>
+      <P_11>1000.00</P_11>
+      <P_12>zw</P_12>
+    </FaWiersz>
+    <Rozliczenie><DoRozliczenia>1000.00</DoRozliczenia></Rozliczenie>
+    <Platnosc><FormaPlatnosci>6</FormaPlatnosci></Platnosc>
+  </Fa>
+</Faktura>`;
+    const inv = makeInvoice({
+      net_total: 1000, vat_total: 0, gross_total: 1000,
+      document_type: 'CORRECTION',
+      corrected_invoice_number: 'FV/001',
+      items: [{
+        id: '00000000-0000-0000-0000-000000000010',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 1, name: 'ZW', unit: 'szt.',
+        quantity: 1, unit_price_net: 1000, vat_rate: 'zw',
+        net_amount: 1000, vat_amount: 0, gross_amount: 1000, discount_pct: null,
+      }],
+    });
+    const result = validateFa3Xml(badXml, inv);
+    assert.ok(
+      result.errors.some(e => e.rule === 'p18_p19_conflict'),
+      'Should detect P_18=1 + P_19=1 coexistence conflict',
+    );
+  });
+
+  it('validator catches zero-value P_13 fields', () => {
+    const badXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">
+  <Naglowek><KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza></Naglowek>
+  <Podmiot1><DaneIdentyfikacyjne><NIP>1234567890</NIP><Nazwa>Seller</Nazwa></DaneIdentyfikacyjne></Podmiot1>
+  <Podmiot2><DaneIdentyfikacyjne><NIP>0987654321</NIP><Nazwa>Buyer</Nazwa></DaneIdentyfikacyjne></Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_1>2026-09-20</P_1>
+    <P_2>FV/001</P_2>
+    <P_13_7>1000.00</P_13_7>
+    <P_13_10>0.00</P_13_10>
+    <P_13_9>1000.00</P_13_9>
+    <P_15>1000.00</P_15>
+    <Adnotacje><P_16>2</P_16><P_17>2</P_17><P_18>2</P_18A>2</P_18A><Zwolnienie><P_19>1</P_19><P_19A>zwolnienie</P_19A></Zwolnienie></Adnotacje>
+    <RodzajFaktury>KOR</RodzajFaktury>
+    <PrzyczynaKorekty>test</PrzyczynaKorekty>
+    <DaneFaKorygowanej><DataWystFaKorygowanej>2026-09-20</DataWystFaKorygowanej><NrFaKorygowanej>FV/001</NrFaKorygowanej></DaneFaKorygowanej>
+    <FaWiersz>
+      <NrWierszaFa>1</NrWierszaFa>
+      <P_7>Test</P_7>
+      <P_8A>szt.</P_8A>
+      <P_8B>1.0000</P_8B>
+      <P_9A>1000.00</P_9A>
+      <P_11>1000.00</P_11>
+      <P_12>zw</P_12>
+    </FaWiersz>
+    <Rozliczenie><DoRozliczenia>1000.00</DoRozliczenia></Rozliczenie>
+    <Platnosc><FormaPlatnosci>6</FormaPlatnosci></Platnosc>
+  </Fa>
+</Faktura>`;
+    const inv = makeInvoice({
+      net_total: 1000, vat_total: 0, gross_total: 1000,
+      document_type: 'CORRECTION',
+      corrected_invoice_number: 'FV/001',
+      items: [{
+        id: '00000000-0000-0000-0000-000000000010',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 1, name: 'ZW', unit: 'szt.',
+        quantity: 1, unit_price_net: 1000, vat_rate: 'zw',
+        net_amount: 1000, vat_amount: 0, gross_amount: 1000, discount_pct: null,
+      }],
+    });
+    const result = validateFa3Xml(badXml, inv);
+    assert.ok(
+      result.errors.some(e => e.rule === 'zero_value_p13_field' && e.element === 'P_13_10'),
+      'Should detect zero-value P_13_10 field',
+    );
+  });
+
+  it('summary is consistent: P_13_7 = P_13_9 = P_15 = 0 for oo→zw with equal amounts', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    const result = validateFa3Xml(xml, ooToZwCorrection);
+    assert.ok(result.summaryCheck, 'Summary check should be present');
+    assert.ok(result.summaryCheck!.consistent, `Summary should be consistent: ${JSON.stringify(result.summaryCheck)}`);
+  });
+
+  it('keeps P_9A positive for both reversal and new lines', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(!xml.includes('<P_9A>-'), 'P_9A must never be negative');
+    assert.ok(xml.includes('<P_9A>1000.00</P_9A>'), 'P_9A should be 1000.00 for both lines');
+  });
+
+  it('includes correction references (KOR, PrzyczynaKorekty, DaneFaKorygowanej)', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(xml.includes('<RodzajFaktury>KOR</RodzajFaktury>'), 'Must use KOR');
+    assert.ok(xml.includes('<PrzyczynaKorekty>'), 'Must include correction reason');
+    assert.ok(xml.includes('<NrFaKorygowanej>FV/2026/09/001</NrFaKorygowanej>'), 'Must include corrected invoice number');
+  });
+
+  it('does not emit P_13_1, P_13_2, P_13_3, P_13_5, P_13_8 — only P_13_7 and P_13_10', () => {
+    const xml = buildFa2Xml(ooToZwCorrection);
+    assert.ok(!xml.includes('<P_13_1>'), 'P_13_1 should not appear');
+    assert.ok(!xml.includes('<P_13_2>'), 'P_13_2 should not appear');
+    assert.ok(!xml.includes('<P_13_3>'), 'P_13_3 should not appear');
+    assert.ok(!xml.includes('<P_13_5>'), 'P_13_5 should not appear');
+    assert.ok(!xml.includes('<P_13_8>'), 'P_13_8 should not appear');
+    assert.ok(xml.includes('<P_13_7>'), 'P_13_7 should be present (zw, positive)');
+    assert.ok(xml.includes('<P_13_10>'), 'P_13_10 should be present (oo, negative reversal)');
+  });
+});
+
+// ─── VAT Category Correction: zw → oo (reverse direction) ─────────────────────
+
+describe('FA(3) — VAT category correction (zw → oo)', () => {
+  // Original invoice had VAT exempt (zw) at 500 PLN net.
+  // Correction reverses the zw line (-500) and adds an oo line (+500).
+  // Net effect: zw nets to 0 (reversed away), oo nets to 500.
+  // The XML must only show P_13_10 (oo) in the summary, NOT P_13_7 (zw).
+  // P_18 must be 1 (reverse charge) and P_19 must NOT be 1.
+  const zwToOoCorrection = makeInvoice({
+    document_type: 'CORRECTION',
+    invoice_number: 'FK/2026/11/002',
+    net_total: 0,
+    vat_total: 0,
+    gross_total: 0,
+    corrected_invoice_number: 'FV/2026/09/002',
+    corrected_invoice_date: '2026-09-20',
+    correction_reason: 'Zmiana stawki VAT ze zwolnienia na odwrócone obciążenie',
+    items: [
+      {
+        id: '00000000-0000-0000-0000-000000000020',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 1,
+        name: 'Korekta: zwolnienie (reversal)',
+        unit: 'szt.',
+        quantity: -1,
+        unit_price_net: 500,
+        vat_rate: 'zw',
+        net_amount: -500,
+        vat_amount: 0,
+        gross_amount: -500,
+        discount_pct: null,
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000021',
+        invoice_id: '00000000-0000-0000-0000-000000000001',
+        position: 2,
+        name: 'Korekta: odwrócone obciążenie (new)',
+        unit: 'szt.',
+        quantity: 1,
+        unit_price_net: 500,
+        vat_rate: 'oo',
+        net_amount: 500,
+        vat_amount: 0,
+        gross_amount: 500,
+        discount_pct: null,
+      },
+    ],
+  });
+
+  it('generates valid FA(3) XML that passes full validation', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    const result = validateFa3Xml(xml, zwToOoCorrection);
+    assert.ok(result.valid, `XML should be valid, errors: ${result.errors.map(e => e.message).join('; ')}`);
+  });
+
+  it('emits P_13_7 (zw) with NEGATIVE value — reversal is shown in summary', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    assert.ok(xml.includes('<P_13_7>'), 'P_13_7 must be present for zw reversal');
+    assert.ok(xml.includes('<P_13_7>-500.00</P_13_7>'), 'P_13_7 must show -500.00 (reversal amount)');
+  });
+
+  it('emits P_13_10 (oo) with the correct positive net total', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    assert.ok(xml.includes('<P_13_10>'), 'P_13_10 must be present for oo category');
+    assert.ok(xml.includes('<P_13_10>500.00</P_13_10>'), 'P_13_10 must show 500.00 (new category amount)');
+  });
+
+  it('sets P_18=1 (reverse charge) since oo is the active category', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    assert.ok(xml.includes('<P_18>1</P_18>'), 'P_18 must be 1 for active reverse charge');
+  });
+
+  it('does NOT set P_19=1 (VAT exemption) — zw is reversed away', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    assert.ok(!xml.includes('<P_19>1</P_19>'), 'P_19 must NOT be 1 — zw is reversed away, no exemption');
+  });
+
+  it('P_18=1 and P_19=1 do NOT coexist', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    const hasP18_1 = xml.includes('<P_18>1</P_18>');
+    const hasP19_1 = xml.includes('<P_19>1</P_19>');
+    assert.ok(!(hasP18_1 && hasP19_1), 'P_18=1 and P_19=1 must not coexist');
+  });
+
+  it('summary is consistent for zw→oo correction', () => {
+    const xml = buildFa2Xml(zwToOoCorrection);
+    const result = validateFa3Xml(xml, zwToOoCorrection);
+    assert.ok(result.summaryCheck?.consistent, `Summary should be consistent: ${JSON.stringify(result.summaryCheck)}`);
+  });
+});

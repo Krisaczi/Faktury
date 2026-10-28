@@ -272,9 +272,19 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
  * inv.net_total directly, to avoid drift).
  * P_15 uses inv.gross_total.
  */
+function isZeroNet(g: VatGroup): boolean {
+  return Math.round(g.netTotal * 100) / 100 === 0;
+}
+
 function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
+  // Emit P_13 fields for VAT groups with non-zero net totals.
+  // In correction invoices, negative P_13 values are valid — they represent
+  // the reversal of a category (e.g. P_13_10 = -1000 for an oo line being reversed).
+  // Zero-net groups are skipped: a category that nets to zero (equal reversal
+  // and new amount) produces no P_13 field, avoiding noise in the summary.
+  const activeGroups = vatGroups.filter(g => !isZeroNet(g));
   const rateMap = new Map<VatRate, VatGroup>();
-  for (const g of vatGroups) rateMap.set(g.rate, g);
+  for (const g of activeGroups) rateMap.set(g.rate, g);
 
   const get = (rate: VatRate, field: 'netTotal' | 'vatTotal'): number =>
     rateMap.get(rate)?.[field] ?? 0;
@@ -304,22 +314,23 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
   }
 
-  // P_13_7 = VAT exempt (zwolnione od podatku) — only if zw is present
+  // P_13_7 = VAT exempt (zwolnione od podatku) — only if zw has non-zero net
   if (rateMap.has('zw')) {
     lines.push(`    <P_13_7>${dec2(get('zw', 'netTotal'))}</P_13_7>`);
   }
 
-  // P_13_8 = non-taxable (nie podlega) — only if np is present
+  // P_13_8 = non-taxable (nie podlega) — only if np has non-zero net
   if (rateMap.has('np')) {
     lines.push(`    <P_13_8>${dec2(get('np', 'netTotal'))}</P_13_8>`);
   }
 
   // P_13_9 = total net — sum of all per-rate net totals (required)
-  // Computed from the group totals, not inv.net_total, to guarantee consistency
-  const computedNetTotal = vatGroups.reduce((sum, g) => sum + g.netTotal, 0);
+  // Computed from ALL non-zero groups (including negative reversal amounts)
+  // to match inv.net_total exactly.
+  const computedNetTotal = activeGroups.reduce((sum, g) => sum + g.netTotal, 0);
   lines.push(`    <P_13_9>${dec2(computedNetTotal)}</P_13_9>`);
 
-  // P_13_10 = domestic reverse charge (oo) — only if oo is present
+  // P_13_10 = domestic reverse charge (oo) — only if oo has non-zero net
   if (rateMap.has('oo')) {
     lines.push(`    <P_13_10>${dec2(get('oo', 'netTotal'))}</P_13_10>`);
   }
@@ -343,10 +354,16 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
  * is not reverse charge. It is a different mechanism entirely.
  */
 function buildAdnotacje(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[]): string {
-  const hasExempt = vatGroups.some(g => g.rate === 'zw');
-  const hasReverseCharge = vatGroups.some(g => g.rate === 'oo');
+  // P_18/P_19 are based on which categories have POSITIVE net totals — i.e. the
+  // categories that are actively present on the corrected invoice. A correction
+  // that reverses away a category (e.g. oo → zw) produces a negative net for the
+  // old category; that negative must NOT trigger reverse-charge or exemption flags.
+  const positiveGroups = vatGroups.filter(g => Math.round(g.netTotal * 100) / 100 > 0);
+  const hasExempt = positiveGroups.some(g => g.rate === 'zw');
+  const hasReverseCharge = positiveGroups.some(g => g.rate === 'oo');
 
-  const p18 = hasReverseCharge ? '1' : '2';
+  // P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist.
+  const p18 = (hasReverseCharge && !hasExempt) ? '1' : '2';
   const exemptionReason = inv.notes?.trim()
     ? inv.notes.trim()
     : 'zwolnienie z podatku VAT';

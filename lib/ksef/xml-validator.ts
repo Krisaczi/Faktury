@@ -392,10 +392,49 @@ function validateBusinessRules(
     }
   }
 
+  // ── Rule 2b: No zero-value P_13 fields ──
+  // A P_13 field with value 0.00 is meaningless and indicates a reversed-away
+  // category that was not filtered out. For correction invoices changing VAT
+  // category (e.g. oo → zw), the reversed-away rate nets to zero and must not
+  // appear in the summary.
+  for (const p13Elem of Object.values(RATE_TO_P13)) {
+    const val = parseDecimal(extractElement(xml, p13Elem));
+    if (val != null && Math.round(val * 100) / 100 === 0) {
+      errors.push({
+        category: 'business',
+        severity: 'error',
+        rule: 'zero_value_p13_field',
+        element: p13Elem,
+        message: `${p13Elem} has value 0.00 — zero-value summary fields must not be emitted (reversed-away VAT categories should be omitted)`,
+      });
+    }
+  }
+
+  // ── Rule 2c: Contradictory VAT summary categories ──
+  // VAT exemption (P_13_7/zw) and reverse charge (P_13_10/oo) cannot both have
+  // POSITIVE values in the same invoice. In correction invoices, a negative P_13
+  // value represents a reversal (not an active category), so P_13_7=-1000 and
+  // P_13_10=+500 are not contradictory — they represent a category change.
+  const p13_7Val = parseDecimal(extractElement(xml, 'P_13_7'));
+  const p13_10Val = parseDecimal(extractElement(xml, 'P_13_10'));
+  const hasPositiveExempt = p13_7Val != null && p13_7Val > 0;
+  const hasPositiveReverseCharge = p13_10Val != null && p13_10Val > 0;
+  if (hasPositiveExempt && hasPositiveReverseCharge) {
+    errors.push({
+      category: 'business',
+      severity: 'error',
+      rule: 'contradictory_vat_categories',
+      element: 'P_13_7/P_13_10',
+      message: 'VAT exemption (P_13_7) and reverse charge (P_13_10) cannot both have positive values — they represent different, mutually exclusive VAT mechanisms',
+      detail: `P_13_7=${p13_7Val?.toFixed(2)}, P_13_10=${p13_10Val?.toFixed(2)}`,
+    });
+  }
+
   // ── Rule 3: P_18 annotation correctness ──
   const p18 = extractElement(xml, 'P_18');
-  const hasReverseCharge = presentRates.has('oo');
-  const hasExempt = presentRates.has('zw');
+  const p19 = extractElement(xml, 'P_19');
+  const hasReverseCharge = hasPositiveReverseCharge;
+  const hasExempt = hasPositiveExempt;
 
   if (p18 === '1' && !hasReverseCharge) {
     errors.push({
@@ -403,8 +442,8 @@ function validateBusinessRules(
       severity: 'error',
       rule: 'invalid_p18_reverse_charge',
       element: 'P_18',
-      message: 'P_18=1 (reverse charge) but no line items have VAT rate "oo" (reverse charge)',
-      detail: 'P_18=1 must only be set when reverse charge (oo) lines are present',
+      message: 'P_18=1 (reverse charge) but no positive reverse charge (oo) summary is present',
+      detail: 'P_18=1 must only be set when reverse charge (oo) has a positive net total',
     });
   }
 
@@ -418,13 +457,24 @@ function validateBusinessRules(
     });
   }
 
-  if (p18 === '2' && hasReverseCharge) {
+  // P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist
+  if (p18 === '1' && p19 === '1') {
+    errors.push({
+      category: 'business',
+      severity: 'error',
+      rule: 'p18_p19_conflict',
+      element: 'P_18/P_19',
+      message: 'P_18=1 (reverse charge) and P_19=1 (VAT exemption) cannot coexist — reverse charge and VAT exemption are mutually exclusive mechanisms',
+    });
+  }
+
+  if (p18 === '2' && hasReverseCharge && !hasExempt) {
     errors.push({
       category: 'business',
       severity: 'error',
       rule: 'missing_p18_reverse_charge',
       element: 'P_18',
-      message: 'P_18=2 (not applicable) but reverse charge (oo) lines are present — P_18 should be 1',
+      message: 'P_18=2 (not applicable) but positive reverse charge (oo) is present — P_18 should be 1',
     });
   }
 
