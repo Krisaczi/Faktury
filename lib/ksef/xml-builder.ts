@@ -284,6 +284,56 @@ function buildRozliczenie(inv: IssuedInvoiceWithItems, computedP15: number): str
     </Rozliczenie>`;
 }
 
+/**
+ * Build optional special-procedure sections: NoweSrodkiTransportu and PMarzy.
+ *
+ * These are ONLY emitted when the invoice explicitly flags them via
+ * `specialProcedure.newMeansOfTransport` or `specialProcedure.marginScheme`.
+ * Standard service invoices must never contain these sections.
+ *
+ * Returns an object with the XML fragments and a diagnostic log of which
+ * sections were generated vs. skipped.
+ */
+interface OptionalSectionResult {
+  xml: string;
+  generated: string[];
+  skipped: string[];
+}
+
+function buildOptionalSections(inv: IssuedInvoiceWithItems): OptionalSectionResult {
+  const flags = inv.specialProcedure;
+  const newTransport = flags?.newMeansOfTransport === true;
+  const marginScheme = flags?.marginScheme === true;
+
+  const generated: string[] = [];
+  const skipped: string[] = [];
+  const parts: string[] = [];
+
+  if (newTransport) {
+    parts.push(`    <NoweSrodkiTransportu>
+      <P_22N>1</P_22N>
+    </NoweSrodkiTransportu>`);
+    generated.push('NoweSrodkiTransportu');
+  } else {
+    skipped.push('NoweSrodkiTransportu');
+  }
+
+  if (marginScheme) {
+    parts.push(`    <PMarzy>
+      <P_PMarzyN>1</P_PMarzyN>
+    </PMarzy>`);
+    generated.push('PMarzy');
+  } else {
+    skipped.push('PMarzy');
+  }
+
+  return {
+    xml: parts.length > 0 ? parts.join('\n') : '',
+    generated,
+    skipped,
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /** Raw FA(3) XML for a single issued invoice. No signing applied. */
@@ -298,6 +348,7 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const faWiersze = buildFaWiersze(invoice);
   const rozliczenie = buildRozliczenie(invoice, summary.p15);
   const platnosc  = buildPlatnosc(invoice);
+  const optionalSections = buildOptionalSections(invoice);
 
   const p6 = invoice.sale_date && invoice.sale_date !== invoice.issue_date
     ? `\n    <P_6>${esc(isoDate(invoice.sale_date))}</P_6>`
@@ -307,6 +358,8 @@ export function buildFa2Xml(invoice: IssuedInvoiceWithItems): string {
   const rodzaj = KSEF_RODZAJ_FAKTURY[docType] ?? 'VAT';
 
   const korygowana = docType === 'CORRECTION' ? buildCorrectionElements(invoice) : '';
+
+  const optionalXml = optionalSections.xml ? `\n${optionalSections.xml}` : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"
@@ -323,8 +376,19 @@ ${vatSum}
 ${adnotacje}
     <RodzajFaktury>${rodzaj}</RodzajFaktury>${korygowana}
 ${faWiersze}
-${rozliczenie}
+${rozliczenie}${optionalXml}
 ${platnosc}
   </Fa>
 </Faktura>`;
+}
+
+/**
+ * Get the list of optional sections that were generated vs. skipped for an invoice.
+ * Useful for diagnostics before XML generation.
+ */
+export function getOptionalSectionsStatus(inv: IssuedInvoiceWithItems): {
+  generated: string[];
+  skipped: string[];
+} {
+  return buildOptionalSections(inv);
 }

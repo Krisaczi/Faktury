@@ -268,6 +268,43 @@ export function generateValidationReport(
     checks: paymentChecks,
   });
 
+  // ── Section 7: Optional Sections (NoweSrodkiTransportu / PMarzy) ──
+  const optionalChecks: ValidationDetailCheck[] = [];
+  const flags = invoice.specialProcedure;
+  const expectsTransport = flags?.newMeansOfTransport === true;
+  const expectsMargin = flags?.marginScheme === true;
+  const hasTransportInXml = xml.includes('<NoweSrodkiTransportu');
+  const hasMarginInXml = xml.includes('<PMarzy');
+
+  optionalChecks.push({
+    name: 'NoweSrodkiTransportu',
+    status: hasTransportInXml && !expectsTransport ? 'fail' : 'pass',
+    message: hasTransportInXml
+      ? expectsTransport
+        ? 'Emitted (new means of transport flag active)'
+        : 'ERROR: Emitted without specialProcedure.newMeansOfTransport flag'
+      : 'Skipped (not applicable)',
+  });
+  optionalChecks.push({
+    name: 'PMarzy',
+    status: hasMarginInXml && !expectsMargin ? 'fail' : 'pass',
+    message: hasMarginInXml
+      ? expectsMargin
+        ? 'Emitted (margin scheme flag active)'
+        : 'ERROR: Emitted without specialProcedure.marginScheme flag'
+      : 'Skipped (not applicable)',
+  });
+  optionalChecks.push({
+    name: 'Zwolnienie (P_19)',
+    status: 'pass',
+    message: activeCats.hasExempt ? 'Emitted (VAT exemption active)' : 'Not emitted (P_19N)',
+  });
+  sections.push({
+    name: 'Optional Sections Generated',
+    status: optionalChecks.some(c => c.status === 'fail') ? 'fail' : 'pass',
+    checks: optionalChecks,
+  });
+
   // ── Overall status ──
   const hasFail = sections.some(s => s.status === 'fail');
   const hasWarning = sections.some(s => s.status === 'warning');

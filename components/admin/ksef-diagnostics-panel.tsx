@@ -20,6 +20,7 @@ import {
   Calculator,
   AlertOctagon,
   Code2,
+  GitCompare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -183,6 +184,8 @@ interface KsefRejectionDetails {
 }
 
 interface DiagnosticsData {
+  invoiceId: string;
+  invoiceNumber: string | null;
   valid: boolean;
   missingFields: string[];
   warnings: string[];
@@ -818,6 +821,110 @@ function DebugLogTimeline({ logs }: { logs: DebugLogEntry[] }) {
 
 // ─── KSeF Rejection Details View ─────────────────────────────────────────────
 
+// ─── Internal vs KSeF Comparison View ────────────────────────────────────────
+
+function ValidationComparisonView({
+  xmlValidation,
+  preSubmissionReport,
+  rejectionDetails,
+}: {
+  xmlValidation: XmlValidationResult | null;
+  preSubmissionReport: PreSubmissionReport | null;
+  rejectionDetails: KsefRejectionDetails | null;
+}) {
+  const internalSchema = xmlValidation ? (xmlValidation.schemaErrors.length === 0 ? 'PASS' : 'FAIL') : 'N/A';
+  const internalBusiness = xmlValidation ? (xmlValidation.businessErrors.length === 0 ? 'PASS' : 'FAIL') : 'N/A';
+  const internalSummary = preSubmissionReport ? (preSubmissionReport.mathConsistent ? 'PASS' : 'FAIL') : 'N/A';
+  const internalReady = preSubmissionReport ? (preSubmissionReport.readyForKsef ? 'YES' : 'NO') : 'NO';
+
+  const ksefRejected = rejectionDetails?.rejected ?? false;
+  const ksefSchema = ksefRejected ? 'FAIL' : 'PASS';
+  const ksefBusiness = ksefRejected ? 'FAIL' : 'PASS';
+  const ksefReason = rejectionDetails?.errorMessage ?? rejectionDetails?.processingDescription ?? null;
+  const ksefErrorNode = rejectionDetails?.errorPath ?? null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+        <GitCompare className="w-4 h-4 text-slate-500" />
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          Internal vs KSeF Validation
+        </span>
+      </div>
+      <div className="px-3 py-3 space-y-3">
+        {/* Internal validation column */}
+        <div>
+          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+            <CheckCircle className="w-3 h-3 text-emerald-500" />
+            InvoiceIQ Internal Validation
+          </div>
+          <div className="space-y-1 text-xs">
+            <ComparisonRow label="Schema Validation" status={internalSchema} />
+            <ComparisonRow label="Business Validation" status={internalBusiness} />
+            <ComparisonRow label="Summary Validation" status={internalSummary} />
+            <ComparisonRow label="Ready For KSeF" status={internalReady} />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-slate-200 dark:border-slate-700" />
+
+        {/* KSeF validation column */}
+        <div>
+          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+            {ksefRejected
+              ? <XCircle className="w-3 h-3 text-red-500" />
+              : <CheckCircle className="w-3 h-3 text-emerald-500" />}
+            KSeF Validation
+          </div>
+          <div className="space-y-1 text-xs">
+            <ComparisonRow label="Schema Validation" status={ksefSchema} />
+            <ComparisonRow label="Business Validation" status={ksefBusiness} />
+            {ksefReason && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-2.5 py-1.5 mt-1.5">
+                <div className="text-[10px] font-semibold text-red-700 dark:text-red-400 mb-0.5">Reason:</div>
+                <p className="text-xs text-red-800 dark:text-red-300 break-words">{ksefReason}</p>
+              </div>
+            )}
+            {ksefErrorNode && (
+              <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 px-2.5 py-1.5 mt-1.5">
+                <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 mb-0.5">XML Element:</div>
+                <code className="text-xs font-mono text-amber-800 dark:text-amber-300 break-all">{ksefErrorNode}</code>
+              </div>
+            )}
+            {!ksefRejected && (
+              <div className="text-[10px] text-slate-400 italic mt-1">
+                No KSeF rejection recorded — invoice not yet submitted or was accepted.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComparisonRow({ label, status }: { label: string; status: string }) {
+  const isPass = status === 'PASS' || status === 'YES';
+  const isFail = status === 'FAIL' || status === 'NO';
+  return (
+    <div className="flex items-center gap-2">
+      {isPass
+        ? <CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+        : isFail
+          ? <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+          : <span className="w-3 h-3 text-slate-400 text-[10px] flex-shrink-0">—</span>}
+      <span className="text-slate-500 dark:text-slate-400 flex-1">{label}</span>
+      <span className={cn(
+        'font-mono font-semibold',
+        isPass && 'text-emerald-600 dark:text-emerald-400',
+        isFail && 'text-red-600 dark:text-red-400',
+        !isPass && !isFail && 'text-slate-400',
+      )}>{status}</span>
+    </div>
+  );
+}
+
 function RejectionDetailsView({ details }: { details: KsefRejectionDetails }) {
   const [showRaw, setShowRaw] = useState(false);
   const stageLabel = details.rejectionStage === 'send'
@@ -1054,6 +1161,31 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
     }
     // eslint-disable-next-line no-console
     console.groupEnd();
+
+    // ── Log KSeF rejection details if rejected ──
+    if (report.rejectionDetails?.rejected) {
+      const rd = report.rejectionDetails;
+      // eslint-disable-next-line no-console
+      console.group('[KSeF]');
+      // eslint-disable-next-line no-console
+      console.log('Status: REJECTED');
+      // eslint-disable-next-line no-console
+      console.log('Session:', rd.referenceNumber ?? 'N/A');
+      // eslint-disable-next-line no-console
+      console.log('Invoice:', report.invoiceNumber ?? 'N/A');
+      // eslint-disable-next-line no-console
+      console.log('ErrorCode:', rd.errorCode ?? 'N/A');
+      // eslint-disable-next-line no-console
+      console.log('ErrorNode:', rd.errorPath ?? 'N/A');
+      // eslint-disable-next-line no-console
+      console.log('Message:', rd.errorMessage ?? rd.processingDescription ?? 'N/A');
+      if (rd.validationErrors.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log('Validation Errors:', rd.validationErrors);
+      }
+      // eslint-disable-next-line no-console
+      console.groupEnd();
+    }
   }
 
   async function handleValidate() {
@@ -1169,6 +1301,13 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
         {data.rejectionDetails?.rejected && (
           <RejectionDetailsView details={data.rejectionDetails} />
         )}
+
+        {/* ── Internal vs KSeF Validation Comparison ── */}
+        <ValidationComparisonView
+          xmlValidation={data.xmlValidation}
+          preSubmissionReport={data.preSubmissionReport}
+          rejectionDetails={data.rejectionDetails}
+        />
 
         {/* ── Ready/Blocked banner ── */}
         {data.preSubmissionReport && (

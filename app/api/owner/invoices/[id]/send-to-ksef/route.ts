@@ -350,7 +350,10 @@ export async function POST(
       ksefStatus:   result.status as KsefStatus,
       error:        result.error,
       ksefResponse: result.response,
-      message:      'KSeF odrzucił fakturę. Sprawdź szczegóły i popraw błędy.',
+      validation:   result.validation ?? null,
+      message:      result.validation?.validationMessage
+        ? `KSeF odrzucił fakturę: ${result.validation.validationMessage}${result.validation.errorPath ? ` (element: ${result.validation.errorPath})` : ''}`
+        : 'KSeF odrzucił fakturę. Sprawdź szczegóły i popraw błędy.',
     }, { status: 422 });
   }
 

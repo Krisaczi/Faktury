@@ -148,6 +148,14 @@ export const IssuedInvoiceSchema = z.object({
 export type IssuedInvoiceInput = z.infer<typeof IssuedInvoiceSchema>;
 export type IssuedInvoiceItemInput = z.infer<typeof IssuedInvoiceItemSchema>;
 
+/** Special procedure flags — control optional FA(3) sections. */
+export interface SpecialProcedure {
+  /** P_22 — new means of transport (NoweSrodkiTransportu). Default: false */
+  newMeansOfTransport?: boolean;
+  /** PMarzy — margin scheme (procedura marży). Default: false */
+  marginScheme?: boolean;
+}
+
 /** Full invoice hydrated with its line items — use for display/export. */
 export type IssuedInvoiceWithItems = IssuedInvoiceRow & {
   items: IssuedInvoiceItemRow[];
@@ -165,6 +173,8 @@ export type IssuedInvoiceWithItems = IssuedInvoiceRow & {
     advance_amount: number;
     advance_number: string | null;
   }>;
+  // Optional special-procedure flags controlling FA(3) sections
+  specialProcedure?: SpecialProcedure;
 };
 
 // ─── Calculation helpers ──────────────────────────────────────────────────────

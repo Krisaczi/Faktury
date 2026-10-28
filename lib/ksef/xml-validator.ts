@@ -535,6 +535,36 @@ function validateBusinessRules(
     });
   }
 
+  // ── Rule 13: Inappropriate optional sections (NoweSrodkiTransportu / PMarzy) ──
+  // These sections must only appear when explicitly requested via specialProcedure flags.
+  // Standard service invoices must never contain them.
+  const hasNoweSrodki = hasElement(xml, 'NoweSrodkiTransportu');
+  const hasPMarzy = hasElement(xml, 'PMarzy');
+  const flags = invoice.specialProcedure;
+  const expectsTransport = flags?.newMeansOfTransport === true;
+  const expectsMargin = flags?.marginScheme === true;
+
+  if (hasNoweSrodki && !expectsTransport) {
+    errors.push({
+      category: 'business',
+      severity: 'error',
+      rule: 'spurious_nowe_srodki_transportu',
+      element: 'NoweSrodkiTransportu',
+      message: 'NoweSrodkiTransportu section present but invoice is not flagged as new means of transport',
+      detail: 'Set specialProcedure.newMeansOfTransport = true only for new means of transport invoices',
+    });
+  }
+  if (hasPMarzy && !expectsMargin) {
+    errors.push({
+      category: 'business',
+      severity: 'error',
+      rule: 'spurious_pmarzy',
+      element: 'PMarzy',
+      message: 'PMarzy section present but invoice is not flagged as margin scheme',
+      detail: 'Set specialProcedure.marginScheme = true only for margin scheme invoices (used goods, art, antiques)',
+    });
+  }
+
   return { errors, warnings, summaryCheck };
 }
 

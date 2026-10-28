@@ -13,6 +13,19 @@ import { createHash, createPublicKey, publicEncrypt, constants, randomBytes, cre
 
 export type KsefStatus = 'pending' | 'queued' | 'submitted' | 'accepted' | 'rejected' | 'failed';
 
+export interface KsefSessionValidation {
+  sessionReferenceNumber: string | null;
+  invoiceReferenceNumber: string | null;
+  processingCode: number | null;
+  processingDescription: string | null;
+  validationCode: string | null;
+  validationMessage: string | null;
+  detailedErrorMessage: string | null;
+  errorPath: string | null;
+  errorNode: string | null;
+  rawResponse: Record<string, unknown> | null;
+}
+
 export interface KsefSubmissionResult {
   success:       boolean;
   ksefNumber?:   string;
@@ -21,6 +34,7 @@ export interface KsefSubmissionResult {
   response:      Record<string, unknown>;
   error?:        string;
   transient:     boolean;
+  validation?:   KsefSessionValidation;
 }
 
 interface KsefCredentials {
@@ -35,6 +49,18 @@ const KSEF_BASE_URLS = {
 
 export function generateIdempotencyKey(invoiceId: string): string {
   return createHash('sha256').update(`ksef-submit:${invoiceId}`).digest('hex');
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function pickStr(obj: Record<string, unknown> | null | undefined, ...keys: string[]): string | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === 'string' && v.trim() !== '') return v;
+    if (typeof v === 'number') return String(v);
+  }
+  return null;
 }
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -313,7 +339,7 @@ async function sendInvoiceInSession(
   signedXml: string,
   aesKey: Buffer,
   initVector: Buffer,
-): Promise<{ success: boolean; invoiceId?: string; status: KsefStatus; response: Record<string, unknown>; error?: string; transient: boolean }> {
+): Promise<{ success: boolean; invoiceId?: string; status: KsefStatus; response: Record<string, unknown>; error?: string; transient: boolean; validation?: KsefSessionValidation }> {
   try {
     const xmlBuffer = Buffer.from(signedXml, 'utf-8');
     const invoiceHash = createHash('sha256').update(xmlBuffer).digest('base64');
@@ -354,12 +380,29 @@ async function sendInvoiceInSession(
     }
 
     if (res.status === 400 || res.status === 422) {
+      // Extract detailed validation info from the send-level rejection
+      const validationCode = pickStr(responseBody, 'validationCode', 'errorCode', 'code', 'processingCode');
+      const validationMessage = pickStr(responseBody, 'validationMessage', 'errorMessage', 'message', 'description', 'errorDescription');
+      const errorPath = pickStr(responseBody, 'errorPath', 'xpath', 'path', 'element');
+      const validation: KsefSessionValidation = {
+        sessionReferenceNumber: null,
+        invoiceReferenceNumber: (responseBody.referenceNumber ?? responseBody.id) as string | null,
+        processingCode: (responseBody.processingCode as number) ?? res.status,
+        processingDescription: (responseBody.processingDescription as string) ?? null,
+        validationCode,
+        validationMessage,
+        detailedErrorMessage: (responseBody.detail as string) ?? null,
+        errorPath,
+        errorNode: errorPath,
+        rawResponse: responseBody,
+      };
       return {
         success: false,
         status: 'rejected',
         response: responseBody,
-        error: (responseBody.message ?? responseBody.error ?? 'KSeF rejected the invoice') as string,
+        error: validationMessage ?? (responseBody.message ?? responseBody.error ?? 'KSeF rejected the invoice') as string,
         transient: false,
+        validation,
       };
     }
 
@@ -411,6 +454,69 @@ async function checkInvoiceStatus(
   } catch {
     return { status: 'submitted' };
   }
+}
+
+/**
+ * Extract structured per-invoice validation details from a failed KSeF invoice.
+ *
+ * KSeF nests the actual validation error inside the failed-invoices response.
+ * The fields may be named differently depending on the API version, so we check
+ * multiple possible keys for each piece of data.
+ */
+function extractInvoiceValidation(
+  failedInv: Record<string, unknown> | undefined,
+  failedRaw: Record<string, unknown> | null,
+  sessionRef: string,
+  invoiceRef: string | undefined,
+  sessionCode: number,
+  sessionDescription: string | undefined,
+  processingCode: number | undefined,
+  processingDescription: string | undefined,
+): KsefSessionValidation {
+  // KSeF may nest validation errors in arrays within the failed invoice object
+  const errorArrays = [
+    failedInv?.validationErrors,
+    failedInv?.errors,
+    failedInv?.processingErrors,
+    failedInv?.errorDetails,
+  ].filter(Array.isArray) as Record<string, unknown>[][];
+
+  const firstError: Record<string, unknown> | undefined =
+    errorArrays.flatMap(a => a).find(e => typeof e === 'object' && e !== null) as Record<string, unknown> | undefined;
+
+  const validationCode =
+    pickStr(failedInv, 'validationCode', 'errorCode', 'code', 'processingCode') ??
+    pickStr(firstError, 'errorCode', 'code', 'validationCode') ??
+    null;
+
+  const validationMessage =
+    pickStr(failedInv, 'validationMessage', 'errorMessage', 'message', 'description', 'errorDescription') ??
+    pickStr(firstError, 'message', 'description', 'detail', 'errorDescription') ??
+    null;
+
+  const errorPath =
+    pickStr(firstError, 'xpath', 'path', 'elementPath', 'location') ??
+    pickStr(firstError, 'element', 'elementName', 'field') ??
+    pickStr(failedInv, 'errorPath', 'xpath', 'path', 'element') ??
+    null;
+
+  const detailedErrorMessage =
+    pickStr(failedInv, 'detailedErrorMessage', 'detail', 'details') ??
+    pickStr(firstError, 'detail', 'details') ??
+    null;
+
+  return {
+    sessionReferenceNumber: sessionRef,
+    invoiceReferenceNumber: invoiceRef ?? pickStr(failedInv, 'referenceNumber', 'invoiceReferenceNumber', 'elementReferenceNumber') ?? null,
+    processingCode: processingCode ?? sessionCode ?? null,
+    processingDescription: processingDescription ?? sessionDescription ?? null,
+    validationCode,
+    validationMessage,
+    detailedErrorMessage,
+    errorPath,
+    errorNode: errorPath,
+    rawResponse: failedRaw ?? (failedInv ? { failedInvoice: failedInv } : null),
+  };
 }
 
 // ─── Main entry point ──────────────────────────────────────────────────────
@@ -552,6 +658,57 @@ export async function submitToKsef(params: {
       const invoices = await listSessionInvoices(baseUrl, accessToken, sessionRef);
       const matched = invoices[0];
       const failedResult = await listFailedSessionInvoices(baseUrl, accessToken, sessionRef);
+
+      // ── Extract detailed per-invoice validation errors ──
+      // KSeF stores the actual rejection reason inside the failed-invoices
+      // endpoint response. The session-level description is generic (e.g.
+      // "Błąd weryfikacji, brak poprawnych faktur") and useless for debugging.
+      // We dig into the per-invoice data to find the real validation code,
+      // message, XPath/element, and raw response.
+      const failedInv = failedResult.invoices?.[0];
+      const validation = extractInvoiceValidation(
+        failedInv,
+        failedResult.raw,
+        sessionRef,
+        sendResult.invoiceId,
+        sessionStatus.code,
+        sessionStatus.description,
+        matched?.processingCode,
+        matched?.processingDescription,
+      );
+
+      // Build a detailed error message that includes the actual KSeF
+      // validation error, not just the session-level description.
+      const errorParts: string[] = [];
+      if (validation.validationCode) {
+        errorParts.push(`[${validation.validationCode}]`);
+      }
+      if (validation.validationMessage) {
+        errorParts.push(validation.validationMessage);
+      } else if (validation.detailedErrorMessage) {
+        errorParts.push(validation.detailedErrorMessage);
+      } else if (validation.processingDescription) {
+        errorParts.push(validation.processingDescription);
+      } else {
+        errorParts.push(sessionStatus.description ?? `code ${sessionStatus.code}`);
+      }
+      if (validation.errorPath) {
+        errorParts.push(`(element: ${validation.errorPath})`);
+      }
+      const detailedError = errorParts.join(' ');
+
+      // Structured console log for developer debugging
+      // eslint-disable-next-line no-console
+      console.warn('[KSeF] Invoice rejected', {
+        session: sessionRef,
+        invoice: sendResult.invoiceId ?? 'unknown',
+        status: 'REJECTED',
+        errorCode: validation.validationCode,
+        errorNode: validation.errorPath,
+        message: validation.validationMessage ?? validation.detailedErrorMessage,
+        processingCode: validation.processingCode,
+      });
+
       return {
         success:   false,
         status:    'rejected',
@@ -566,9 +723,11 @@ export async function submitToKsef(params: {
           pollLog,
           failedInvoices:     failedResult.invoices,
           failedInvoicesRaw:  failedResult.raw,
+          validationDetails:  validation,
         },
-        error:     `KSeF session failed: ${sessionStatus.description ?? `code ${sessionStatus.code}`}`,
+        error:     detailedError,
         transient: false,
+        validation,
       };
     }
   }
