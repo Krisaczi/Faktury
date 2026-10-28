@@ -92,13 +92,17 @@ const REQUIRED_FA_CHILDREN_AFTER_SUMMARY = ['P_15', 'Adnotacje', 'RodzajFaktury'
 // ─── VAT rate → P_13 element mapping ──────────────────────────────────────────
 
 const RATE_TO_P13: Record<string, string> = {
-  '23': 'P_13_1',
-  '8':  'P_13_2',
-  '5':  'P_13_3',
-  '0':  'P_13_5',
-  'zw': 'P_13_7',
-  'np': 'P_13_8',
-  'oo': 'P_13_10',
+  '23':    'P_13_1',
+  '8':     'P_13_2',
+  '5':     'P_13_3',
+  '0':     'P_13_5',
+  '0_kr':  'P_13_6_1',
+  '0_wdt': 'P_13_6_2',
+  '0_ex':  'P_13_6_3',
+  'zw':    'P_13_7',
+  'np':    'P_13_8',
+  'np_ii': 'P_13_8',
+  'oo':    'P_13_10',
 };
 
 // ─── Schema validation ────────────────────────────────────────────────────────
@@ -175,7 +179,31 @@ function validateSchema(xml: string): XmlValidationError[] {
     }
   }
 
-  // 6. Check element ordering: P_13_9 must come AFTER P_13_8 and BEFORE P_13_10
+  // 6. Check element ordering: P_13_6_1 must come AFTER P_13_5 and BEFORE P_13_7
+  const p13_5Pos  = xml.indexOf('<P_13_5');
+  const p13_6_1Pos = xml.indexOf('<P_13_6_1');
+  const p13_7Pos  = xml.indexOf('<P_13_7');
+
+  if (p13_5Pos !== -1 && p13_6_1Pos !== -1 && p13_5Pos > p13_6_1Pos) {
+    errors.push({
+      category: 'schema',
+      severity: 'error',
+      rule: 'element_order',
+      element: 'P_13_6_1',
+      message: 'P_13_6_1 must appear AFTER P_13_5 in the FA(3) sequence',
+    });
+  }
+  if (p13_6_1Pos !== -1 && p13_7Pos !== -1 && p13_6_1Pos > p13_7Pos) {
+    errors.push({
+      category: 'schema',
+      severity: 'error',
+      rule: 'element_order',
+      element: 'P_13_7',
+      message: 'P_13_7 must appear AFTER P_13_6_1 in the FA(3) sequence',
+    });
+  }
+
+  // 6b. P_13_9 must come AFTER P_13_8 and BEFORE P_13_10
   const p13_8Pos = xml.indexOf('<P_13_8');
   const p13_9Pos = xml.indexOf('<P_13_9');
   const p13_10Pos = xml.indexOf('<P_13_10');
@@ -260,7 +288,7 @@ function validateSchema(xml: string): XmlValidationError[] {
 
   // 10. Check P_12 values in line items are valid FA(3) rate codes
   const p12Values = extractAllElements(xml, 'P_12');
-  const validP12 = ['23', '22', '8', '7', '5', '4', '3', '0', 'zw', 'oo', 'np I', 'np II'];
+  const validP12 = ['23', '22', '8', '7', '5', '4', '3', '0', '0 KR', '0 WDT', '0 EX', 'zw', 'oo', 'np I', 'np II'];
   for (const p12 of p12Values) {
     if (!validP12.includes(p12)) {
       errors.push({
@@ -291,7 +319,7 @@ function validateBusinessRules(
   // P_15 = total gross
   // For non-taxable/exempt/zero rates, net == gross, so P_13_9 should relate to P_15.
   // Specifically: P_15 = P_13_9 + SUM(P_14_*) (VAT amounts for taxable rates)
-  const p13Fields = ['P_13_1', 'P_13_2', 'P_13_3', 'P_13_5', 'P_13_7', 'P_13_8', 'P_13_10'];
+  const p13Fields = ['P_13_1', 'P_13_2', 'P_13_3', 'P_13_5', 'P_13_6_1', 'P_13_6_2', 'P_13_6_3', 'P_13_7', 'P_13_8', 'P_13_10'];
   const p14Fields = ['P_14_1', 'P_14_2', 'P_14_3'];
 
   let p13Sum = 0;
@@ -374,14 +402,25 @@ function validateBusinessRules(
   // ── Rule 2: VAT category mapping — only emit P_13 fields for present rates ──
   const presentRates = new Set<string>();
   for (const item of invoice.items) {
-    presentRates.add(item.vat_rate as string);
+    // np_ii shares P_13_8 with np — check for either
+    const rate = item.vat_rate as string;
+    if (rate === 'np_ii') {
+      presentRates.add('np');
+      presentRates.add('np_ii');
+    } else {
+      presentRates.add(rate);
+    }
   }
 
   // Check that no spurious P_13 fields are emitted for rates NOT in the invoice
+  // Handle aggregated rates: np and np_ii both map to P_13_8, so P_13_8 is valid
+  // if either np or np_ii is present.
   for (const [rate, p13Elem] of Object.entries(RATE_TO_P13)) {
     const ratePresent = presentRates.has(rate);
     const elemPresent = hasElement(xml, p13Elem);
     if (!ratePresent && elemPresent) {
+      // For aggregated P_13_8: skip if any rate sharing this element is present
+      if (p13Elem === 'P_13_8' && (presentRates.has('np') || presentRates.has('np_ii'))) continue;
       errors.push({
         category: 'business',
         severity: 'error',
@@ -397,7 +436,11 @@ function validateBusinessRules(
   // category that was not filtered out. For correction invoices changing VAT
   // category (e.g. oo → zw), the reversed-away rate nets to zero and must not
   // appear in the summary.
+  // Use a Set to avoid duplicate checks for aggregated P_13_8 (np + np_ii).
+  const p13ElementsChecked = new Set<string>();
   for (const p13Elem of Object.values(RATE_TO_P13)) {
+    if (p13ElementsChecked.has(p13Elem)) continue;
+    p13ElementsChecked.add(p13Elem);
     const val = parseDecimal(extractElement(xml, p13Elem));
     if (val != null && Math.round(val * 100) / 100 === 0) {
       errors.push({

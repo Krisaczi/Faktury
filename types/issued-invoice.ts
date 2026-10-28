@@ -25,7 +25,7 @@ export type IssuedInvoiceStatus = (typeof ISSUED_INVOICE_STATUSES)[number];
 export const PAYMENT_METHODS = ['transfer', 'cash', 'card', 'blik', 'other'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const VAT_RATES = ['23', '8', '5', '0', 'zw', 'np', 'oo'] as const;
+export const VAT_RATES = ['23', '8', '5', '0', '0_kr', '0_wdt', '0_ex', 'zw', 'np', 'np_ii', 'oo'] as const;
 export type VatRate = (typeof VAT_RATES)[number];
 
 export const DOCUMENT_TYPES = ['STANDARD', 'CORRECTION', 'ADVANCE', 'SETTLEMENT', 'SIMPLIFIED'] as const;
@@ -68,7 +68,7 @@ export const IssuedInvoiceItemSchema = z.object({
   unit:           z.string().min(1).max(20).default('szt.'),
   quantity:       z.number().refine((v) => v !== 0, 'Ilość nie może wynosić 0'),
   unit_price_net: z.number(),
-  vat_rate:       z.enum(VAT_RATES),
+  vat_rate:       z.enum(VAT_RATES).catch('23'),
   net_amount:     z.number(),
   vat_amount:     z.number().default(0),
   gross_amount:   z.number(),
@@ -170,13 +170,17 @@ export type IssuedInvoiceWithItems = IssuedInvoiceRow & {
 // ─── Calculation helpers ──────────────────────────────────────────────────────
 
 const VAT_RATE_DECIMALS: Record<VatRate, number> = {
-  '23': 0.23,
-  '8':  0.08,
-  '5':  0.05,
-  '0':  0,
-  'zw': 0,
-  'np': 0,
-  'oo': 0,
+  '23':    0.23,
+  '8':     0.08,
+  '5':     0.05,
+  '0':     0,
+  '0_kr':  0,
+  '0_wdt': 0,
+  '0_ex':  0,
+  'zw':    0,
+  'np':    0,
+  'np_ii': 0,
+  'oo':    0,
 };
 
 export interface ComputedItem {

@@ -43,13 +43,17 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 const VAT_LABELS: Record<VatRate, string> = {
-  '23': '23%',
-  '8':  '8%',
-  '5':  '5%',
-  '0':  '0%',
-  'zw': 'zw.',
-  'np': 'n.p.',
-  'oo': 'o.o.',
+  '23':    '23%',
+  '8':     '8%',
+  '5':     '5%',
+  '0':     '0%',
+  '0_kr':  '0% KR',
+  '0_wdt': '0% WDT',
+  '0_ex':  '0% EX',
+  'zw':    'zw.',
+  'np':    'n.p. I',
+  'np_ii': 'n.p. II',
+  'oo':    'o.o.',
 };
 
 // ─── VAT breakdown ────────────────────────────────────────────────────────────

@@ -85,13 +85,17 @@ interface VatRateMapping {
 }
 
 const VAT_RATE_MAP: Record<VatRate, VatRateMapping> = {
-  '23': { p12: '23', p13Element: 'P_13_1', p14Element: 'P_14_1', hasVat: true,  order: 1 },
-  '8':  { p12: '8',  p13Element: 'P_13_2', p14Element: 'P_14_2', hasVat: true,  order: 2 },
-  '5':  { p12: '5',  p13Element: 'P_13_3', p14Element: 'P_14_3', hasVat: true,  order: 3 },
-  '0':  { p12: '0',  p13Element: 'P_13_5', p14Element: null,     hasVat: false, order: 5 },
-  'zw': { p12: 'zw', p13Element: 'P_13_7',   p14Element: null,   hasVat: false, order: 7 },
-  'np': { p12: 'np I', p13Element: 'P_13_8',   p14Element: null,   hasVat: false, order: 8 },
-  'oo': { p12: 'oo',   p13Element: 'P_13_10',  p14Element: null,   hasVat: false, order: 10 },
+  '23':    { p12: '23',    p13Element: 'P_13_1',   p14Element: 'P_14_1', hasVat: true,  order: 1 },
+  '8':     { p12: '8',     p13Element: 'P_13_2',   p14Element: 'P_14_2', hasVat: true,  order: 2 },
+  '5':     { p12: '5',     p13Element: 'P_13_3',   p14Element: 'P_14_3', hasVat: true,  order: 3 },
+  '0':     { p12: '0',     p13Element: 'P_13_5',   p14Element: null,     hasVat: false, order: 5 },
+  '0_kr':  { p12: '0 KR',  p13Element: 'P_13_6_1', p14Element: null,     hasVat: false, order: 6 },
+  '0_wdt': { p12: '0 WDT', p13Element: 'P_13_6_2', p14Element: null,     hasVat: false, order: 6 },
+  '0_ex':  { p12: '0 EX',  p13Element: 'P_13_6_3', p14Element: null,     hasVat: false, order: 6 },
+  'zw':    { p12: 'zw',    p13Element: 'P_13_7',   p14Element: null,     hasVat: false, order: 7 },
+  'np':    { p12: 'np I',  p13Element: 'P_13_8',   p14Element: null,     hasVat: false, order: 8 },
+  'np_ii': { p12: 'np II', p13Element: 'P_13_8',   p14Element: null,     hasVat: false, order: 8 },
+  'oo':    { p12: 'oo',    p13Element: 'P_13_10',  p14Element: null,     hasVat: false, order: 10 },
 };
 
 // FA(3) FormaPlatnosci codes (per official FA(3) documentation):
@@ -190,18 +194,28 @@ interface VatGroup {
   grossTotal:  number;
 }
 
+/**
+ * Rates that share the same P_13 element (e.g. np and np_ii both map to P_13_8).
+ * When building groups, these rates are aggregated into a single group so that
+ * their net totals are combined in the summary.
+ */
+const P13_AGGREGATE: Record<string, VatRate> = {
+  'np_ii': 'np',
+};
+
 function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
   const map = new Map<VatRate, VatGroup>();
   for (const item of items) {
-    const rate    = item.vat_rate as VatRate;
-    const mapping = VAT_RATE_MAP[rate] ?? VAT_RATE_MAP['23'];
-    const g = map.get(rate);
+    const rawRate   = item.vat_rate as VatRate;
+    const groupRate = P13_AGGREGATE[rawRate] ?? rawRate;
+    const mapping   = VAT_RATE_MAP[rawRate] ?? VAT_RATE_MAP['23'];
+    const g = map.get(groupRate);
     if (g) {
       g.netTotal   += item.net_amount;
       g.vatTotal   += item.vat_amount;
       g.grossTotal += item.gross_amount;
     } else {
-      map.set(rate, { rate, mapping, netTotal: item.net_amount, vatTotal: item.vat_amount, grossTotal: item.gross_amount });
+      map.set(groupRate, { rate: groupRate, mapping, netTotal: item.net_amount, vatTotal: item.vat_amount, grossTotal: item.gross_amount });
     }
   }
   return Array.from(map.values()).sort((a, b) => a.mapping.order - b.mapping.order);
@@ -314,6 +328,19 @@ function buildVatSummaryAndP15(inv: IssuedInvoiceWithItems, vatGroups: VatGroup[
     lines.push(`    <P_13_5>${dec2(get('0', 'netTotal'))}</P_13_5>`);
   }
 
+  // P_13_6_1 = 0% excluding WDT/export (0 KR) — only if 0_kr has non-zero net
+  if (rateMap.has('0_kr')) {
+    lines.push(`    <P_13_6_1>${dec2(get('0_kr', 'netTotal'))}</P_13_6_1>`);
+  }
+  // P_13_6_2 = 0% WDT — only if 0_wdt has non-zero net
+  if (rateMap.has('0_wdt')) {
+    lines.push(`    <P_13_6_2>${dec2(get('0_wdt', 'netTotal'))}</P_13_6_2>`);
+  }
+  // P_13_6_3 = 0% export — only if 0_ex has non-zero net
+  if (rateMap.has('0_ex')) {
+    lines.push(`    <P_13_6_3>${dec2(get('0_ex', 'netTotal'))}</P_13_6_3>`);
+  }
+
   // P_13_7 = VAT exempt (zwolnione od podatku) — only if zw has non-zero net
   if (rateMap.has('zw')) {
     lines.push(`    <P_13_7>${dec2(get('zw', 'netTotal'))}</P_13_7>`);
@@ -420,7 +447,7 @@ function buildFaWiersze(inv: IssuedInvoiceWithItems): string {
       <NrWierszaFa>${item.position}</NrWierszaFa>
       <P_7>${esc(item.name)}</P_7>
       <P_8A>${esc(item.unit)}</P_8A>
-      <P_8B>${dec4(Math.abs(item.quantity))}</P_8B>
+      <P_8B>${dec2(Math.abs(item.quantity))}</P_8B>
       <P_9A>${dec2(p9a)}</P_9A>${discountLine}
       <P_11>${dec2(item.net_amount)}</P_11>
       <P_12>${esc(mapping.p12)}</P_12>

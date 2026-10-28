@@ -418,7 +418,7 @@ export function InvoiceLineItemsSection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {['23', '8', '5', '0', 'zw', 'np', 'oo'].map(r => (
+                  {['23', '8', '5', '0', '0_kr', '0_wdt', '0_ex', 'zw', 'np', 'np_ii', 'oo'].map(r => (
                     <SelectItem key={r} value={r}>{r}</SelectItem>
                   ))}
                 </SelectContent>

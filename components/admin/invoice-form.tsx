@@ -116,7 +116,8 @@ interface Props {
 
 const VAT_LABELS: Record<VatRate, string> = {
   '23': '23%', '8': '8%', '5': '5%', '0': '0%',
-  'zw': 'Zw.', 'np': 'n.p.', 'oo': 'o.o.',
+  '0_kr': '0% KR', '0_wdt': '0% WDT', '0_ex': '0% EX',
+  'zw': 'Zwolniony', 'np': 'n.p. I', 'np_ii': 'n.p. II', 'oo': 'Odwrotne obciążenie',
 };
 
 const PAYMENT_LABELS = {
