@@ -397,41 +397,54 @@ function validateBusinessRules(
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(origDate)) {
       errors.push({ category: 'business', severity: 'error', rule: 'invalid_corrected_invoice_date', element: 'DataWystFaKorygowanej', message: `Corrected invoice date "${origDate}" is not in YYYY-MM-DD format` });
     }
-    // ── Rule 5a: NrKSeFN required when original invoice was submitted to KSeF ──
+    // ── Rule 5a: NrKSeFFaKorygowanej required when original invoice was in KSeF ──
     const correctedKsefNo = (invoice as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no;
     if (correctedKsefNo && correctedKsefNo.trim()) {
-      if (!hasElement(xml, 'NrKSeFN')) {
+      if (!hasElement(xml, 'NrKSeFFaKorygowanej')) {
         errors.push({
           category: 'business',
           severity: 'error',
           rule: 'missing_nr_ksef_corrected',
-          element: 'NrKSeFN',
-          message: 'Corrected invoice has a KSeF number (corrected_invoice_ksef_no) but NrKSeFN is missing from XML',
-          detail: `Expected NrKSeFN = ${correctedKsefNo}`,
+          element: 'NrKSeFFaKorygowanej',
+          message: 'Corrected invoice has a KSeF number (corrected_invoice_ksef_no) but NrKSeFFaKorygowanej is missing from XML',
+          detail: `Expected NrKSeFFaKorygowanej = ${correctedKsefNo}`,
         });
       } else {
-        const xmlKsefNo = extractElement(xml, 'NrKSeFN');
+        const xmlKsefNo = extractElement(xml, 'NrKSeFFaKorygowanej');
         if (xmlKsefNo !== correctedKsefNo.trim()) {
           errors.push({
             category: 'business',
             severity: 'error',
             rule: 'nr_ksef_mismatch',
-            element: 'NrKSeFN',
-            message: `NrKSeFN in XML ("${xmlKsefNo}") does not match corrected_invoice_ksef_no ("${correctedKsefNo}")`,
+            element: 'NrKSeFFaKorygowanej',
+            message: `NrKSeFFaKorygowanej in XML ("${xmlKsefNo}") does not match corrected_invoice_ksef_no ("${correctedKsefNo}")`,
           });
         }
       }
-    }
-    // ── Rule 5b: Warn if correction has no KSeF number for original ──
-    if (!correctedKsefNo || !correctedKsefNo.trim()) {
-      warnings.push({
-        category: 'business',
-        severity: 'warning',
-        rule: 'missing_corrected_ksef_no',
-        element: 'NrKSeFN',
-        message: 'Correction invoice does not reference the original KSeF number — KSeF may reject if the original was submitted to KSeF',
-        detail: 'If the original invoice was submitted to KSeF, NrKSeFN (NrKSeFFaKorygowanej) is required',
-      });
+      // Also verify NrKSeF=1 is present (marks that original was in KSeF)
+      const nrKsef = extractElement(xml, 'NrKSeF');
+      if (nrKsef !== '1') {
+        errors.push({
+          category: 'business',
+          severity: 'error',
+          rule: 'missing_nr_ksef_marker',
+          element: 'NrKSeF',
+          message: 'NrKSeF must be "1" when NrKSeFFaKorygowanej is present (original invoice was in KSeF)',
+        });
+      }
+    } else {
+      // Original was NOT in KSeF — NrKSeFN should be "1"
+      const nrKsefN = extractElement(xml, 'NrKSeFN');
+      if (nrKsefN !== '1') {
+        warnings.push({
+          category: 'business',
+          severity: 'warning',
+          rule: 'missing_corrected_ksef_no',
+          element: 'NrKSeFN',
+          message: 'Correction invoice does not reference a KSeF number and NrKSeFN=1 is missing — KSeF may reject',
+          detail: 'If the original invoice was NOT in KSeF, set NrKSeFN=1. If it WAS in KSeF, provide NrKSeFFaKorygowanej + NrKSeF=1.',
+        });
+      }
     }
   }
 

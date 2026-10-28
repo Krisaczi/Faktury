@@ -261,13 +261,21 @@ function buildCorrectionElements(inv: IssuedInvoiceWithItems): string {
     ? `\n    <PrzyczynaKorekty>${esc(przyczyna)}</PrzyczynaKorekty>`
     : '';
   const ksefNo = (inv as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no?.trim();
-  const ksefNoLine = ksefNo
-    ? `\n      <NrKSeFN>${esc(ksefNo)}</NrKSeFN>`
-    : '';
+
+  // FA(3) correction linkage:
+  // - NrKSeF=1 + NrKSeFFaKorygowanej={number} → original was in KSeF
+  // - NrKSeFN=1                             → original was issued OUTSIDE KSeF
+  let ksefLinkageLine: string;
+  if (ksefNo) {
+    ksefLinkageLine = `\n      <NrKSeF>1</NrKSeF>\n      <NrKSeFFaKorygowanej>${esc(ksefNo)}</NrKSeFFaKorygowanej>`;
+  } else {
+    ksefLinkageLine = `\n      <NrKSeFN>1</NrKSeFN>`;
+  }
+
   return `${przyczynaLine}
     <DaneFaKorygowanej>
       <DataWystFaKorygowanej>${esc(isoDate(origDate))}</DataWystFaKorygowanej>
-      <NrFaKorygowanej>${esc(inv.corrected_invoice_number)}</NrFaKorygowanej>${ksefNoLine}
+      <NrFaKorygowanej>${esc(inv.corrected_invoice_number)}</NrFaKorygowanej>${ksefLinkageLine}
     </DaneFaKorygowanej>`;
 }
 

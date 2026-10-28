@@ -158,6 +158,33 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
   const vatTotal = mappedItems.reduce((sum: number, i: { vat_amount: number }) => sum + i.vat_amount, 0);
   const grossTotal = netTotal + vatTotal;
 
+  // Extract correction metadata from the platform invoice's JSON metadata column.
+  // Platform invoices store correction info in metadata rather than dedicated columns.
+  const meta = (invoice as Record<string, unknown>).metadata as Record<string, unknown> | null;
+  const docType = (meta?.document_type as string) ?? 'STANDARD';
+  const correctedInvoiceNumber = (meta?.corrected_invoice_number as string) ?? null;
+  const correctedInvoiceDate = (meta?.corrected_invoice_date as string) ?? null;
+  const correctionReason = (meta?.correction_reason as string) ?? null;
+  let correctedKsefNo = (meta?.corrected_invoice_ksef_no as string) ?? null;
+
+  // If this is a correction and we have the original invoice number but no KSeF number,
+  // try to look up the original invoice's KSeF number from the database.
+  if (docType === 'CORRECTION' && correctedInvoiceNumber && !correctedKsefNo) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: origInvoice } = await (supabase as any)
+      .from('platform_invoices')
+      .select('ksef_number')
+      .eq('invoice_number', correctedInvoiceNumber)
+      .not('ksef_number', 'is', null)
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (origInvoice?.ksef_number) {
+      correctedKsefNo = origInvoice.ksef_number;
+    }
+  }
+
   // Map to the IssuedInvoiceWithItems shape.
   // Platform invoices have a different schema, so we use a type assertion
   // after building only the fields the XML builder actually reads.
@@ -183,6 +210,11 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
     vat_total: vatTotal,
     gross_total: grossTotal,
     notes: invoice.notes ?? null,
+    document_type: docType,
+    correction_reason: correctionReason,
+    corrected_invoice_number: correctedInvoiceNumber,
+    corrected_invoice_date: correctedInvoiceDate,
+    corrected_invoice_ksef_no: correctedKsefNo,
     ksef_reference_no: invoice.ksef_number ?? null,
     ksef_session_token: null,
     ksef_status: null,

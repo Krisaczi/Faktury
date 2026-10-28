@@ -289,18 +289,18 @@ export function generateValidationReport(
       : 'All P_13 fields have corresponding line items',
   });
 
-  // Correction linkage — NrKSeFN
+  // Correction linkage — NrKSeFFaKorygowanej
   if (docType === 'CORRECTION') {
     const correctedKsefNo = (invoice as unknown as { corrected_invoice_ksef_no?: string | null }).corrected_invoice_ksef_no;
     const hasKsefRef = !!correctedKsefNo?.trim();
     semanticChecks.push({
-      name: 'Original KSeF Number (NrKSeFN)',
-      status: bizErrors.some(e => e.rule === 'missing_nr_ksef_corrected' || e.rule === 'nr_ksef_mismatch') ? 'fail'
+      name: 'Original KSeF Number (NrKSeFFaKorygowanej)',
+      status: bizErrors.some(e => e.rule === 'missing_nr_ksef_corrected' || e.rule === 'nr_ksef_mismatch' || e.rule === 'missing_nr_ksef_marker') ? 'fail'
         : bizWarnings.some(w => w.rule === 'missing_corrected_ksef_no') ? 'warning'
         : hasKsefRef ? 'pass' : 'warning',
       message: hasKsefRef
-        ? `Referenced: ${correctedKsefNo}`
-        : 'No KSeF number for corrected invoice — KSeF may reject if original was submitted',
+        ? `Referenced: ${correctedKsefNo} (NrKSeF=1 + NrKSeFFaKorygowanej)`
+        : 'No KSeF number for corrected invoice — NrKSeFN=1 will be emitted (original outside KSeF)',
     });
 
     // Correction category transition

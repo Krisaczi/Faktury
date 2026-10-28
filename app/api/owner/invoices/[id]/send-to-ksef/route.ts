@@ -169,11 +169,16 @@ export async function POST(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta = (invoice as any).metadata ?? {};
     const mappedItems = meta.items ?? [];
+    const docType = meta.document_type ?? 'STANDARD';
     const mappedInvoice = {
       net_total: meta.net_total ?? 0,
       gross_total: meta.gross_total ?? 0,
       vat_total: meta.vat_total ?? 0,
-      document_type: meta.document_type ?? 'STANDARD',
+      document_type: docType,
+      corrected_invoice_number: meta.corrected_invoice_number ?? null,
+      corrected_invoice_date: meta.corrected_invoice_date ?? null,
+      corrected_invoice_ksef_no: meta.corrected_invoice_ksef_no ?? null,
+      correction_reason: meta.correction_reason ?? null,
       items: mappedItems,
     } as unknown as import('@/types/issued-invoice').IssuedInvoiceWithItems;
 
