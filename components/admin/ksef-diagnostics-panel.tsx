@@ -332,12 +332,15 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
       const res = await fetch(`/api/owner/invoices/${invoiceId}/ksef-diagnostics`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 404) {
+          throw new Error('KSeF diagnostics service unavailable.');
+        }
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const json = await res.json() as DiagnosticsData;
       setData(json);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load diagnostics');
+      setError(err instanceof Error ? err.message : 'KSeF diagnostics service unavailable.');
     } finally {
       setLoading(false);
     }
@@ -393,12 +396,21 @@ export function KsefDiagnosticsPanel({ invoiceId }: { invoiceId: string }) {
 
   if (error) {
     return (
-      <Card className="border-red-200 dark:border-red-800">
+      <Card className="border-amber-200 dark:border-amber-800">
         <CardContent className="pt-5">
-          <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-            <AlertTriangle className="w-4 h-4" />
-            {error}
+          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>KSeF diagnostics service unavailable.</span>
           </div>
+          <p className="text-xs text-slate-400 mt-1.5 ml-6">{error}</p>
+          <Button
+            size="sm" variant="outline"
+            className="mt-3 h-8 text-xs gap-1.5"
+            onClick={() => fetchDiagnostics()}
+          >
+            <RefreshCw className="w-3 h-3" />
+            Spróbuj ponownie
+          </Button>
         </CardContent>
       </Card>
     );

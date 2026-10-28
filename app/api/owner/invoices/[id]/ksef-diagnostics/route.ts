@@ -17,6 +17,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  try {
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,20 +35,23 @@ export async function GET(
 
   // Fetch the invoice with all fields needed for validation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invoice } = await (supabase as any)
+  const { data: invoice, error: invErr } = await (supabase as any)
     .from('platform_invoices')
     .select(`
       id, invoice_number, invoice_date, status, payment_method, due_date,
-      currency, metadata,
-      ksef_number, ksef_status, ksef_response,
+      currency, metadata, issued_by,
+      ksef_number, ksef_status, ksef_response, ksef_reference_no,
       ksef_submitted_at, ksef_last_attempt_at,
       ksef_submission_id
     `)
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!invoice) {
-    return NextResponse.json({ error: 'Faktura nie znaleziona.' }, { status: 404 });
+  if (!invoice || invErr) {
+    return NextResponse.json({
+      error: 'Faktura nie znaleziona.',
+      invoiceId: params.id,
+    }, { status: 404 });
   }
 
   // Fetch the seller company data
@@ -130,20 +134,33 @@ export async function GET(
   const invAny = invoice as any;
 
   return NextResponse.json({
-    valid:          validation.valid,
-    missingFields:  validation.missingFields,
-    warnings:       validation.warningFields,
-    xmlGenerated:   rawXml !== null,
-    submitted:      !!invAny.ksef_submitted_at,
+    invoiceId:         params.id,
+    invoiceNumber:     invoice.invoice_number ?? null,
+    valid:             validation.valid,
+    validationPassed:  validation.valid,
+    missingFields:     validation.missingFields,
+    warnings:          validation.warningFields,
+    xmlGenerated:      rawXml !== null,
+    submitted:         !!invAny.ksef_submitted_at,
     validation,
     fieldMappings,
     rawXml,
-    ksefNumber:     invAny.ksef_number ?? null,
-    ksefStatus:     invAny.ksef_status ?? null,
-    submissionDate: invAny.ksef_submitted_at ?? null,
-    lastAttempt:    invAny.ksef_last_attempt_at ?? null,
-    submissionId:   invAny.ksef_submission_id ?? null,
-    responsePayload: invAny.ksef_response ?? null,
+    generatedXml:      rawXml,
+    requestPayload:    null,
+    ksefNumber:        invAny.ksef_number ?? null,
+    ksefReferenceNumber: invAny.ksef_reference_no ?? null,
+    ksefStatus:        invAny.ksef_status ?? null,
+    submissionDate:    invAny.ksef_submitted_at ?? null,
+    lastAttemptDate:   invAny.ksef_last_attempt_at ?? null,
+    lastAttempt:       invAny.ksef_last_attempt_at ?? null,
+    submissionId:      invAny.ksef_submission_id ?? null,
+    responsePayload:   invAny.ksef_response ?? null,
     debugLogs,
   });
+  } catch (err) {
+    return NextResponse.json({
+      error: 'KSeF diagnostics error',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    }, { status: 500 });
+  }
 }
