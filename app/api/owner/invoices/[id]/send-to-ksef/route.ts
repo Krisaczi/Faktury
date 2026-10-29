@@ -341,6 +341,22 @@ export async function POST(
   }
 
   if (!result.success) {
+    const v = result.validation;
+    // eslint-disable-next-line no-console
+    console.error('[KSeF Validation]', {
+      session: v?.sessionReferenceNumber ?? null,
+      invoice: v?.invoiceReferenceNumber ?? null,
+      status: 'Rejected',
+      errorCode: v?.validationCode ?? null,
+      businessRule: v?.businessRuleId ?? null,
+      validationRule: v?.validationRule ?? null,
+      xpath: v?.errorPath ?? null,
+      element: v?.fieldName ?? null,
+      message: v?.validationMessage ?? v?.detailedErrorMessage ?? null,
+      processingCode: v?.processingCode ?? null,
+      processingDescription: v?.processingDescription ?? null,
+      rawResponse: result.response,
+    });
     // Include raw XML in the stored response for debugging when rejected
     const debugResponse = rawXmlForDebug
       ? { ...result.response, _rawXml: rawXmlForDebug.slice(0, 8000) }
@@ -357,7 +373,7 @@ export async function POST(
       ksefResponse: result.response,
       validation:   result.validation ?? null,
       message:      result.validation?.validationMessage
-        ? `KSeF odrzucił fakturę: ${result.validation.validationMessage}${result.validation.errorPath ? ` (element: ${result.validation.errorPath})` : ''}`
+        ? `KSeF odrzucił fakturę: [${result.validation.validationCode ?? 'brak kodu'}] ${result.validation.validationMessage}${result.validation.errorPath ? ` (XPath: ${result.validation.errorPath})` : ''}${result.validation.businessRuleId ? ` (regula: ${result.validation.businessRuleId})` : ''}`
         : 'KSeF odrzucił fakturę. Sprawdź szczegóły i popraw błędy.',
     }, { status: 422 });
   }
