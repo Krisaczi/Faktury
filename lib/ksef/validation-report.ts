@@ -346,7 +346,7 @@ export function generateValidationReport(
   const expectsMargin = flags?.marginScheme === true;
   const hasTransportInXml = xml.includes('<NoweSrodkiTransportu');
   const transportFlaggedInXml = xml.includes('<P_22>1</P_22>');
-  const hasMarginInXml = xml.includes('<PMarzy');
+  const hasMarginInXml = xml.includes('<P_PMarzy>1</P_PMarzy>');
 
   optionalChecks.push({
     name: 'NoweSrodkiTransportu',
@@ -364,7 +364,9 @@ export function generateValidationReport(
       ? expectsMargin
         ? 'Emitted (margin scheme flag active)'
         : 'ERROR: Emitted without specialProcedure.marginScheme flag'
-      : 'Not emitted (not applicable)',
+      : expectsMargin
+        ? 'ERROR: Margin scheme flag active but PMarzy not emitted'
+        : 'Marker emitted (P_PMarzyN=1, not applicable)',
   });
   optionalChecks.push({
     name: 'Zwolnienie (P_19)',

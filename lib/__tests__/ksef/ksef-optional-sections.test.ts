@@ -63,14 +63,15 @@ function makeBaseInvoice(overrides: Partial<IssuedInvoiceWithItems> = {}): Issue
 describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
 
   // ── Test 1: Standard invoice — sections omitted entirely ──
-  it('emits the NoweSrodkiTransportu P_22N marker and P_23 but not PMarzy for a standard invoice', () => {
+  it('emits the NoweSrodkiTransportu P_22N marker, P_23 and the P_PMarzyN marker for a standard invoice', () => {
     const invoice = makeBaseInvoice();
     const xml = buildFa2Xml(invoice);
 
     expect(xml).toContain('<NoweSrodkiTransportu>\n        <P_22N>1</P_22N>');
     expect(xml).not.toContain('<P_22>');
-    expect(xml).not.toContain('<PMarzy');
-    expect(xml).not.toContain('<P_PMarzy');
+    expect(xml).toContain('<PMarzy>
+        <P_PMarzyN>1</P_PMarzyN>');
+    expect(xml).not.toContain('<P_PMarzy>1</P_PMarzy>');
     expect(xml).toContain('<P_23>2</P_23>');
 
     const validation = validateFa3Xml(xml, invoice);
@@ -112,8 +113,8 @@ describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
     expect(xml).toContain('<NoweSrodkiTransportu');
     expect(xml).toContain('<P_22>1</P_22>');
     expect(xml).not.toContain('<P_22N');
-    // PMarzy still omitted
-    expect(xml).not.toContain('<PMarzy');
+    expect(xml).toContain('<P_PMarzyN>1</P_PMarzyN>');
+    expect(xml).not.toContain('<P_PMarzy>1</P_PMarzy>');
 
     const validation = validateFa3Xml(xml, invoice);
     const report = generateValidationReport(xml, invoice, validation);
@@ -148,8 +149,9 @@ describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
     expect(optionalSection!.status).toBe('pass');
 
     const transportCheck = optionalSection!.checks.find(c => c.name === 'NoweSrodkiTransportu');
-    expect(transportCheck!.message).toContain('P_22N'); = optionalSection!.checks.find(c => c.name === 'PMarzy');
-    expect(marzyCheck!.message).toContain('Not emitted');
+    const marzyCheck = optionalSection!.checks.find(c => c.name === 'PMarzy');
+    expect(transportCheck!.message).toContain('P_22N');
+    expect(marzyCheck!.message).toContain('P_PMarzyN');
 
     // Zwolnienie check should always be present
     const zwolnienieCheck = optionalSection!.checks.find(c => c.name === 'Zwolnienie (P_19)');
