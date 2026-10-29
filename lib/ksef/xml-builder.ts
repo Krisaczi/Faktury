@@ -193,8 +193,8 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_19N>1</P_19N>
       </Zwolnienie>`;
 
-  // NoweSrodkiTransportu is required in Adnotacje; standard invoices carry the P_22N marker.
-  // P_23 and PMarzy are only emitted when the invoice uses that special procedure.
+  // NoweSrodkiTransportu and P_23 are required in Adnotacje; standard invoices carry the P_22N marker and P_23=2.
+  // PMarzy is only emitted when the invoice uses the margin scheme.
   const flags = inv.specialProcedure;
   const newTransport = flags?.newMeansOfTransport === true;
   const marginScheme = flags?.marginScheme === true;
@@ -207,7 +207,7 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_22N>1</P_22N>
       </NoweSrodkiTransportu>`;
 
-  const p23 = newTransport || marginScheme ? '\n      <P_23>2</P_23>' : '';
+  const p23 = '\n      <P_23>2</P_23>';
 
   const pMarzy = marginScheme
     ? `\n      <PMarzy>

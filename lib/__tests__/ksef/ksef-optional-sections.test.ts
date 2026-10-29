@@ -63,7 +63,7 @@ function makeBaseInvoice(overrides: Partial<IssuedInvoiceWithItems> = {}): Issue
 describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
 
   // ── Test 1: Standard invoice — sections omitted entirely ──
-  it('emits the NoweSrodkiTransportu P_22N marker but not PMarzy or P_23 for a standard invoice', () => {
+  it('emits the NoweSrodkiTransportu P_22N marker and P_23 but not PMarzy for a standard invoice', () => {
     const invoice = makeBaseInvoice();
     const xml = buildFa2Xml(invoice);
 
@@ -71,7 +71,7 @@ describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
     expect(xml).not.toContain('<P_22>');
     expect(xml).not.toContain('<PMarzy');
     expect(xml).not.toContain('<P_PMarzy');
-    expect(xml).not.toContain('<P_23');
+    expect(xml).toContain('<P_23>2</P_23>');
 
     const validation = validateFa3Xml(xml, invoice);
     expect(validation.valid).toBe(true);
