@@ -123,7 +123,8 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
         const res = await fetch(`/api/owner/invoices/${id}/send-to-ksef`, { method: 'POST' });
         const data = await res.json().catch(() => ({ error: 'Błąd' }));
         if (!res.ok && res.status !== 202) {
-          setError(data.error ?? 'Błąd wysyłania do KSeF.');
+          setError(data.message ?? data.error ?? 'Błąd wysyłania do KSeF.');
+          if (res.status === 422) viewKsefPayload(id);
           return;
         }
         loadInvoices();
@@ -424,6 +425,54 @@ export function PlatformInvoicesClient({ initialInvoices, initialTotal, isOwner 
                     </div>
                   </div>
                 )}
+
+                {/* KSeF Validation Details */}
+                {(() => {
+                  const resp = payloadModal.data.ksefResponse;
+                  const v = (resp?.validationDetails ?? null) as Record<string, string | null> | null;
+                  const rows: Array<[string, string | null | undefined]> = v ? [
+                    ['Kod błędu', v.validationCode],
+                    ['Komunikat', v.validationMessage ?? v.detailedErrorMessage],
+                    ['Reguła biznesowa', v.businessRuleId],
+                    ['Reguła walidacji', v.validationRule],
+                    ['Element', v.fieldName],
+                    ['XPath', v.errorPath],
+                    ['Kod przetwarzania', v.processingCode],
+                    ['Opis przetwarzania', v.processingDescription],
+                    ['Nr referencyjny faktury', v.invoiceReferenceNumber],
+                    ['Nr referencyjny sesji', v.sessionReferenceNumber],
+                  ] : [];
+                  const hasDetails = rows.some(([, val]) => !!val);
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Walidacja KSeF</p>
+                      {hasDetails ? (
+                        <div className="grid grid-cols-2 gap-4 p-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10">
+                          {rows.filter(([, val]) => !!val).map(([label, val]) => (
+                            <div key={label} className={label === 'Komunikat' ? 'col-span-2' : undefined}>
+                              <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                              <p className="text-sm font-mono text-slate-800 dark:text-slate-200 break-all">{val}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">
+                          Detailed KSeF validation response could not be retrieved.
+                        </p>
+                      )}
+                      {resp && (
+                        <details className="rounded-lg border border-slate-200 dark:border-slate-800">
+                          <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+                            Pełna odpowiedź KSeF (surowa)
+                          </summary>
+                          <pre className="text-xs font-mono p-4 bg-slate-900 text-slate-100 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-all">
+{JSON.stringify(resp, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* XML Payload */}
                 {payloadModal.data.rawXml && (
