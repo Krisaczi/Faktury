@@ -189,7 +189,9 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_19>1</P_19>
         <P_19A>${esc(exemptionReason)}</P_19A>
       </Zwolnienie>`
-    : '';
+    : `\n      <Zwolnienie>
+        <P_19N>1</P_19N>
+      </Zwolnienie>`;
 
   // NoweSrodkiTransportu, P_23, and PMarzy are OPTIONAL children of Adnotacje.
   // They must ONLY be emitted when the invoice uses that special procedure.
