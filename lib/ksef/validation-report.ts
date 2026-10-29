@@ -338,24 +338,24 @@ export function generateValidationReport(
   });
 
   // ── Section 7: Adnotacje Special Procedures (NoweSrodkiTransportu / PMarzy) ──
-  // These are OPTIONAL children of Adnotacje. They must only appear when the
-  // corresponding special procedure flag is active. Normal invoices must not
-  // contain them at all — not even "N" markers.
+  // NoweSrodkiTransportu is always present: P_22=1 when flagged, otherwise the P_22N marker.
+  // PMarzy only appears when the margin scheme flag is active.
   const optionalChecks: ValidationDetailCheck[] = [];
   const flags = invoice.specialProcedure;
   const expectsTransport = flags?.newMeansOfTransport === true;
   const expectsMargin = flags?.marginScheme === true;
   const hasTransportInXml = xml.includes('<NoweSrodkiTransportu');
+  const transportFlaggedInXml = xml.includes('<P_22>1</P_22>');
   const hasMarginInXml = xml.includes('<PMarzy');
 
   optionalChecks.push({
     name: 'NoweSrodkiTransportu',
-    status: hasTransportInXml === expectsTransport ? 'pass' : 'fail',
-    message: hasTransportInXml
-      ? expectsTransport
+    status: hasTransportInXml && transportFlaggedInXml === expectsTransport ? 'pass' : 'fail',
+    message: !hasTransportInXml
+      ? 'ERROR: Missing from Adnotacje'
+      : expectsTransport
         ? 'Emitted (new means of transport flag active)'
-        : 'ERROR: Emitted without specialProcedure.newMeansOfTransport flag'
-      : 'Not emitted (not applicable)',
+        : 'Marker emitted (P_22N=1, not applicable)',
   });
   optionalChecks.push({
     name: 'PMarzy',

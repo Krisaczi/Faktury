@@ -678,23 +678,33 @@ function validateBusinessRules(
     });
   }
 
-  // ── Rule 13: Inappropriate optional sections (NoweSrodkiTransportu / PMarzy) ──
-  // These sections must only appear when explicitly requested via specialProcedure flags.
-  // Standard service invoices must never contain them.
+  // ── Rule 13: NoweSrodkiTransportu is required in Adnotacje; its content depends on the flag ──
   const hasNoweSrodki = hasElement(xml, 'NoweSrodkiTransportu');
   const hasPMarzy = hasElement(xml, 'PMarzy');
   const flags = invoice.specialProcedure;
   const expectsTransport = flags?.newMeansOfTransport === true;
   const expectsMargin = flags?.marginScheme === true;
+  const transportFlagged = xml.includes('<P_22>1</P_22>');
 
-  if (hasNoweSrodki && !expectsTransport) {
+  if (!hasNoweSrodki) {
+    errors.push({
+      category: 'schema',
+      severity: 'error',
+      rule: 'missing_nowe_srodki_transportu',
+      element: 'NoweSrodkiTransportu',
+      message: 'NoweSrodkiTransportu section is missing from Adnotacje',
+      detail: 'Every FA(3) invoice must carry NoweSrodkiTransportu (P_22N=1 when not a new means of transport)',
+    });
+  } else if (transportFlagged !== expectsTransport) {
     errors.push({
       category: 'business',
       severity: 'error',
-      rule: 'spurious_nowe_srodki_transportu',
+      rule: 'nowe_srodki_transportu_flag_mismatch',
       element: 'NoweSrodkiTransportu',
-      message: 'NoweSrodkiTransportu section present but invoice is not flagged as new means of transport',
-      detail: 'Set specialProcedure.newMeansOfTransport = true only for new means of transport invoices',
+      message: expectsTransport
+        ? 'Invoice is flagged as new means of transport but P_22=1 is missing'
+        : 'Invoice is not flagged as new means of transport but P_22=1 is present',
+      detail: 'Set specialProcedure.newMeansOfTransport to match the NoweSrodkiTransportu content',
     });
   }
   if (hasPMarzy && !expectsMargin) {

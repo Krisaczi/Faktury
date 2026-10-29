@@ -148,9 +148,7 @@ describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
     expect(optionalSection!.status).toBe('pass');
 
     const transportCheck = optionalSection!.checks.find(c => c.name === 'NoweSrodkiTransportu');
-    expect(transportCheck!.message).toContain('Not emitted');
-
-    const marzyCheck = optionalSection!.checks.find(c => c.name === 'PMarzy');
+    expect(transportCheck!.message).toContain('P_22N'); = optionalSection!.checks.find(c => c.name === 'PMarzy');
     expect(marzyCheck!.message).toContain('Not emitted');
 
     // Zwolnienie check should always be present
