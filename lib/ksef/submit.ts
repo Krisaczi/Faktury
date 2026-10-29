@@ -336,6 +336,22 @@ async function listFailedSessionInvoices(
   }
 }
 
+async function fetchInvoiceStatusRaw(
+  baseUrl: string,
+  accessToken: string,
+  invoiceRef: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(`${baseUrl}/invoices/${invoiceRef}/status`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    const body = await res.json().catch(() => null) as Record<string, unknown> | null;
+    return body ? { httpStatus: res.status, ...body } : { httpStatus: res.status };
+  } catch {
+    return null;
+  }
+}
+
 async function sendInvoiceInSession(
   baseUrl: string,
   accessToken: string,
@@ -692,7 +708,10 @@ export async function submitToKsef(params: {
       // "Błąd weryfikacji, brak poprawnych faktur") and useless for debugging.
       // We dig into the per-invoice data to find the real validation code,
       // message, XPath/element, and raw response.
-      const failedInv = failedResult.invoices?.[0];
+      const invoiceStatusRaw = sendResult.invoiceId
+        ? await fetchInvoiceStatusRaw(baseUrl, accessToken, sendResult.invoiceId)
+        : null;
+      const failedInv = failedResult.invoices?.[0] ?? invoiceStatusRaw ?? undefined;
       const validation = extractInvoiceValidation(
         failedInv,
         failedResult.raw,
@@ -722,6 +741,9 @@ export async function submitToKsef(params: {
       if (validation.errorPath) {
         errorParts.push(`(element: ${validation.errorPath})`);
       }
+      if (!validation.validationCode && !validation.validationMessage && !validation.detailedErrorMessage && !validation.errorPath) {
+        errorParts.push('Detailed KSeF validation response could not be retrieved.');
+      }
       const detailedError = errorParts.join(' ');
 
       // Structured console log for developer debugging
@@ -750,6 +772,7 @@ export async function submitToKsef(params: {
           pollLog,
           failedInvoices:     failedResult.invoices,
           failedInvoicesRaw:  failedResult.raw,
+          invoiceStatusRaw,
           validationDetails:  validation,
         },
         error:     detailedError,
