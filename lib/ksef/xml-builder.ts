@@ -193,10 +193,8 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_19N>1</P_19N>
       </Zwolnienie>`;
 
-  // NoweSrodkiTransportu, P_23, and PMarzy are OPTIONAL children of Adnotacje.
-  // They must ONLY be emitted when the invoice uses that special procedure.
-  // Normal domestic invoices must not contain these sections at all — not even
-  // the "N" (not applicable) markers, which KSeF rejects as spurious.
+  // NoweSrodkiTransportu is required in Adnotacje; standard invoices carry the P_22N marker.
+  // P_23 and PMarzy are only emitted when the invoice uses that special procedure.
   const flags = inv.specialProcedure;
   const newTransport = flags?.newMeansOfTransport === true;
   const marginScheme = flags?.marginScheme === true;
@@ -205,7 +203,9 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
     ? `\n      <NoweSrodkiTransportu>
         <P_22>1</P_22>
       </NoweSrodkiTransportu>`
-    : '';
+    : `\n      <NoweSrodkiTransportu>
+        <P_22N>1</P_22N>
+      </NoweSrodkiTransportu>`;
 
   const p23 = newTransport || marginScheme ? '\n      <P_23>2</P_23>' : '';
 

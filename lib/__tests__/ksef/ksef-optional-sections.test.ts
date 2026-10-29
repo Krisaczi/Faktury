@@ -63,12 +63,12 @@ function makeBaseInvoice(overrides: Partial<IssuedInvoiceWithItems> = {}): Issue
 describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
 
   // ── Test 1: Standard invoice — sections omitted entirely ──
-  it('does not emit NoweSrodkiTransportu, P_23, or PMarzy for a standard invoice', () => {
+  it('emits the NoweSrodkiTransportu P_22N marker but not PMarzy or P_23 for a standard invoice', () => {
     const invoice = makeBaseInvoice();
     const xml = buildFa2Xml(invoice);
 
-    expect(xml).not.toContain('<NoweSrodkiTransportu');
-    expect(xml).not.toContain('<P_22');
+    expect(xml).toContain('<NoweSrodkiTransportu>\n        <P_22N>1</P_22N>');
+    expect(xml).not.toContain('<P_22>');
     expect(xml).not.toContain('<PMarzy');
     expect(xml).not.toContain('<P_PMarzy');
     expect(xml).not.toContain('<P_23');
@@ -90,8 +90,9 @@ describe('Adnotacje optional sections (NoweSrodkiTransportu / PMarzy)', () => {
     expect(xml).toContain('<PMarzy');
     expect(xml).toContain('<P_PMarzy>1</P_PMarzy>');
     expect(xml).not.toContain('<P_PMarzyN');
-    // NoweSrodkiTransportu still omitted
-    expect(xml).not.toContain('<NoweSrodkiTransportu');
+    // NoweSrodkiTransportu falls back to the P_22N marker
+    expect(xml).toContain('<P_22N>1</P_22N>');
+    expect(xml).not.toContain('<P_22>');
 
     const validation = validateFa3Xml(xml, invoice);
     const report = generateValidationReport(xml, invoice, validation);
