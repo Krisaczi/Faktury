@@ -193,41 +193,34 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
         <P_19N>1</P_19N>
       </Zwolnienie>`;
 
-  // NoweSrodkiTransportu and PMarzy are MANDATORY children of Adnotacje per FA(3) XSD.
-  // They are xsd:choice elements: either the full sequence (for special procedures)
-  // or the "N" marker (indicating the procedure does NOT apply).
+  // NoweSrodkiTransportu, P_23, and PMarzy are OPTIONAL children of Adnotacje.
+  // They must ONLY be emitted when the invoice uses that special procedure.
+  // Normal domestic invoices must not contain these sections at all — not even
+  // the "N" (not applicable) markers, which KSeF rejects as spurious.
   const flags = inv.specialProcedure;
   const newTransport = flags?.newMeansOfTransport === true;
   const marginScheme = flags?.marginScheme === true;
 
   const noweSrodki = newTransport
-    ? `      <NoweSrodkiTransportu>
+    ? `\n      <NoweSrodkiTransportu>
         <P_22>1</P_22>
       </NoweSrodkiTransportu>`
-    : `      <NoweSrodkiTransportu>
-        <P_22N>1</P_22N>
-      </NoweSrodkiTransportu>`;
+    : '';
 
-  // P_23 is mandatory: "1" for simplified procedure invoices, "2" otherwise.
-  const p23 = '2';
+  const p23 = newTransport || marginScheme ? '\n      <P_23>2</P_23>' : '';
 
   const pMarzy = marginScheme
-    ? `      <PMarzy>
+    ? `\n      <PMarzy>
         <P_PMarzy>1</P_PMarzy>
       </PMarzy>`
-    : `      <PMarzy>
-        <P_PMarzyN>1</P_PMarzyN>
-      </PMarzy>`;
+    : '';
 
   return `    <Adnotacje>
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>${p18}</P_18>
       <P_18A>2</P_18A>
-${zwolnienie}
-${noweSrodki}
-      <P_23>${p23}</P_23>
-${pMarzy}
+${zwolnienie}${noweSrodki}${p23}${pMarzy}
     </Adnotacje>`;
 }
 

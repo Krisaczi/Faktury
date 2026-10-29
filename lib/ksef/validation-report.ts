@@ -338,34 +338,33 @@ export function generateValidationReport(
   });
 
   // ── Section 7: Adnotacje Special Procedures (NoweSrodkiTransportu / PMarzy) ──
-  // These are MANDATORY children of Adnotacje per FA(3) XSD.
-  // Each is a choice: the active form (P_22 / P_PMarzy) or the "N" marker (P_22N / P_PMarzyN).
+  // These are OPTIONAL children of Adnotacje. They must only appear when the
+  // corresponding special procedure flag is active. Normal invoices must not
+  // contain them at all — not even "N" markers.
   const optionalChecks: ValidationDetailCheck[] = [];
   const flags = invoice.specialProcedure;
   const expectsTransport = flags?.newMeansOfTransport === true;
   const expectsMargin = flags?.marginScheme === true;
-  const hasTransportActive = xml.includes('<P_22>1</P_22>');
-  const hasTransportMarker = xml.includes('<P_22N');
-  const hasMarginActive = xml.includes('<P_PMarzy>1</P_PMarzy>');
-  const hasMarginMarker = xml.includes('<P_PMarzyN');
+  const hasTransportInXml = xml.includes('<NoweSrodkiTransportu');
+  const hasMarginInXml = xml.includes('<PMarzy');
 
   optionalChecks.push({
     name: 'NoweSrodkiTransportu',
-    status: hasTransportActive === expectsTransport ? 'pass' : 'fail',
-    message: hasTransportActive
-      ? 'Emitted (P_22=1, new means of transport flag active)'
-      : hasTransportMarker
-        ? 'Marker emitted (P_22N=1, not applicable)'
-        : 'ERROR: NoweSrodkiTransportu missing from Adnotacje',
+    status: hasTransportInXml === expectsTransport ? 'pass' : 'fail',
+    message: hasTransportInXml
+      ? expectsTransport
+        ? 'Emitted (new means of transport flag active)'
+        : 'ERROR: Emitted without specialProcedure.newMeansOfTransport flag'
+      : 'Not emitted (not applicable)',
   });
   optionalChecks.push({
     name: 'PMarzy',
-    status: hasMarginActive === expectsMargin ? 'pass' : 'fail',
-    message: hasMarginActive
-      ? 'Emitted (P_PMarzy=1, margin scheme flag active)'
-      : hasMarginMarker
-        ? 'Marker emitted (P_PMarzyN=1, not applicable)'
-        : 'ERROR: PMarzy missing from Adnotacje',
+    status: hasMarginInXml === expectsMargin ? 'pass' : 'fail',
+    message: hasMarginInXml
+      ? expectsMargin
+        ? 'Emitted (margin scheme flag active)'
+        : 'ERROR: Emitted without specialProcedure.marginScheme flag'
+      : 'Not emitted (not applicable)',
   });
   optionalChecks.push({
     name: 'Zwolnienie (P_19)',
