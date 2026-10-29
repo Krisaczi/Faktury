@@ -680,7 +680,7 @@ function validateBusinessRules(
 
   // ── Rule 13: NoweSrodkiTransportu is required in Adnotacje; its content depends on the flag ──
   const hasNoweSrodki = hasElement(xml, 'NoweSrodkiTransportu');
-  const hasPMarzy = hasElement(xml, 'PMarzy');
+  const hasPMarzy = hasElement(xml, 'P_PMarzy');
   const flags = invoice.specialProcedure;
   const expectsTransport = flags?.newMeansOfTransport === true;
   const expectsMargin = flags?.marginScheme === true;
