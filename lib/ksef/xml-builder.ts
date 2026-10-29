@@ -165,8 +165,6 @@ function buildPodmiot2(inv: IssuedInvoiceWithItems): string {
       <AdresL1>${esc(addr.ulica)}</AdresL1>
       <AdresL2>${esc(addr.kodPocztowy)} ${esc(addr.miasto)}</AdresL2>
     </Adres>
-    <JST>2</JST>
-    <GV>2</GV>
   </Podmiot2>`;
 }
 
@@ -185,13 +183,11 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
     ? inv.notes.trim()
     : 'zwolnienie z podatku VAT';
   const zwolnienie = activeCats.hasExempt
-    ? `      <Zwolnienie>
+    ? `\n      <Zwolnienie>
         <P_19>1</P_19>
         <P_19A>${esc(exemptionReason)}</P_19A>
       </Zwolnienie>`
-    : `      <Zwolnienie>
-        <P_19N>1</P_19N>
-      </Zwolnienie>`;
+    : '';
 
   // NoweSrodkiTransportu, P_23, and PMarzy are OPTIONAL children of Adnotacje.
   // They must ONLY be emitted when the invoice uses that special procedure.
@@ -219,8 +215,7 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>${p18}</P_18>
-      <P_18A>2</P_18A>
-${zwolnienie}${noweSrodki}${p23}${pMarzy}
+      <P_18A>2</P_18A>${zwolnienie}${noweSrodki}${p23}${pMarzy}
     </Adnotacje>`;
 }
 

@@ -23,6 +23,10 @@ export interface KsefSessionValidation {
   detailedErrorMessage: string | null;
   errorPath: string | null;
   errorNode: string | null;
+  errorCode: string | null;
+  businessRuleId: string | null;
+  validationRule: string | null;
+  fieldName: string | null;
   rawResponse: Record<string, unknown> | null;
 }
 
@@ -394,6 +398,10 @@ async function sendInvoiceInSession(
         detailedErrorMessage: (responseBody.detail as string) ?? null,
         errorPath,
         errorNode: errorPath,
+        errorCode: validationCode,
+        businessRuleId: pickStr(responseBody, 'businessRuleId', 'ruleId') ?? null,
+        validationRule: pickStr(responseBody, 'validationRule', 'ruleName') ?? null,
+        fieldName: pickStr(responseBody, 'fieldName', 'field', 'element') ?? null,
         rawResponse: responseBody,
       };
       return {
@@ -505,6 +513,21 @@ function extractInvoiceValidation(
     pickStr(firstError, 'detail', 'details') ??
     null;
 
+  const businessRuleId =
+    pickStr(firstError, 'businessRuleId', 'ruleId', 'businessRule') ??
+    pickStr(failedInv, 'businessRuleId', 'ruleId', 'businessRule') ??
+    null;
+
+  const validationRule =
+    pickStr(firstError, 'validationRule', 'rule', 'ruleName') ??
+    pickStr(failedInv, 'validationRule', 'rule', 'ruleName') ??
+    null;
+
+  const fieldName =
+    pickStr(firstError, 'fieldName', 'field', 'element', 'elementName') ??
+    pickStr(failedInv, 'fieldName', 'field') ??
+    null;
+
   return {
     sessionReferenceNumber: sessionRef,
     invoiceReferenceNumber: invoiceRef ?? pickStr(failedInv, 'referenceNumber', 'invoiceReferenceNumber', 'elementReferenceNumber') ?? null,
@@ -515,6 +538,10 @@ function extractInvoiceValidation(
     detailedErrorMessage,
     errorPath,
     errorNode: errorPath,
+    errorCode: validationCode,
+    businessRuleId,
+    validationRule,
+    fieldName,
     rawResponse: failedRaw ?? (failedInv ? { failedInvoice: failedInv } : null),
   };
 }
