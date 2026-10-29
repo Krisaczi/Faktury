@@ -508,14 +508,22 @@ function extractInvoiceValidation(
   const firstError: Record<string, unknown> | undefined =
     errorArrays.flatMap(a => a).find(e => typeof e === 'object' && e !== null) as Record<string, unknown> | undefined;
 
+  const invStatus = (failedInv?.status && typeof failedInv.status === 'object' ? failedInv.status : null) as Record<string, unknown> | null;
+  const invStatusDetails = Array.isArray(invStatus?.details)
+    ? (invStatus!.details as unknown[]).filter((d): d is string => typeof d === 'string').join(' ') || null
+    : null;
+
   const validationCode =
     pickStr(failedInv, 'validationCode', 'errorCode', 'code', 'processingCode') ??
     pickStr(firstError, 'errorCode', 'code', 'validationCode') ??
+    pickStr(invStatus, 'code') ??
     null;
 
   const validationMessage =
     pickStr(failedInv, 'validationMessage', 'errorMessage', 'message', 'description', 'errorDescription') ??
     pickStr(firstError, 'message', 'description', 'detail', 'errorDescription') ??
+    invStatusDetails ??
+    pickStr(invStatus, 'description') ??
     null;
 
   const errorPath =
@@ -527,6 +535,7 @@ function extractInvoiceValidation(
   const detailedErrorMessage =
     pickStr(failedInv, 'detailedErrorMessage', 'detail', 'details') ??
     pickStr(firstError, 'detail', 'details') ??
+    invStatusDetails ??
     null;
 
   const businessRuleId =
