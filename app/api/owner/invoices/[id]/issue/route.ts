@@ -23,7 +23,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: u } = await (supabase as any)
     .from('users')
-    .select('role')
+    .select('role, company_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -157,19 +157,20 @@ export async function POST(
   let ksefResult: { ksefStatus?: string; ksefNumber?: string; error?: string; transient?: boolean } | null = null;
 
   try {
-    // Load company NIP
+    // Seller is the issuing user's company (the buyer is invoice.entity_id)
+    const sellerCompanyId = u.company_id;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: company } = await (supabase as any)
       .from('companies')
       .select('nip')
-      .eq('id', invoice.entity_id)
+      .eq('id', sellerCompanyId)
       .maybeSingle();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: creds } = await (supabase as any)
       .from('ksef_credentials')
       .select('token, environment')
-      .eq('company_id', invoice.entity_id)
+      .eq('company_id', sellerCompanyId)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
