@@ -9,6 +9,7 @@
 
 import type { Database } from '@/types/database';
 import { KSEF_RODZAJ_FAKTURY, type DocumentType, type VatRate } from '@/types/issued-invoice';
+import { P13_FIELDS } from './fa3-schema';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -266,8 +267,9 @@ export function buildFieldMappings(inv: InvoiceForValidation): FieldMapping[] {
     }
     for (const rate of Array.from(rateMap.keys())) {
       const count = rateMap.get(rate)!;
-      const ksefRate = rate === 'np' ? 'np I' : rate === 'np2' ? 'np II' : rate;
-      const p13 = rate === '23' ? 'P_13_1' : rate === '8' ? 'P_13_2' : rate === '5' ? 'P_13_3' : rate === '0' ? 'P_13_5' : rate === 'zw' ? 'P_13_7' : rate === 'np' ? 'P_13_8' : rate === 'oo' ? 'P_13_10' : 'P_13_?';
+      const fieldDef = P13_FIELDS[rate];
+      const ksefRate = fieldDef?.p12Value ?? rate;
+      const p13 = fieldDef?.element ?? 'P_13_?';
       mappings.push({
         invoiceField: `VAT Rate: ${rate}`,
         ksefElement: `P_12=${ksefRate} → ${p13}`,

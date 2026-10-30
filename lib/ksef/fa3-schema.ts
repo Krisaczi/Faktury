@@ -28,9 +28,9 @@ export const P13_FIELDS: Record<string, P13FieldDef> = {
   '23':    { element: 'P_13_1',   p12Value: '23',    hasVat: true,  order: 1,  businessReason: 'Standard 23% VAT rate' },
   '8':     { element: 'P_13_2',   p12Value: '8',     hasVat: true,  order: 2,  businessReason: 'Reduced 8% VAT rate' },
   '5':     { element: 'P_13_3',   p12Value: '5',     hasVat: true,  order: 3,  businessReason: 'Reduced 5% VAT rate' },
-  '0':     { element: 'P_13_5',   p12Value: '0',     hasVat: false, order: 5,  businessReason: 'Zero-rated domestic transaction (0% VAT)' },
-  '0_kr':  { element: 'P_13_6_1', p12Value: '0 KR',  hasVat: false, order: 6,  businessReason: 'Zero-rated intra-community supply (WDT)' },
-  '0_wdt': { element: 'P_13_6_2', p12Value: '0 WDT', hasVat: false, order: 6,  businessReason: 'Zero-rated intra-community acquisition (WNT)' },
+  '0':     { element: 'P_13_6_1', p12Value: '0 KR',  hasVat: false, order: 6,  businessReason: 'Zero-rated domestic transaction (0% KR)', aggregatesWith: '0_kr' },
+  '0_kr':  { element: 'P_13_6_1', p12Value: '0 KR',  hasVat: false, order: 6,  businessReason: 'Zero-rated domestic transaction (0% KR)' },
+  '0_wdt': { element: 'P_13_6_2', p12Value: '0 WDT', hasVat: false, order: 6,  businessReason: 'Zero-rated intra-community supply (WDT)' },
   '0_ex':  { element: 'P_13_6_3', p12Value: '0 EX',  hasVat: false, order: 6,  businessReason: 'Zero-rated export transaction' },
   'zw':    { element: 'P_13_7',   p12Value: 'zw',    hasVat: false, order: 7,  businessReason: 'VAT-exempt transaction (Art. 43 ust. 1)' },
   'np':    { element: 'P_13_8',   p12Value: 'np I',  hasVat: false, order: 8,  businessReason: 'Not subject to VAT — outside scope (np I)' },
@@ -47,7 +47,7 @@ export const P14_FIELDS: Record<string, string> = {
 
 /** Valid P_12 (TStawkaPodatmiu) codes per FA(3) specification. */
 export const VALID_P12_VALUES = [
-  '23', '22', '8', '7', '5', '4', '3', '0',
+  '23', '22', '8', '7', '5', '4', '3',
   '0 KR', '0 WDT', '0 EX',
   'zw', 'oo', 'np I', 'np II',
 ];
