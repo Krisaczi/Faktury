@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useVendors } from '@/hooks/use-vendors';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,14 @@ import { StateCard } from '@/components/ui/state-card';
 import { SkeletonList } from '@/components/ui/skeleton-loaders';
 import { InlineLoader } from '@/components/ui/skeleton-loaders';
 import { PageHeader, Stack, Grid, HStack } from '@/components/ui/layout-primitives';
+import { useCeidgLookup } from '@/hooks/use-ceidg-lookup';
+import { CeidgBlockingWarning, CeidgLookupStatus } from '@/components/ceidg/ceidg-lookup-status';
+import {
+  formatCeidgStreetLine,
+  isCeidgStatusBlocking,
+  mapCeidgToFormValues,
+  type CeidgStatus,
+} from '@/lib/ceidg/ceidg-company';
 
 const statusColors: Record<string, string> = {
   active:       'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -66,7 +74,11 @@ const riskColor = (score: number | null) => {
 };
 
 interface VendorForm {
+  nip:           string;
   name:          string;
+  address_street: string;
+  address_zip:   string;
+  address_city:  string;
   category:      string;
   contact_email: string;
   status:        'active' | 'inactive' | 'under_review';
@@ -74,7 +86,8 @@ interface VendorForm {
 }
 
 const defaultForm: VendorForm = {
-  name: '', category: '', contact_email: '', status: 'active', risk_score: '',
+  nip: '', name: '', address_street: '', address_zip: '', address_city: '',
+  category: '', contact_email: '', status: 'active', risk_score: '',
 };
 
 export default function VendorsPage() {
@@ -84,6 +97,35 @@ export default function VendorsPage() {
   const [form,       setForm]       = useState<VendorForm>(defaultForm);
   const [saving,     setSaving]     = useState(false);
   const [formError,  setFormError]  = useState('');
+  const [ceidgStatus, setCeidgStatus] = useState<CeidgStatus | null>(null);
+  const [ceidgAcknowledged, setCeidgAcknowledged] = useState(true);
+  const { state: lookupState, lookup, scheduleLookup, reset: resetCeidg } = useCeidgLookup();
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    setForm(defaultForm);
+    setFormError('');
+    setCeidgStatus(null);
+    setCeidgAcknowledged(true);
+    resetCeidg();
+  }, [dialogOpen, resetCeidg]);
+
+  useEffect(() => {
+    if (lookupState.phase !== 'found') return;
+    const { company } = lookupState;
+    const values = mapCeidgToFormValues(company);
+    setForm((prev) => ({
+      ...prev,
+      nip:           company.nip,
+      name:          values.name,
+      address_street: formatCeidgStreetLine(values),
+      address_zip:   values.postalCode,
+      address_city:  values.city,
+      contact_email: values.email,
+    }));
+    setCeidgStatus(company.status);
+    setCeidgAcknowledged(!isCeidgStatusBlocking(company.status));
+  }, [lookupState]);
 
   const filtered = vendors.filter(
     (v) =>
@@ -95,14 +137,23 @@ export default function VendorsPage() {
     e.preventDefault();
     setFormError('');
     if (!form.name.trim()) { setFormError('Nazwa firmy jest wymagana'); return; }
+    if (form.nip && !/^\d{10}$/.test(form.nip)) { setFormError('NIP musi zawierać 10 cyfr'); return; }
+    if (ceidgStatus && isCeidgStatusBlocking(ceidgStatus) && !ceidgAcknowledged) {
+      setFormError('Potwierdź zapis dostawcy ze statusem CEIDG, aby kontynuować.');
+      return;
+    }
     setSaving(true);
     try {
       await addVendor({
-        name:          form.name.trim(),
-        category:      form.category      || null,
-        contact_email: form.contact_email || null,
-        status:        form.status,
-        risk_score:    form.risk_score ? parseFloat(form.risk_score) : null,
+        name:           form.name.trim(),
+        nip:            form.nip || null,
+        address_street: form.address_street.trim() || null,
+        address_zip:    form.address_zip.trim()    || null,
+        address_city:   form.address_city.trim()   || null,
+        category:       form.category      || null,
+        contact_email:  form.contact_email || null,
+        status:         form.status,
+        risk_score:     form.risk_score ? parseFloat(form.risk_score) : null,
       });
       setDialogOpen(false);
       setForm(defaultForm);
@@ -123,15 +174,14 @@ export default function VendorsPage() {
           <DialogTrigger asChild>
             <Button
               className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => { setForm(defaultForm); setFormError(''); }}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Dadaj dostawcę
+              Dodaj dostawcę
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Dadaj dostawcę</DialogTitle>
+              <DialogTitle>Dodaj dostawcę</DialogTitle>
               <DialogDescription>
                 Wpisz dane dostawcy.
               </DialogDescription>
@@ -144,13 +194,29 @@ export default function VendorsPage() {
                 </div>
               )}
               <div className="space-y-2">
+                <Label htmlFor="nip">NIP</Label>
+                <Input
+                  id="nip"
+                  inputMode="numeric"
+                  value={form.nip}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setForm({ ...form, nip: digits });
+                    scheduleLookup(digits);
+                  }}
+                  placeholder="1234567890"
+                  className="font-mono"
+                  autoFocus
+                />
+                <CeidgLookupStatus nip={form.nip} lookupState={lookupState} status={ceidgStatus} onLookup={lookup} />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Nazwa firmy *</Label>
                 <Input
                   id="name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Acme Corporation"
-                  autoFocus
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -187,6 +253,34 @@ export default function VendorsPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="address_street">Ulica i numer</Label>
+                <Input
+                  id="address_street"
+                  value={form.address_street}
+                  onChange={(e) => setForm({ ...form, address_street: e.target.value })}
+                  placeholder="ul. Przykładowa 1"
+                />
+              </div>
+              <div className="grid grid-cols-[1fr_2fr] gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="address_zip">Kod pocztowy</Label>
+                  <Input
+                    id="address_zip"
+                    value={form.address_zip}
+                    onChange={(e) => setForm({ ...form, address_zip: e.target.value })}
+                    placeholder="00-000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address_city">Miasto</Label>
+                  <Input
+                    id="address_city"
+                    value={form.address_city}
+                    onChange={(e) => setForm({ ...form, address_city: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label>Status</Label>
                 <Select
                   value={form.status}
@@ -200,6 +294,11 @@ export default function VendorsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <CeidgBlockingWarning
+                status={ceidgStatus}
+                acknowledged={ceidgAcknowledged}
+                onAcknowledge={setCeidgAcknowledged}
+              />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
@@ -207,7 +306,7 @@ export default function VendorsPage() {
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={saving}>
                   {saving ? (
                     <><InlineLoader size="sm" className="mr-2 text-white" />Dodawanie…</>
-                  ) : 'Dadaj dostawcę'}
+                  ) : 'Dodaj dostawcę'}
                 </Button>
               </DialogFooter>
             </form>
