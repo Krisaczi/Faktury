@@ -91,7 +91,7 @@ function buildVatGroups(items: IssuedInvoiceWithItems['items']): VatGroup[] {
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
-function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false): string {
+function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false, logoDataUrl: string | null = null): string {
   const cur = invoice.currency ?? 'PLN';
   const vatGroups = buildVatGroups(invoice.items);
   const generatedAt = format(new Date(), 'dd.MM.yyyy HH:mm', { locale: pl });
@@ -180,6 +180,13 @@ function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false):
       padding-bottom: 24px;
       margin-bottom: 32px;
       border-bottom: 2.5px solid #0f172a;
+    }
+    .company-logo {
+      display: block;
+      max-height: 64px;
+      max-width: 220px;
+      object-fit: contain;
+      margin-bottom: 16px;
     }
     .doc-title {
       font-size: 28px;
@@ -539,6 +546,7 @@ function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false):
     <!-- Document header -->
     <div class="doc-header">
       <div>
+        ${logoDataUrl ? `<img class="company-logo" src="${logoDataUrl}" alt="Logo firmy"/>` : ''}
         <div class="doc-title">FAKTURA VAT</div>
         <div class="doc-subtitle">Dokument wystawiony zgodnie z przepisami ustawy o VAT</div>
       </div>
@@ -817,6 +825,22 @@ export async function GET(
       bankAccount = ba;
     }
 
+    let logoDataUrl: string | null = null;
+    const { data: companyRow } = await (supabase as any)
+      .from('companies')
+      .select('logo_path')
+      .eq('id', u.company_id)
+      .maybeSingle();
+    if (companyRow?.logo_path) {
+      const { data: logoBlob } = await supabase.storage
+        .from('company-logos')
+        .download(companyRow.logo_path);
+      if (logoBlob && ['image/png', 'image/jpeg', 'image/webp'].includes(logoBlob.type)) {
+        const logoBytes = Buffer.from(await logoBlob.arrayBuffer());
+        logoDataUrl = `data:${logoBlob.type};base64,${logoBytes.toString('base64')}`;
+      }
+    }
+
     const invoiceWithItems: IssuedInvoiceWithItems = {
       ...invoice,
       items: items ?? [],
@@ -842,7 +866,7 @@ export async function GET(
     }
 
     const autoPrint = req.nextUrl.searchParams.get('print') === '1';
-    const html = buildHtml(invoiceWithItems, autoPrint);
+    const html = buildHtml(invoiceWithItems, autoPrint, logoDataUrl);
 
     return new NextResponse(html, {
       status: 200,

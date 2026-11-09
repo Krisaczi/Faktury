@@ -85,9 +85,22 @@ async function fetchInvoiceWithItems(id: string): Promise<IssuedInvoiceWithItems
 
   if (itemsErr) throw new Error(`DB error fetching invoice items: ${itemsErr.message}`);
 
+  let companyBankAccount: IssuedInvoiceWithItems['company_bank_account'] = null;
+  if (invoice.company_bank_account_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: ba, error: baErr } = await (supabase as any)
+      .from('company_bank_accounts')
+      .select('id, account_holder_name, iban, bic, bank_name')
+      .eq('id', invoice.company_bank_account_id)
+      .maybeSingle();
+    if (baErr) throw new Error(`DB error fetching bank account: ${baErr.message}`);
+    companyBankAccount = ba;
+  }
+
   return {
     ...invoice,
     items: items ?? [],
+    company_bank_account: companyBankAccount,
     specialProcedure: { splitPaymentMechanism: invoice.split_payment_mechanism === true },
   };
 }

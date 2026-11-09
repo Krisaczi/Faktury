@@ -264,10 +264,18 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
     ? `\n      <TerminPlatnosci>\n        <Termin>${esc(isoDate(inv.due_date))}</Termin>\n      </TerminPlatnosci>`
     : '';
 
-  const rawAccount = inv.seller_bank_account?.trim() ?? '';
+  const linked = inv.company_bank_account;
+  const rawAccount = (linked?.iban ?? inv.seller_bank_account ?? '').trim();
   const nrRb = rawAccount.replace(/^PL/i, '').replace(/\s/g, '');
-  const bankLine = nrRb
-    ? `\n      <RachunekBankowy>\n        <NrRB>${esc(nrRb)}</NrRB>\n      </RachunekBankowy>`
+  const swift = linked?.bic?.trim().replace(/\s/g, '') ?? '';
+  const bankName = linked?.bank_name?.trim() ?? '';
+  const bankParts = [
+    nrRb ? `<NrRB>${esc(nrRb)}</NrRB>` : '',
+    swift ? `<SWIFT>${esc(swift)}</SWIFT>` : '',
+    bankName ? `<NazwaBanku>${esc(bankName)}</NazwaBanku>` : '',
+  ].filter(Boolean);
+  const bankLine = bankParts.length
+    ? `\n      <RachunekBankowy>\n        ${bankParts.join('\n        ')}\n      </RachunekBankowy>`
     : '';
 
   return `    <Platnosc>${dueDateLine}

@@ -32,6 +32,7 @@ export type Database = {
           registered_at: string | null;
           onboarding_step: string | null;
           invoice_numbering_mode: 'auto' | 'manual';
+          logo_path: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +40,7 @@ export type Database = {
           id?: string;
           name: string;
           nip?: string | null;
+          logo_path?: string | null;
           currency?: string;
           ingestion_email?: string | null;
           subscription_status?: string;
