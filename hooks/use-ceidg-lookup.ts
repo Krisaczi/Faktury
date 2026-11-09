@@ -19,6 +19,14 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 const DEFAULT_ERROR = 'Nie udało się połączyć z CEIDG. Spróbuj ponownie później.';
 
+type CeidgPayload = Partial<CeidgLookupResponse> & { code?: string; error?: string };
+
+async function readErrorPayload(error: unknown): Promise<CeidgPayload | null> {
+  const response = (error as { context?: Response } | null)?.context;
+  if (!(response instanceof Response)) return null;
+  return (await response.json().catch(() => null)) as CeidgPayload | null;
+}
+
 export function useCeidgLookup() {
   const [state, setState] = useState<CeidgLookupState>({ phase: 'idle' });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,8 +49,8 @@ export function useCeidgLookup() {
 
     if (requestId !== requestIdRef.current) return;
 
-    const payload = data as Partial<CeidgLookupResponse> & { code?: string; error?: string } | null;
-    if (error || !payload?.company) {
+    const payload = error ? await readErrorPayload(error) : (data as CeidgPayload | null);
+    if (!payload?.company) {
       const code = payload?.code ?? '';
       setState({ phase: 'error', message: ERROR_MESSAGES[code] ?? DEFAULT_ERROR });
       return;
