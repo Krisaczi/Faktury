@@ -41,6 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { VendorBankAccountsEditor } from '@/components/vendors/vendor-bank-accounts-editor';
 import {
   AreaChart,
   Area,
@@ -166,10 +167,16 @@ function MobileInvoiceRow({ row }: { row: VendorInvoiceRow }) {
 // ─── Edit vendor dialog ─────────────────────────────────────────────────────────
 function EditVendorDialog({
   vendor,
+  bankAccounts,
   onSave,
+  onAddBankAccount,
+  onRemoveBankAccount,
 }: {
   vendor: VendorFull;
+  bankAccounts: VendorBankAccount[];
   onSave: (updates: Partial<VendorFull>) => Promise<void>;
+  onAddBankAccount: (input: { bank_account_number: string; bank_name: string }) => Promise<void>;
+  onRemoveBankAccount: (accountId: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -329,6 +336,11 @@ function EditVendorDialog({
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Internal notes..." />
           </div>
+          <VendorBankAccountsEditor
+            accounts={bankAccounts}
+            onAdd={onAddBankAccount}
+            onRemove={onRemoveBankAccount}
+          />
         </div>
         <CeidgBlockingWarning
           status={ceidgStatus}
@@ -431,7 +443,7 @@ export default function VendorProfilePage() {
   const { id: vendorId } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const { data, error, isLoading, updateVendorProfile, mergeVendor } = useVendor(vendorId ?? null);
+  const { data, error, isLoading, updateVendorProfile, mergeVendor, addBankAccount, removeBankAccount } = useVendor(vendorId ?? null);
 
   // Invoice filters
   const [invoiceFilters, setInvoiceFilters] = useState<VendorInvoiceFilters>({
@@ -488,6 +500,16 @@ export default function VendorProfilePage() {
   async function handleMerge(sourceId: string) {
     await mergeVendor(sourceId);
     showToast('Vendors merged successfully', 'success');
+  }
+
+  async function handleAddBankAccount(input: { bank_account_number: string; bank_name: string }) {
+    await addBankAccount(input);
+    showToast('Bank account added', 'success');
+  }
+
+  async function handleRemoveBankAccount(accountId: string) {
+    await removeBankAccount(accountId);
+    showToast('Bank account removed', 'success');
   }
 
   function handleSort(field: string) {
@@ -608,7 +630,13 @@ export default function VendorProfilePage() {
                     {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     Export CSV
                   </Button>
-                  <EditVendorDialog vendor={vendor} onSave={handleUpdateVendor} />
+                  <EditVendorDialog
+                    vendor={vendor}
+                    bankAccounts={bankAccounts}
+                    onSave={handleUpdateVendor}
+                    onAddBankAccount={handleAddBankAccount}
+                    onRemoveBankAccount={handleRemoveBankAccount}
+                  />
                 </div>
               )}
             </div>
@@ -771,7 +799,13 @@ export default function VendorProfilePage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 pt-2">
-                      <EditVendorDialog vendor={vendor} onSave={handleUpdateVendor} />
+                      <EditVendorDialog
+                    vendor={vendor}
+                    bankAccounts={bankAccounts}
+                    onSave={handleUpdateVendor}
+                    onAddBankAccount={handleAddBankAccount}
+                    onRemoveBankAccount={handleRemoveBankAccount}
+                  />
                       <MergeVendorDialog onMerge={handleMerge} />
                       {vendor.contact_email && (
                         <a href={`mailto:${vendor.contact_email}`} className="block">
