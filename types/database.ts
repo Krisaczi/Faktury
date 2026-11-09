@@ -185,6 +185,14 @@ export type Database = {
           address_zip: string | null;
           address_city: string | null;
           bank_account_number: string | null;
+          building_number: string | null;
+          apartment_number: string | null;
+          country: string | null;
+          phone: string | null;
+          regon: string | null;
+          website: string | null;
+          ceidg_status: 'active' | 'suspended' | 'deleted' | 'inactive' | null;
+          ceidg_checked_at: string | null;
           created_at: string;
           updated_at: string;
         };

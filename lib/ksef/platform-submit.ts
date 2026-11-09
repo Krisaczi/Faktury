@@ -19,14 +19,15 @@ import type { KsefPayload } from './index';
  * Map a numeric VAT rate percent to the VatRate enum.
  * KSeF FA(2) only supports specific rates: 23, 8, 5, 0, zw, np, oo.
  */
-function vatRateFromPercent(percent: number | string | null, notes?: string | null): string {
+function vatRateFromPercent(percent: number | string | null, exempt: boolean, notes?: string | null): string {
+  if (exempt) return 'zw';
   if (percent == null) return '0';
   const n = typeof percent === 'string' ? Number(percent) : percent;
   if (n === 23) return '23';
   if (n === 8)  return '8';
   if (n === 5)  return '5';
   if (n === 0)  {
-    // If notes mention VAT exemption (zwolnienie), use 'zw' instead of '0'
+    // Legacy invoices recorded exemption only in notes
     if (notes && /zwoln/i.test(notes)) return 'zw';
     return '0';
   }
@@ -115,7 +116,7 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
   const buyerAddress = `${buyerStreet}, ${buyerZip} ${buyerCity}`.replace(/^,\s*/, '').trim();
 
   // Determine the invoice-level VAT rate
-  const invoiceVatRate = vatRateFromPercent(invoice.vat_rate_percent, invoice.notes);
+  const invoiceVatRate = vatRateFromPercent(invoice.vat_rate_percent, invoice.vat_exempt === true, invoice.notes);
 
   // Map line items to the issued_invoice_items shape
   const mappedItems = items.map((item: {
@@ -128,7 +129,7 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
     vat_rate_percent: string | number | null;
   }, index: number) => {
     const itemVatRate = item.vat_rate_percent != null
-      ? vatRateFromPercent(item.vat_rate_percent, invoice.notes)
+      ? vatRateFromPercent(item.vat_rate_percent, invoice.vat_exempt === true, invoice.notes)
       : invoiceVatRate;
 
     const unitPriceNet = item.unit_price_cents / 100;
@@ -225,6 +226,7 @@ async function fetchPlatformInvoiceForKsef(invoiceId: string): Promise<IssuedInv
     created_at: invoice.created_at,
     updated_at: invoice.updated_at,
     company_bank_account: null,
+    specialProcedure: { splitPaymentMechanism: invoice.split_payment_mechanism === true },
     items: mappedItems,
   } as unknown as IssuedInvoiceWithItems;
 

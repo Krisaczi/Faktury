@@ -71,6 +71,8 @@ export function PlatformInvoiceModal({
   // VAT state
   const [vatRate, setVatRate]               = useState<number>(0);
   const [customVatRate, setCustomVatRate]   = useState<string>('');
+  const [vatExempt, setVatExempt]           = useState(false);
+  const [splitPaymentMechanism, setSplitPaymentMechanism] = useState(false);
   const [vatMode, setVatMode]               = useState<'invoice' | 'per_line'>('invoice');
   const [priceIncludesTax, setPriceIncludesTax] = useState(false);
   const [vatNumber, setVatNumber]           = useState('');
@@ -104,6 +106,7 @@ export function PlatformInvoiceModal({
         if (taxRes.ok) {
           const taxData = await taxRes.json() as { defaultVatRate: number | null; defaultVatNumber: string | null };
           if (taxData.defaultVatRate != null) {
+            setVatExempt(false);
             setVatRate(taxData.defaultVatRate);
             setDefaultVatRate(taxData.defaultVatRate);
           } else {
@@ -150,7 +153,7 @@ export function PlatformInvoiceModal({
     }
     if (!open) {
       setStep('loading'); setUsage(null); setError(null); setDraftId(null); setServerTotals(null);
-      setLineItems([]); setVatRate(0); setCustomVatRate(''); setVatNumber('');
+      setLineItems([]); setVatRate(0); setVatExempt(false); setSplitPaymentMechanism(false); setCustomVatRate(''); setVatNumber('');
       setVatMode('invoice'); setPriceIncludesTax(false); setVatConfirmed(false);
       setDefaultVatRate(null);
       setAutoGenNumber(true); setManualInvoiceNumber(''); setNumberError(null);
@@ -225,6 +228,8 @@ export function PlatformInvoiceModal({
             notes:            notes || undefined,
             internalReference: internalRef || undefined,
             vatRate:          effectiveVatRate,
+            vatExempt,
+            splitPaymentMechanism,
             vatMode,
             priceIncludesTax,
             vatNumber:        vatNumber || undefined,
@@ -467,9 +472,11 @@ export function PlatformInvoiceModal({
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-500">Stawka VAT</Label>
                   <Select
-                    value={customVatRate !== '' ? '__custom' : String(vatRate)}
+                    value={vatExempt ? '__exempt' : customVatRate !== '' ? '__custom' : String(vatRate)}
                     onValueChange={(v) => {
-                      if (v === '__custom') { setCustomVatRate(''); return; }
+                      if (v === '__exempt') { setVatExempt(true); setCustomVatRate(''); setVatRate(0); return; }
+                      if (v === '__custom') { setVatExempt(false); setSplitPaymentMechanism(false); setCustomVatRate(''); return; }
+                      setVatExempt(false);
                       setCustomVatRate('');
                       setVatRate(Number(v));
                     }}
@@ -479,6 +486,7 @@ export function PlatformInvoiceModal({
                       {VAT_PRESETS.map((r) => (
                         <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
                       ))}
+                      <SelectItem value="__exempt">Zwolniony</SelectItem>
                       <SelectItem value="__custom">Niestandardowa...</SelectItem>
                     </SelectContent>
                   </Select>
@@ -493,7 +501,7 @@ export function PlatformInvoiceModal({
                 {/* VAT mode */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-500">Zakres VAT</Label>
-                  <Select value={vatMode} onValueChange={(v: 'invoice' | 'per_line') => setVatMode(v)}>
+                  <Select value={vatMode} disabled={vatExempt} onValueChange={(v: 'invoice' | 'per_line') => setVatMode(v)}>
                     <SelectTrigger className="text-sm h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="invoice">Cała faktura</SelectItem>
@@ -519,6 +527,19 @@ export function PlatformInvoiceModal({
                   <Label className="text-xs text-slate-500">Numer VAT (opcjonalnie)</Label>
                   <Input className="h-9 text-sm" value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="PL1234567890" />
                 </div>
+
+                <label className="flex items-start gap-2.5 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2.5 cursor-pointer md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={splitPaymentMechanism}
+                    onChange={(e) => setSplitPaymentMechanism(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Mechanizm podzielonej płatności (MPP)</span>
+                    <span className="text-xs text-slate-500">Oznacz fakture jako objeta mechanizmem podzielonej platnosci (P_18A=1).</span>
+                  </span>
+                </label>
               </div>
 
               <p className="text-xs text-slate-400">

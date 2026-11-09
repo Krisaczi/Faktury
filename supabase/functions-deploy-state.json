@@ -1,0 +1,21 @@
+{
+  "projectId": "66536442",
+  "functions": {
+    "ksefRetryWorker": {
+      "hasChanged": false,
+      "hash": "d930a6e30eda0a8236cabb32240a06c28f7317846c56882bf2cc20dc882a037e"
+    },
+    "parseInvoice": {
+      "hasChanged": false,
+      "hash": "d96f1679a6b7f89e42021e3d5f21be5f231c7819a5486b690b30c09fa5bb79c0"
+    },
+    "runRiskEngine": {
+      "hasChanged": false,
+      "hash": "d3fd142314da3a0e034b8f63a05951a018da3bc90c65c90e5677146d8c834bdc"
+    },
+    "ceidgLookup": {
+      "hasChanged": false,
+      "hash": "a63bb84775c2870b6258b50e512d5110d9e2c74fe2670c9483ff1a4356c65b5f"
+    }
+  }
+}

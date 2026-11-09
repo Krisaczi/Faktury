@@ -31,6 +31,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useCeidgLookup } from '@/hooks/use-ceidg-lookup';
+import { CeidgBlockingWarning, CeidgLookupStatus } from '@/components/ceidg/ceidg-lookup-status';
+import {
+  formatCeidgStreetCity,
+  isCeidgStatusBlocking,
+  mapCeidgToFormValues,
+  type CeidgStatus,
+} from '@/lib/ceidg/ceidg-company';
 
 export interface Customer {
   id:            string;
@@ -45,6 +53,12 @@ export interface Customer {
   billing_email: string | null;
   last_used_at:  string | null;
   created_at:    string;
+  building_number?:  string | null;
+  apartment_number?: string | null;
+  regon?:            string | null;
+  website?:          string | null;
+  ceidg_status?:     CeidgStatus | null;
+  ceidg_checked_at?: string | null;
 }
 
 interface Pagination {
@@ -488,27 +502,68 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
   const [zip, setZip]           = useState('');
   const [email, setEmail]       = useState('');
   const [phone, setPhone]       = useState('');
+  const [website, setWebsite]   = useState('');
+  const [buildingNumber, setBuildingNumber]   = useState('');
+  const [apartmentNumber, setApartmentNumber] = useState('');
+  const [regon, setRegon]       = useState('');
+  const [country, setCountry]   = useState('Polska');
+  const [ceidgStatus, setCeidgStatus]       = useState<CeidgStatus | null>(null);
+  const [ceidgCheckedAt, setCeidgCheckedAt] = useState<string | null>(null);
+  const [ceidgAcknowledged, setCeidgAcknowledged] = useState(true);
   const [errors, setErrors]     = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError]   = useState('');
+  const ceidg = useCeidgLookup();
+  const { state: lookupState, reset: resetCeidg, scheduleLookup } = ceidg;
 
-  // Populate form when modal opens
   useEffect(() => {
     if (open) {
       if (mode === 'edit' && customer) {
         setName(customer.name);
         setNip(customer.nip ?? '');
-        setAddress(customer.street ?? '');
+        setAddress([customer.street, customer.city].filter(Boolean).join(', '));
         setZip(customer.postal_code ?? '');
         setEmail(customer.email ?? '');
         setPhone(customer.phone ?? '');
+        setWebsite(customer.website ?? '');
+        setBuildingNumber(customer.building_number ?? '');
+        setApartmentNumber(customer.apartment_number ?? '');
+        setRegon(customer.regon ?? '');
+        setCountry(customer.country || 'Polska');
+        setCeidgStatus(customer.ceidg_status ?? null);
+        setCeidgCheckedAt(customer.ceidg_checked_at ?? null);
       } else {
         setName(''); setNip(''); setAddress(''); setZip(''); setEmail(''); setPhone('');
+        setWebsite(''); setBuildingNumber(''); setApartmentNumber(''); setRegon(''); setCountry('Polska');
+        setCeidgStatus(null); setCeidgCheckedAt(null);
       }
+      setCeidgAcknowledged(true);
+      resetCeidg();
       setErrors({});
       setSubmitError('');
     }
-  }, [open, mode, customer]);
+  }, [open, mode, customer, resetCeidg]);
+
+  useEffect(() => {
+    if (lookupState.phase !== 'found') return;
+    const { company, checkedAt } = lookupState;
+    const values = mapCeidgToFormValues(company);
+    setName(values.name);
+    setRegon(values.regon);
+    setAddress(formatCeidgStreetCity(values));
+    setZip(values.postalCode);
+    setEmail(values.email);
+    setPhone(values.phone);
+    setWebsite(values.website);
+    setBuildingNumber(values.buildingNumber);
+    setApartmentNumber(values.apartmentNumber);
+    setRegon(values.regon);
+    setCountry(values.country);
+    setCeidgStatus(company.status);
+    setCeidgCheckedAt(checkedAt);
+    setCeidgAcknowledged(!isCeidgStatusBlocking(company.status));
+    setErrors({});
+  }, [lookupState]);
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -535,6 +590,10 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (ceidgStatus && isCeidgStatusBlocking(ceidgStatus) && !ceidgAcknowledged) {
+      setSubmitError('Potwierdź zapis klienta ze statusem CEIDG, aby kontynuować.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError('');
 
@@ -546,6 +605,13 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
         zip:     zip.trim(),
         email:   email.trim() || undefined,
         phone:   phone.trim() || undefined,
+        website: website.trim(),
+        buildingNumber,
+        apartmentNumber,
+        regon,
+        country,
+        ceidgStatus,
+        ceidgCheckedAt,
       };
 
       const url    = mode === 'edit' && customer ? `/api/customers/${customer.id}` : '/api/customers';
@@ -610,11 +676,16 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
             </Label>
             <Input
               value={nip}
-              onChange={(e) => setNip(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                setNip(value);
+                scheduleLookup(value);
+              }}
               placeholder="1234567890"
               className={cn('font-mono', errors.nip && 'border-red-400')}
             />
             {errors.nip && <p className="text-xs text-red-500">{errors.nip}</p>}
+            <CeidgLookupStatus nip={nip} lookupState={lookupState} status={ceidgStatus} onLookup={ceidg.lookup} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -673,6 +744,23 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
               placeholder="+48 123 456 789"
             />
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+              Strona WWW
+            </Label>
+            <Input
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="https://firma.pl"
+            />
+          </div>
+
+          <CeidgBlockingWarning
+            status={ceidgStatus}
+            acknowledged={ceidgAcknowledged}
+            onAcknowledge={setCeidgAcknowledged}
+          />
 
           {submitError && (
             <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">

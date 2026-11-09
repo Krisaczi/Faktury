@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.ksefRetryWorker]
 verify_jwt = false
+
+[functions.ceidgLookup]
+verify_jwt = true

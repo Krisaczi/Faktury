@@ -197,6 +197,7 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
   const flags = inv.specialProcedure;
   const newTransport = flags?.newMeansOfTransport === true;
   const marginScheme = flags?.marginScheme === true;
+  const splitPayment = flags?.splitPaymentMechanism === true;
 
   const noweSrodki = newTransport
     ? `\n      <NoweSrodkiTransportu>
@@ -220,7 +221,7 @@ function buildAdnotacje(inv: IssuedInvoiceWithItems, summary: ReturnType<typeof 
       <P_16>2</P_16>
       <P_17>2</P_17>
       <P_18>${p18}</P_18>
-      <P_18A>2</P_18A>${zwolnienie}${noweSrodki}${p23}${pMarzy}
+      <P_18A>${splitPayment ? '1' : '2'}</P_18A>${zwolnienie}${noweSrodki}${p23}${pMarzy}
     </Adnotacje>`;
 }
 

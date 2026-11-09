@@ -71,21 +71,21 @@ export default function SignupPage() {
             </svg>
           </div>
           <CardTitle className="text-xl text-center text-slate-900 dark:text-white">
-            Account already exists
+            Konto już istnieje
           </CardTitle>
           <CardDescription className="text-center text-slate-500 dark:text-slate-400">
-            An account with this email is already registered. Sign in or reset your password if you have forgotten it.
+            Konto z tym adresem e-mail jest już zarejestrowane. Zaloguj się lub zresetuj hasło, jeśli je zapomniałeś.
           </CardDescription>
         </CardHeader>
         <CardFooter className="flex flex-col gap-2 pt-0">
           <Link href="/login" className="w-full">
             <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-              Sign in
+              Zaloguj się
             </Button>
           </Link>
           <Link href="/forgot-password" className="w-full">
             <Button variant="outline" className="w-full">
-              Reset password
+              Zresetuj hasło
             </Button>
           </Link>
         </CardFooter>
@@ -104,7 +104,7 @@ export default function SignupPage() {
             </svg>
           </div>
           <CardTitle className="text-xl text-center text-slate-900 dark:text-white">
-            Check your email
+            Sprawdź swoją pocztę e-mail
           </CardTitle>
           <CardDescription className="text-center text-slate-500 dark:text-slate-400">
             {isResent
@@ -115,7 +115,7 @@ export default function SignupPage() {
         <CardFooter className="justify-center">
           <Link href="/login">
             <Button variant="outline" className="w-full">
-              Back to sign in
+              Powrót do logowania
             </Button>
           </Link>
         </CardFooter>
@@ -127,10 +127,10 @@ export default function SignupPage() {
     <Card className="border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50">
       <CardHeader className="space-y-1 pb-6">
         <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
-          Create an account
+          Utwórz konto
         </CardTitle>
         <CardDescription className="text-slate-500 dark:text-slate-400">
-          Start managing vendor risk today
+          Zacznij zarządzać swoimi fakturami już dziś
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -143,7 +143,7 @@ export default function SignupPage() {
 
           <div className="space-y-2">
             <Label htmlFor="full_name" className="text-slate-700 dark:text-slate-300">
-              Full name
+              Imię i nazwisko
             </Label>
             <Input
               id="full_name"
@@ -160,7 +160,7 @@ export default function SignupPage() {
 
           <div className="space-y-2">
             <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
-              Email address
+              Adres email
             </Label>
             <Input
               id="email"
@@ -177,7 +177,7 @@ export default function SignupPage() {
 
           <div className="space-y-2">
             <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
-              Password
+              Hasło
             </Label>
             <div className="relative">
               <Input
@@ -204,7 +204,7 @@ export default function SignupPage() {
 
           <div className="space-y-2">
             <Label htmlFor="confirm_password" className="text-slate-700 dark:text-slate-300">
-              Confirm password
+              Potwierdź hasło
             </Label>
             <div className="relative">
               <Input
@@ -236,32 +236,32 @@ export default function SignupPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating account...
+                Tworzenie konta...
               </>
             ) : (
               <>
                 <UserPlus className="w-4 h-4 mr-2" />
-                Create account
+                Utwórz konto
               </>
             )}
           </Button>
 
           <p className="text-xs text-center text-slate-400 dark:text-slate-500">
-            By creating an account you agree to our{' '}
-            <span className="underline cursor-pointer hover:text-slate-600 dark:hover:text-slate-300">Terms</span>{' '}
-            and{' '}
-            <span className="underline cursor-pointer hover:text-slate-600 dark:hover:text-slate-300">Privacy Policy</span>
+            Tworząc konto wyrażasz zgodę na nasze{' '}
+            <span className="underline cursor-pointer hover:text-slate-600 dark:hover:text-slate-300">Warunki użytkowania</span>{' '}
+            i{' '}
+            <span className="underline cursor-pointer hover:text-slate-600 dark:hover:text-slate-300">Politykę prywatności</span>
           </p>
         </form>
       </CardContent>
       <CardFooter className="pt-0 flex justify-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Already have an account?{' '}
+         Masz już konto?{' '}
           <Link
             href="/login"
             className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
           >
-            Sign in
+            Zaloguj się
           </Link>
         </p>
       </CardFooter>

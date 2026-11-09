@@ -21,6 +21,8 @@ const DraftSchema = z.object({
   internalReference: z.string().max(200).optional(),
   dueDate:          z.string().optional(),
   vatRate:          z.number().min(0).max(100).optional(),
+  vatExempt:        z.boolean().optional().default(false),
+  splitPaymentMechanism: z.boolean().optional().default(false),
   vatMode:          z.enum(['invoice', 'per_line']).optional().default('invoice'),
   priceIncludesTax: z.boolean().optional().default(false),
   vatNumber:        z.string().max(30).optional(),
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
   const {
     entityId, entityType, periodYear, periodMonth, lineItems,
     notes, internalReference, dueDate,
-    vatRate, vatMode, priceIncludesTax, vatNumber,
+    vatRate, vatExempt, splitPaymentMechanism, vatMode, priceIncludesTax, vatNumber,
     invoiceNumber, invoiceDate, autoGenerateNumber,
   } = parsed.data;
 
@@ -74,8 +76,8 @@ export async function POST(req: NextRequest) {
   if (!company) return NextResponse.json({ error: 'Firma nie istnieje.' }, { status: 404 });
   if (company.is_active === false) return NextResponse.json({ error: 'Firma jest nieaktywna.' }, { status: 400 });
 
-  const invoiceVatRate = validateVatRate(vatRate ?? 0);
-  const usePerLineVat = vatMode === 'per_line';
+  const invoiceVatRate = vatExempt ? 0 : validateVatRate(vatRate ?? 0);
+  const usePerLineVat = vatMode === 'per_line' && !vatExempt;
 
   const taxResult = computeTax(
     lineItems.map((li) => ({
@@ -140,6 +142,8 @@ export async function POST(req: NextRequest) {
       due_date:              dueDate ?? null,
       metadata:              { plan: company.product_type ?? 'starter', autoGenerateNumber },
       vat_rate_percent:      invoiceVatRate,
+      vat_exempt:            vatExempt,
+      split_payment_mechanism: splitPaymentMechanism,
       vat_number:            vatNumber ?? null,
       price_includes_tax:    priceIncludesTax,
       tax_total_cents:       taxResult.taxTotalCents,
@@ -190,6 +194,7 @@ export async function POST(req: NextRequest) {
       taxCents:        taxResult.taxTotalCents,
       totalCents:      taxResult.totalCents,
       vatRatePercent:  invoiceVatRate,
+      vatExempt,
       priceIncludesTax,
       vatNumber:       vatNumber ?? null,
     },

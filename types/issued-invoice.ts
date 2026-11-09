@@ -154,6 +154,8 @@ export interface SpecialProcedure {
   newMeansOfTransport?: boolean;
   /** PMarzy — margin scheme (procedura marży). Default: false */
   marginScheme?: boolean;
+  /** P_18A — split payment mechanism (MPP). Default: false */
+  splitPaymentMechanism?: boolean;
 }
 
 /** Full invoice hydrated with its line items — use for display/export. */

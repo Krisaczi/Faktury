@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
@@ -62,6 +62,13 @@ import {
   type VendorInvoiceRow,
   type VendorInvoiceFilters,
 } from '@/hooks/use-vendors';
+import { useCeidgLookup } from '@/hooks/use-ceidg-lookup';
+import { CeidgBlockingWarning, CeidgLookupStatus } from '@/components/ceidg/ceidg-lookup-status';
+import {
+  isCeidgStatusBlocking,
+  mapCeidgToFormValues,
+  type CeidgStatus,
+} from '@/lib/ceidg/ceidg-company';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(date: string | null | undefined) {
@@ -167,24 +174,73 @@ function EditVendorDialog({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name:          vendor.name ?? '',
-    category:      vendor.category ?? '',
-    contact_email: vendor.contact_email ?? '',
-    status:        vendor.status,
-    nip:           vendor.nip ?? '',
-    notes:         vendor.notes ?? '',
+    name:             vendor.name ?? '',
+    category:         vendor.category ?? '',
+    contact_email:    vendor.contact_email ?? '',
+    status:           vendor.status,
+    nip:              vendor.nip ?? '',
+    notes:            vendor.notes ?? '',
+    address_street:   vendor.address_street ?? '',
+    building_number:  vendor.building_number ?? '',
+    apartment_number: vendor.apartment_number ?? '',
+    address_zip:      vendor.address_zip ?? '',
+    address_city:     vendor.address_city ?? '',
+    country:          vendor.country ?? '',
+    phone:            vendor.phone ?? '',
+    website:          vendor.website ?? '',
+    regon:            vendor.regon ?? '',
   });
+  const [ceidgStatus, setCeidgStatus] = useState<CeidgStatus | null>(vendor.ceidg_status ?? null);
+  const [ceidgCheckedAt, setCeidgCheckedAt] = useState<string | null>(vendor.ceidg_checked_at ?? null);
+  const [ceidgAcknowledged, setCeidgAcknowledged] = useState(true);
+  const ceidg = useCeidgLookup();
+  const { state: lookupState, scheduleLookup } = ceidg;
+  const ceidgBlocked = ceidgStatus !== null && isCeidgStatusBlocking(ceidgStatus) && !ceidgAcknowledged;
+
+  useEffect(() => {
+    if (lookupState.phase !== 'found') return;
+    const { company, checkedAt } = lookupState;
+    const values = mapCeidgToFormValues(company);
+    setForm((f) => ({
+      ...f,
+      name:             values.name,
+      contact_email:    values.email,
+      phone:            values.phone,
+      website:          values.website,
+      regon:            values.regon,
+      address_street:   values.street,
+      building_number:  values.buildingNumber,
+      apartment_number: values.apartmentNumber,
+      address_zip:      values.postalCode,
+      address_city:     values.city,
+      country:          values.country,
+    }));
+    setCeidgStatus(company.status);
+    setCeidgCheckedAt(checkedAt);
+    setCeidgAcknowledged(!isCeidgStatusBlocking(company.status));
+  }, [lookupState]);
 
   async function handleSave() {
     setSaving(true);
     try {
       await onSave({
-        name:          form.name || undefined,
-        category:      form.category || null,
-        contact_email: form.contact_email || null,
-        status:        form.status,
-        nip:           form.nip || null,
-        notes:         form.notes || null,
+        name:             form.name || undefined,
+        category:         form.category || null,
+        contact_email:    form.contact_email || null,
+        status:           form.status,
+        nip:              form.nip || null,
+        notes:            form.notes || null,
+        address_street:   form.address_street || null,
+        building_number:  form.building_number || null,
+        apartment_number: form.apartment_number || null,
+        address_zip:      form.address_zip || null,
+        address_city:     form.address_city || null,
+        country:          form.country || null,
+        phone:            form.phone || null,
+        website:          form.website || null,
+        regon:            form.regon || null,
+        ceidg_status:     ceidgStatus,
+        ceidg_checked_at: ceidgCheckedAt,
       });
       setOpen(false);
     } finally {
@@ -212,7 +268,15 @@ function EditVendorDialog({
           </div>
           <div className="space-y-1.5">
             <Label>NIP</Label>
-            <Input value={form.nip} onChange={(e) => setForm((f) => ({ ...f, nip: e.target.value }))} placeholder="Tax ID" />
+            <Input
+              value={form.nip}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, nip: e.target.value }));
+                scheduleLookup(e.target.value.trim());
+              }}
+              placeholder="Tax ID"
+            />
+            <CeidgLookupStatus nip={form.nip.trim()} lookupState={lookupState} status={ceidgStatus} onLookup={ceidg.lookup} />
           </div>
           <div className="space-y-1.5">
             <Label>Category</Label>
@@ -234,13 +298,46 @@ function EditVendorDialog({
             </Select>
           </div>
           <div className="col-span-2 space-y-1.5">
+            <Label>Street</Label>
+            <Input value={form.address_street} onChange={(e) => setForm((f) => ({ ...f, address_street: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Building No.</Label>
+            <Input value={form.building_number} onChange={(e) => setForm((f) => ({ ...f, building_number: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Apartment No.</Label>
+            <Input value={form.apartment_number} onChange={(e) => setForm((f) => ({ ...f, apartment_number: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Postal Code</Label>
+            <Input value={form.address_zip} onChange={(e) => setForm((f) => ({ ...f, address_zip: e.target.value }))} placeholder="00-001" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>City</Label>
+            <Input value={form.address_city} onChange={(e) => setForm((f) => ({ ...f, address_city: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Phone</Label>
+            <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Website</Label>
+            <Input value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://" />
+          </div>
+          <div className="col-span-2 space-y-1.5">
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Internal notes..." />
           </div>
         </div>
+        <CeidgBlockingWarning
+          status={ceidgStatus}
+          acknowledged={ceidgAcknowledged}
+          onAcknowledge={setCeidgAcknowledged}
+        />
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.name.trim()}>
+          <Button onClick={handleSave} disabled={saving || !form.name.trim() || ceidgBlocked}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>

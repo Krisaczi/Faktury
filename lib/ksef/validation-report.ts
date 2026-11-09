@@ -373,10 +373,34 @@ export function generateValidationReport(
     status: 'pass',
     message: activeCats.hasExempt ? 'Emitted (VAT exemption active, P_19=1)' : 'Marker emitted (P_19N=1, not applicable)',
   });
+  const annotationValue = (tag: string) => xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1] ?? null;
+  const expectsSplit = flags?.splitPaymentMechanism === true;
+  const splitXml = annotationValue('P_18A');
+  const splitOk = splitXml === (expectsSplit ? '1' : '2');
+  optionalChecks.push({
+    name: 'Mechanizm Podzielonej Płatności (P_18A)',
+    status: splitOk ? 'pass' : 'fail',
+    message: splitOk
+      ? expectsSplit
+        ? 'Emitted (P_18A=1, split payment active)'
+        : 'Marker emitted (P_18A=2, not applicable)'
+      : `ERROR: XML P_18A=${splitXml ?? 'missing'} does not match split payment flag`,
+  });
   sections.push({
     name: 'Optional Sections Generated',
     status: optionalChecks.some(c => c.status === 'fail') ? 'fail' : 'pass',
     checks: optionalChecks,
+  });
+
+  const annotationTags = ['P_16', 'P_17', 'P_18', 'P_18A'];
+  const annotationChecks: ValidationDetailCheck[] = annotationTags.map((tag) => {
+    const value = annotationValue(tag);
+    return { name: tag, status: value !== null ? 'pass' : 'fail', message: `${tag}=${value ?? 'missing'}` };
+  });
+  sections.push({
+    name: 'Annotations Status',
+    status: annotationChecks.some(c => c.status === 'fail') ? 'fail' : 'pass',
+    checks: annotationChecks,
   });
 
   // ── Overall status ──

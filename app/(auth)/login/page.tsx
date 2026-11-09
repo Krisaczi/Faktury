@@ -85,7 +85,7 @@ function LoginForm() {
       {sessionExpired && (
         <Alert className="py-3 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
           <AlertDescription className="text-amber-700 dark:text-amber-400">
-            Your session has expired. Please log in again.
+            Sesja wygasła. Zaloguj się ponownie.
           </AlertDescription>
         </Alert>
       )}
@@ -98,7 +98,7 @@ function LoginForm() {
 
       <div className="space-y-2">
         <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
-          Email address
+          Email 
         </Label>
         <Input
           id="email"
@@ -122,7 +122,7 @@ function LoginForm() {
             href="/forgot-password"
             className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
           >
-            Forgot password?
+            Zapomniałeś hasła?
           </Link>
         </div>
         <div className="relative">
@@ -157,7 +157,7 @@ function LoginForm() {
           htmlFor="remember-me"
           className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer select-none"
         >
-          Keep me signed in for 7 days
+          Pozostaw mnie zalogowanym przez 7 dni
         </Label>
       </div>
 
@@ -174,7 +174,7 @@ function LoginForm() {
         ) : (
           <>
             <LogIn className="w-4 h-4 mr-2" />
-            Sign in
+            Zaloguj się
           </>
         )}
       </Button>
@@ -187,10 +187,10 @@ export default function LoginPage() {
     <Card className="border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50">
       <CardHeader className="space-y-1 pb-6">
         <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
-          Welcome back
+          Witaj ponownie
         </CardTitle>
         <CardDescription className="text-slate-500 dark:text-slate-400">
-          Sign in to your account to continue
+          Zaloguj się na swoje konto, aby kontynuować
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -200,12 +200,12 @@ export default function LoginPage() {
       </CardContent>
       <CardFooter className="pt-0 flex justify-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Don&apos;t have an account?{' '}
+          Nie masz konta?{' '}
           <Link
             href="/signup"
             className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
           >
-            Create one
+            Utwórz
           </Link>
         </p>
       </CardFooter>

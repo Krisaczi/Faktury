@@ -715,6 +715,11 @@ function buildHtml(invoice: IssuedInvoiceWithItems, autoPrint: boolean = false):
         <span class="pl">Forma</span>
         <span class="pv">${esc(PAYMENT_LABELS[invoice.payment_method] ?? invoice.payment_method)}</span>
       </div>
+      ${invoice.specialProcedure?.splitPaymentMechanism ? `
+      <div class="payment-row">
+        <span class="pl">MPP</span>
+        <span class="pv bold">MECHANIZM PODZIELONEJ PŁATNOŚCI</span>
+      </div>` : ''}
       <div class="payment-row">
         <span class="pl">Kwota</span>
         <span class="pv bold">${esc(fmtAmount(invoice.gross_total, cur))}</span>

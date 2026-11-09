@@ -72,6 +72,7 @@ export async function GET(
       currency:          invoice.currency,
       vatRatePercent:    invoice.vat_rate_percent,
       vatNumber:         invoice.vat_number,
+      splitPaymentMechanism: invoice.split_payment_mechanism === true,
       priceIncludesTax:  invoice.price_includes_tax,
       taxTotalCents:     invoice.tax_total_cents,
       taxBreakdown:      invoice.tax_breakdown,

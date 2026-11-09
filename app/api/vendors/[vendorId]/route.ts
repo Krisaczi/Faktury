@@ -70,6 +70,17 @@ export async function PATCH(
       nip,
       bank_accounts,
       notes,
+      address_street,
+      address_zip,
+      address_city,
+      building_number,
+      apartment_number,
+      country,
+      phone,
+      regon,
+      website,
+      ceidg_status,
+      ceidg_checked_at,
     } = body as {
       name?: string;
       category?: string | null;
@@ -79,6 +90,17 @@ export async function PATCH(
       nip?: string | null;
       bank_accounts?: unknown[];
       notes?: string | null;
+      address_street?: string | null;
+      address_zip?: string | null;
+      address_city?: string | null;
+      building_number?: string | null;
+      apartment_number?: string | null;
+      country?: string | null;
+      phone?: string | null;
+      regon?: string | null;
+      website?: string | null;
+      ceidg_status?: 'active' | 'suspended' | 'deleted' | 'inactive' | null;
+      ceidg_checked_at?: string | null;
     };
 
     const updateData: Record<string, unknown> = {};
@@ -90,6 +112,17 @@ export async function PATCH(
     if (nip            !== undefined) updateData.nip            = nip;
     if (bank_accounts  !== undefined) updateData.bank_accounts  = bank_accounts;
     if (notes          !== undefined) updateData.notes          = notes;
+    if (address_street !== undefined) updateData.address_street = address_street;
+    if (address_zip    !== undefined) updateData.address_zip    = address_zip;
+    if (address_city   !== undefined) updateData.address_city   = address_city;
+    if (building_number !== undefined) updateData.building_number = building_number;
+    if (apartment_number !== undefined) updateData.apartment_number = apartment_number;
+    if (country        !== undefined) updateData.country        = country;
+    if (phone          !== undefined) updateData.phone          = phone;
+    if (regon          !== undefined) updateData.regon          = regon;
+    if (website        !== undefined) updateData.website        = website;
+    if (ceidg_status   !== undefined) updateData.ceidg_status   = ceidg_status;
+    if (ceidg_checked_at !== undefined) updateData.ceidg_checked_at = ceidg_checked_at;
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
@@ -99,7 +132,7 @@ export async function PATCH(
       .from('vendors')
       .update(updateData as never)
       .eq('id', params.vendorId)
-      .select('id, name, category, contact_email, status, risk_score, nip, bank_accounts, notes')
+      .select('id, name, category, contact_email, status, risk_score, nip, bank_accounts, notes, address_street, address_zip, address_city, building_number, apartment_number, country, phone, regon, website, ceidg_status, ceidg_checked_at')
       .single();
 
     if (error) {
