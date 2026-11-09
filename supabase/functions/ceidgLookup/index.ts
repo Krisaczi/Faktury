@@ -125,7 +125,7 @@ async function fetchFromCeidg(nip: string, token: string): Promise<unknown> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let res: Response;
     try {
-      res = await fetch(`${CEIDG_BASE_URL}?${new URLSearchParams({ "nip[]": nip })}`, {
+      res = await fetch(`${CEIDG_BASE_URL}?nip=${nip}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
     } catch {
