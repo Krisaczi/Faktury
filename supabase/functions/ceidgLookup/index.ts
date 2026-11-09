@@ -109,12 +109,13 @@ async function fetchFromCeidg(nip: string, token: string): Promise<unknown> {
     if (res.status === 401 || res.status === 403) {
       throw new LookupError("ceidg_auth_failed", 502, "CEIDG rejected the access token");
     }
+    if (res.status === 404) return { firma: [] };
     if (res.status === 429) {
       if (attempt === MAX_ATTEMPTS) throw new LookupError("rate_limited", 429, "CEIDG rate limit reached");
     } else if (res.status < 500) {
-      throw new LookupError("upstream_error", 502, `CEIDG responded with ${res.status}`);
+      throw new LookupError(`upstream_${res.status}`, 502, `CEIDG responded with ${res.status}`);
     } else if (attempt === MAX_ATTEMPTS) {
-      throw new LookupError("upstream_error", 502, `CEIDG responded with ${res.status}`);
+      throw new LookupError(`upstream_${res.status}`, 502, `CEIDG responded with ${res.status}`);
     }
     await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
   }
