@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const CEIDG_BASE_URL = "https://dane.biznes.gov.pl/api/ceidg/v2/firma";
+const CEIDG_BASE_URL = "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
 const NIP_WEIGHTS = [6, 5, 7, 2, 3, 4, 5, 6, 7];
@@ -65,8 +65,9 @@ function mapStatus(raw: string): CeidgStatus {
 }
 
 export function normalizeCeidgResponse(nip: string, data: unknown): CeidgCompany | null {
-  const firma = (data as { firma?: unknown[] } | null)?.firma;
-  const entry = Array.isArray(firma) ? (firma[0] as Record<string, any> | undefined) : undefined;
+  const payload = data as { firmy?: unknown[]; firma?: unknown[] } | null;
+  const list = payload?.firmy ?? payload?.firma;
+  const entry = Array.isArray(list) ? (list[0] as Record<string, any> | undefined) : undefined;
   if (!entry) return null;
 
   const addr = (entry.adresDzialalnosci ?? {}) as Record<string, unknown>;
@@ -95,7 +96,7 @@ async function fetchFromCeidg(nip: string, token: string): Promise<unknown> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let res: Response;
     try {
-      res = await fetch(`${CEIDG_BASE_URL}?nip=${nip}`, {
+      res = await fetch(`${CEIDG_BASE_URL}?${new URLSearchParams({ "nip[]": nip })}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
     } catch {
