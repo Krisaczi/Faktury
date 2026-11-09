@@ -53,7 +53,7 @@ export const ceidgFieldsSchema = {
   website: z.string().max(300).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),
   ceidgStatus: z.enum(['active', 'suspended', 'deleted', 'inactive']).nullable().optional(),
-  ceidgCheckedAt: z.string().datetime().nullable().optional(),
+  ceidgCheckedAt: z.string().datetime({ offset: true }).nullable().optional(),
 };
 
 export interface CeidgFormValues {
