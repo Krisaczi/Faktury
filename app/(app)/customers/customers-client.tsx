@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatIban, validateIban } from '@/lib/validations/iban';
 import { Search, Plus, Building2, Pencil, Trash2, FileText, Loader as Loader2, Check, User, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ export interface Customer {
   country:       string;
   email:         string | null;
   phone:         string | null;
+  bank_account_number?: string | null;
   billing_email: string | null;
   last_used_at:  string | null;
   created_at:    string;
@@ -502,6 +504,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
   const [zip, setZip]           = useState('');
   const [email, setEmail]       = useState('');
   const [phone, setPhone]       = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [website, setWebsite]   = useState('');
   const [buildingNumber, setBuildingNumber]   = useState('');
   const [apartmentNumber, setApartmentNumber] = useState('');
@@ -525,6 +528,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
         setZip(customer.postal_code ?? '');
         setEmail(customer.email ?? '');
         setPhone(customer.phone ?? '');
+        setBankAccountNumber(customer.bank_account_number ? formatIban(customer.bank_account_number) : '');
         setWebsite(customer.website ?? '');
         setBuildingNumber(customer.building_number ?? '');
         setApartmentNumber(customer.apartment_number ?? '');
@@ -533,7 +537,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
         setCeidgStatus(customer.ceidg_status ?? null);
         setCeidgCheckedAt(customer.ceidg_checked_at ?? null);
       } else {
-        setName(''); setNip(''); setAddress(''); setZip(''); setEmail(''); setPhone('');
+        setName(''); setNip(''); setAddress(''); setZip(''); setEmail(''); setPhone(''); setBankAccountNumber('');
         setWebsite(''); setBuildingNumber(''); setApartmentNumber(''); setRegon(''); setCountry('Polska');
         setCeidgStatus(null); setCeidgCheckedAt(null);
       }
@@ -584,6 +588,10 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       e.email = 'Nieprawidłowy adres e-mail';
     }
+    if (bankAccountNumber.trim()) {
+      const ibanError = validateIban(bankAccountNumber);
+      if (ibanError) e.bankAccountNumber = ibanError;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -605,6 +613,7 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
         zip:     zip.trim(),
         email:   email.trim() || undefined,
         phone:   phone.trim() || undefined,
+        bankAccountNumber: bankAccountNumber.trim() || undefined,
         website: website.trim(),
         buildingNumber,
         apartmentNumber,
@@ -743,6 +752,19 @@ function CustomerFormModal({ open, onOpenChange, onSuccess, mode, customer }: Fo
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+48 123 456 789"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+              Numer konta bankowego
+            </Label>
+            <Input
+              value={bankAccountNumber}
+              onChange={(e) => setBankAccountNumber(e.target.value)}
+              placeholder="PL61 1090 1014 0000 0712 1981 2874"
+              className={errors.bankAccountNumber ? 'border-red-400' : ''}
+            />
+            {errors.bankAccountNumber && <p className="text-xs text-red-500">{errors.bankAccountNumber}</p>}
           </div>
 
           <div className="flex flex-col gap-1.5">

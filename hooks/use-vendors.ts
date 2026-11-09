@@ -101,6 +101,27 @@ async function apiGet<T>(url: string): Promise<T> {
   return res.json();
 }
 
+export async function postVendorBankAccount(
+  vendorId: string,
+  input: { bank_account_number: string; bank_name: string },
+) {
+  const supabase = getSupabaseBrowserClient();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  const res = await fetch(`/api/vendors/${vendorId}/bank-accounts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Could not save bank account' }));
+    throw new Error(err.error ?? 'Could not save bank account');
+  }
+}
+
 export function useVendor(vendorId: string | null) {
   const { data, error, isLoading, mutate } = useSWR<VendorDetailResponse>(
     vendorId ? `vendor-detail-${vendorId}` : null,
@@ -152,21 +173,7 @@ export function useVendor(vendorId: string | null) {
 
   async function addBankAccount(input: { bank_account_number: string; bank_name: string }) {
     if (!vendorId) return;
-    const supabase = getSupabaseBrowserClient();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    const res = await fetch(`/api/vendors/${vendorId}/bank-accounts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Could not save bank account' }));
-      throw new Error(err.error ?? 'Could not save bank account');
-    }
+    await postVendorBankAccount(vendorId, input);
     await mutate();
   }
 

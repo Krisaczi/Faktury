@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyPackage } from '@/lib/packages/get-company-package';
 import { canManageCustomers } from '@/lib/permissions';
 import { ceidgFieldsSchema } from '@/lib/ceidg/ceidg-company';
+import { normalizeIban, optionalIbanSchema } from '@/lib/validations/iban';
 
 const ZIP_REGEX = /^\d{2}-\d{3}$/;
 
@@ -14,6 +15,7 @@ const UpdateCustomerSchema = z.object({
   zip:     z.string().regex(ZIP_REGEX, 'Kod pocztowy musi mieć format XX-XXX'),
   email:   z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   phone:   z.string().max(50).optional().or(z.literal('')),
+  bankAccountNumber: optionalIbanSchema,
   ...ceidgFieldsSchema,
 });
 
@@ -60,7 +62,7 @@ export async function PUT(
     }, { status: 400 });
   }
 
-  const { name, nip, address, zip, email, phone, buildingNumber, apartmentNumber, regon, website, country, ceidgStatus, ceidgCheckedAt } = parsed.data;
+  const { name, nip, address, zip, email, phone, bankAccountNumber, buildingNumber, apartmentNumber, regon, website, country, ceidgStatus, ceidgCheckedAt } = parsed.data;
   const nipValue = nip || null;
 
   // Parse address (ZIP is now a separate field)
@@ -98,6 +100,7 @@ export async function PUT(
       city,
       email:      email || null,
       phone:      phone || null,
+      bank_account_number: bankAccountNumber ? normalizeIban(bankAccountNumber) : null,
       building_number:  buildingNumber || null,
       apartment_number: apartmentNumber || null,
       regon:      regon || null,
@@ -110,7 +113,7 @@ export async function PUT(
     .eq('id', params.id)
     .eq('company_id', u.company_id)
     .is('deleted_at', null)
-    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at')
+    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, bank_account_number, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at')
     .single();
 
   if (updateErr) {

@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyPackage } from '@/lib/packages/get-company-package';
 import { canManageCustomers } from '@/lib/permissions';
 import { ceidgFieldsSchema } from '@/lib/ceidg/ceidg-company';
+import { normalizeIban, optionalIbanSchema } from '@/lib/validations/iban';
 
 // ─── GET /api/customers?search=&page=&limit=&sort= ────────────────────────────
 
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from('buyer_companies')
-    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at, deleted_at', { count: 'exact' })
+    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, bank_account_number, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at, deleted_at', { count: 'exact' })
     .eq('company_id', u.company_id)
     .is('deleted_at', null);
 
@@ -94,6 +95,7 @@ const CreateCustomerSchema = z.object({
   zip:     z.string().regex(ZIP_REGEX, 'Kod pocztowy musi mieć format XX-XXX'),
   email:   z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   phone:   z.string().max(50).optional().or(z.literal('')),
+  bankAccountNumber: optionalIbanSchema,
   ...ceidgFieldsSchema,
 });
 
@@ -147,7 +149,7 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { name, nip, address, zip, email, phone, buildingNumber, apartmentNumber, regon, website, country, ceidgStatus, ceidgCheckedAt } = parsed.data;
+  const { name, nip, address, zip, email, phone, bankAccountNumber, buildingNumber, apartmentNumber, regon, website, country, ceidgStatus, ceidgCheckedAt } = parsed.data;
   const nipValue = nip || null;
 
   // Parse address into street / city (ZIP is now a separate field)
@@ -204,10 +206,11 @@ export async function POST(req: NextRequest) {
       website:    website || null,
       email:      email || null,
       phone:      phone || null,
+      bank_account_number: bankAccountNumber ? normalizeIban(bankAccountNumber) : null,
       ceidg_status:     ceidgStatus ?? null,
       ceidg_checked_at: ceidgCheckedAt ?? null,
     })
-    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at')
+    .select('id, name, nip, street, building_number, apartment_number, regon, website, postal_code, city, country, email, phone, bank_account_number, billing_email, ceidg_status, ceidg_checked_at, last_used_at, created_at')
     .single();
 
   if (insertErr) {

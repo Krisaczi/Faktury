@@ -4,6 +4,8 @@
  * Implements ISO 13616 mod-97 checksum validation without external dependencies.
  */
 
+import { z } from 'zod';
+
 /** IBAN lengths per country code (ISO 13616). */
 const COUNTRY_LENGTHS: Record<string, number> = {
   AL: 28, AD: 24, AT: 20, AZ: 28, BE: 16, BH: 22, BA: 20, BR: 29,
@@ -99,3 +101,13 @@ export function guessBankNameFromPlIban(iban: string): string | null {
   if (!clean.startsWith('PL') || clean.length < 10) return null;
   return null; // Real implementation would use a PL bank sort code lookup table
 }
+
+/** Optional IBAN field: empty is allowed, otherwise must pass validateIban. */
+export const optionalIbanSchema = z
+  .string()
+  .optional()
+  .superRefine((value, ctx) => {
+    if (!value || !value.trim()) return;
+    const error = validateIban(value);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+  });

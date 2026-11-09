@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useVendors } from '@/hooks/use-vendors';
+import { postVendorBankAccount, useVendors } from '@/hooks/use-vendors';
+import { validateIban } from '@/lib/validations/iban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,13 +82,14 @@ interface VendorForm {
   address_city:  string;
   category:      string;
   contact_email: string;
+  bank_account_number: string;
   status:        'active' | 'inactive' | 'under_review';
   risk_score:    string;
 }
 
 const defaultForm: VendorForm = {
   nip: '', name: '', address_street: '', address_zip: '', address_city: '',
-  category: '', contact_email: '', status: 'active', risk_score: '',
+  category: '', contact_email: '', bank_account_number: '', status: 'active', risk_score: '',
 };
 
 export default function VendorsPage() {
@@ -138,13 +140,17 @@ export default function VendorsPage() {
     setFormError('');
     if (!form.name.trim()) { setFormError('Nazwa firmy jest wymagana'); return; }
     if (form.nip && !/^\d{10}$/.test(form.nip)) { setFormError('NIP musi zawierać 10 cyfr'); return; }
+    if (form.bank_account_number.trim()) {
+      const ibanError = validateIban(form.bank_account_number);
+      if (ibanError) { setFormError(ibanError); return; }
+    }
     if (ceidgStatus && isCeidgStatusBlocking(ceidgStatus) && !ceidgAcknowledged) {
       setFormError('Potwierdź zapis dostawcy ze statusem CEIDG, aby kontynuować.');
       return;
     }
     setSaving(true);
     try {
-      await addVendor({
+      const created = await addVendor({
         name:           form.name.trim(),
         nip:            form.nip || null,
         address_street: form.address_street.trim() || null,
@@ -155,6 +161,14 @@ export default function VendorsPage() {
         status:         form.status,
         risk_score:     form.risk_score ? parseFloat(form.risk_score) : null,
       });
+      if (form.bank_account_number.trim()) {
+        try {
+          await postVendorBankAccount(created.id, { bank_account_number: form.bank_account_number, bank_name: '' });
+        } catch {
+          setFormError('Dostawca został dodany, ale nie udało się zapisać konta bankowego. Dodaj je w szczegółach dostawcy.');
+          return;
+        }
+      }
       setDialogOpen(false);
       setForm(defaultForm);
     } catch {
@@ -250,6 +264,16 @@ export default function VendorsPage() {
                   value={form.contact_email}
                   onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
                   placeholder="contact@vendor.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bank_account_number">Numer konta bankowego</Label>
+                <Input
+                  id="bank_account_number"
+                  value={form.bank_account_number}
+                  onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })}
+                  placeholder="PL61 1090 1014 0000 0712 1981 2874"
+                  className="font-mono"
                 />
               </div>
               <div className="space-y-2">
