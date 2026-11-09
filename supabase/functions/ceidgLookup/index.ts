@@ -67,7 +67,9 @@ function mapStatus(raw: string): CeidgStatus {
 export function normalizeCeidgResponse(nip: string, data: unknown): CeidgCompany | null {
   const payload = data as { firmy?: unknown[]; firma?: unknown[] } | null;
   const list = payload?.firmy ?? payload?.firma;
-  const entry = Array.isArray(list) ? (list[0] as Record<string, any> | undefined) : undefined;
+  const entry = Array.isArray(list)
+    ? (list.find((item) => (item as Record<string, any>)?.wlasciciel?.nip === nip) as Record<string, any> | undefined)
+    : undefined;
   if (!entry) return null;
 
   const addr = (entry.adresDzialalnosci ?? {}) as Record<string, unknown>;
@@ -89,6 +91,33 @@ export function normalizeCeidgResponse(nip: string, data: unknown): CeidgCompany
     phone: clean(entry.telefon),
     website: clean(entry.www),
   };
+}
+
+async function fetchFirmDetail(link: string, token: string): Promise<Record<string, any> | null> {
+  if (!link.startsWith("https://dane.biznes.gov.pl/")) return null;
+  try {
+    const res = await fetch(link, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const firm = Array.isArray(body?.firma) ? body.firma[0] : body?.firma ?? body;
+    return firm && typeof firm === "object" ? firm as Record<string, any> : null;
+  } catch {
+    return null;
+  }
+}
+
+// The search endpoint ignores the NIP filter and returns unrelated firms, so only the owner-NIP match is kept.
+async function resolveFirmForNip(nip: string, search: unknown, token: string): Promise<unknown> {
+  const list = (search as { firmy?: unknown[] } | null)?.firmy;
+  const match = Array.isArray(list)
+    ? (list.find((item) => (item as Record<string, any>)?.wlasciciel?.nip === nip) as Record<string, any> | undefined)
+    : undefined;
+  if (!match) return null;
+
+  const detail = typeof match.link === "string" ? await fetchFirmDetail(match.link, token) : null;
+  return { firmy: [{ ...match, ...(detail ?? {}) }] };
 }
 
 async function fetchFromCeidg(nip: string, token: string): Promise<unknown> {
@@ -185,12 +214,14 @@ Deno.serve(async (req: Request) => {
         checkedAt = cached.fetched_at;
       } else {
         if (!ceidgToken) throw new LookupError("not_configured", 500, "CEIDG token is not configured");
-        raw = await fetchFromCeidg(nip, ceidgToken);
-        await admin.from("ceidg_cache").upsert({
-          nip,
-          response: raw,
-          fetched_at: checkedAt,
-        });
+        raw = await resolveFirmForNip(nip, await fetchFromCeidg(nip, ceidgToken), ceidgToken);
+        if (raw) {
+          await admin.from("ceidg_cache").upsert({
+            nip,
+            response: raw,
+            fetched_at: checkedAt,
+          });
+        }
       }
 
       const company = normalizeCeidgResponse(nip, raw);
