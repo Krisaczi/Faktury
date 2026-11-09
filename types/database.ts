@@ -720,6 +720,7 @@ export type Database = {
           vat_total: number;
           gross_total: number;
           notes: string | null;
+          split_payment_mechanism: boolean;
           original_invoice_id: string | null;
           correction_reason: string | null;
           corrected_invoice_number: string | null;
@@ -769,6 +770,7 @@ export type Database = {
           vat_total?: number;
           gross_total?: number;
           notes?: string | null;
+          split_payment_mechanism?: boolean;
           original_invoice_id?: string | null;
           correction_reason?: string | null;
           corrected_invoice_number?: string | null;

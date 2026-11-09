@@ -114,6 +114,8 @@ export const IssuedInvoiceSchema = z.object({
 
   notes: z.string().max(2000).nullable().optional(),
 
+  split_payment_mechanism: z.boolean().default(false),
+
   // Correction invoice fields
   original_invoice_id:    z.string().uuid().nullable().optional(),
   correction_reason:      z.string().max(1000).nullable().optional(),

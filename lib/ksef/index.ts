@@ -85,7 +85,11 @@ async function fetchInvoiceWithItems(id: string): Promise<IssuedInvoiceWithItems
 
   if (itemsErr) throw new Error(`DB error fetching invoice items: ${itemsErr.message}`);
 
-  return { ...invoice, items: items ?? [] };
+  return {
+    ...invoice,
+    items: items ?? [],
+    specialProcedure: { splitPaymentMechanism: invoice.split_payment_mechanism === true },
+  };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────

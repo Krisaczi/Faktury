@@ -124,6 +124,7 @@ export default async function EditInvoicePage({
     buyer_email:         invoice.buyer_email ?? undefined,
     buyer_company_id:    invoice.buyer_company_id ?? undefined,
     notes:               invoice.notes ?? undefined,
+    split_payment_mechanism: invoice.split_payment_mechanism === true,
     items: invoice.items.map((item) => ({
       name:           item.name,
       unit:           item.unit,

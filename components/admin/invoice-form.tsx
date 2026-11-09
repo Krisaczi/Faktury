@@ -70,6 +70,7 @@ const FormSchema = z.object({
   buyer_address:       z.string().optional(),
   buyer_email:         z.string().email('Nieprawidłowy e-mail').optional().or(z.literal('')),
   notes:               z.string().optional(),
+  split_payment_mechanism: z.boolean().default(false),
   // CORRECTION fields
   corrected_invoice_number: z.string().optional(),
   corrected_invoice_date:   z.string().optional(),
@@ -162,6 +163,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
     defaultValues: {
       currency:       'PLN',
       payment_method: 'transfer',
+      split_payment_mechanism: false,
       issue_date:     todayISO(),
       autoGenerateNumber: autoGenerateNumber,
       ...defaultValues,
@@ -627,6 +629,17 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
               </SelectContent>
             </Select>
           </Field>
+          <label className="md:col-span-2 flex items-start gap-2.5 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              {...register('split_payment_mechanism')}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Mechanizm podzielonej płatności (MPP)</span>
+              <span className="text-xs text-slate-500">Oznacz fakturę jako objętą mechanizmem podzielonej płatności (P_18A=1).</span>
+            </span>
+          </label>
         </Grid2>
       </Section>
 

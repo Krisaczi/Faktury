@@ -116,7 +116,7 @@ function LoginForm() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
-            Password
+            Hasło
           </Label>
           <Link
             href="/forgot-password"
@@ -169,7 +169,7 @@ function LoginForm() {
         {isSubmitting ? (
           <>
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            Signing in...
+            Logowanie...
           </>
         ) : (
           <>
