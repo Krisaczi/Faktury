@@ -36,11 +36,14 @@ export function isCeidgStatusBlocking(status: CeidgStatus): boolean {
   return status === 'deleted' || status === 'suspended';
 }
 
-export function formatCeidgStreetCity(values: Pick<CeidgFormValues, 'street' | 'buildingNumber' | 'apartmentNumber' | 'city'>): string {
-  const streetLine = [values.street, [values.buildingNumber, values.apartmentNumber].filter(Boolean).join('/')]
+export function formatCeidgStreetLine(values: Pick<CeidgFormValues, 'street' | 'buildingNumber' | 'apartmentNumber'>): string {
+  return [values.street, [values.buildingNumber, values.apartmentNumber].filter(Boolean).join('/')]
     .filter(Boolean)
     .join(' ');
-  return [streetLine, values.city].filter(Boolean).join(', ');
+}
+
+export function formatCeidgStreetCity(values: Pick<CeidgFormValues, 'street' | 'buildingNumber' | 'apartmentNumber' | 'city'>): string {
+  return [formatCeidgStreetLine(values), values.city].filter(Boolean).join(', ');
 }
 
 export const ceidgFieldsSchema = {

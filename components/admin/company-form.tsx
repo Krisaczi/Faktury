@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Loader as Loader2, Building2, ChevronDown } from 'lucide-react';
@@ -19,6 +19,9 @@ import { cn } from '@/lib/utils';
 import { BuyerCompanySchema } from '@/app/(admin)/admin/companies/types';
 import type { BuyerCompanyFormValues, BuyerCompany } from '@/app/(admin)/admin/companies/types';
 import { createBuyerCompany, updateBuyerCompany } from '@/app/(admin)/admin/companies/actions';
+import { useCeidgLookup } from '@/hooks/use-ceidg-lookup';
+import { CeidgLookupStatus } from '@/components/ceidg/ceidg-lookup-status';
+import { formatCeidgStreetLine, mapCeidgToFormValues } from '@/lib/ceidg/ceidg-company';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +87,21 @@ export function CompanyForm({ mode, defaultValues, companyId, onSuccess, onCance
   });
 
   const vatPayer = watch('vat_payer');
+  const nipValue = watch('nip') ?? '';
+  const ceidg = useCeidgLookup();
+  const { state: lookupState, lookup: lookupCeidg, scheduleLookup } = ceidg;
+  const ceidgStatus = lookupState.phase === 'found' ? lookupState.company.status : null;
+
+  useEffect(() => {
+    if (lookupState.phase !== 'found') return;
+    const values = mapCeidgToFormValues(lookupState.company);
+    setValue('name', values.name, { shouldDirty: true });
+    setValue('street', formatCeidgStreetLine(values), { shouldDirty: true });
+    setValue('postal_code', values.postalCode, { shouldDirty: true });
+    setValue('city', values.city, { shouldDirty: true });
+    setValue('email', values.email, { shouldDirty: true });
+    setValue('phone', values.phone, { shouldDirty: true });
+  }, [lookupState, setValue]);
 
   const onSubmit = (values: BuyerCompanyFormValues) => {
     setServerError(null);
@@ -121,11 +139,14 @@ export function CompanyForm({ mode, defaultValues, companyId, onSuccess, onCance
           hint="10 cyfr bez separatorów"
         >
           <Input
-            {...register('nip')}
+            {...register('nip', {
+              onChange: (e) => scheduleLookup(String(e.target.value).replace(/\D/g, '').slice(0, 10)),
+            })}
             placeholder="0000000000"
             maxLength={10}
             className={cn(errors.nip && 'border-red-400')}
           />
+          <CeidgLookupStatus nip={nipValue} lookupState={lookupState} status={ceidgStatus} onLookup={lookupCeidg} />
         </Field>
       </div>
 
