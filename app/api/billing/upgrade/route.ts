@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,107 +12,22 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: userRow } = await (supabase as any)
-      .from('users')
-      .select('company_id, role')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { error } = await supabase.rpc('self_serve_upgrade');
 
-    if (!userRow?.company_id) {
-      return NextResponse.json({ error: 'No company found', code: 'COMPANY_ID_MISSING' }, { status: 400 });
-    }
-
-    if (userRow.role !== 'owner' && userRow.role !== 'accountant') {
-      return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-    }
-
-    // Check current plan
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: company } = await (supabase as any)
-      .from('companies')
-      .select('product_type')
-      .eq('id', userRow.company_id)
-      .maybeSingle();
-
-    const currentPlan = company?.product_type ?? 'starter';
-
-    if (currentPlan === 'professional') {
-      return NextResponse.json({ error: 'Already on Professional', code: 'ALREADY_PROFESSIONAL' }, { status: 409 });
-    }
-
-    // Upgrade: set product_type to professional + upsert plan_assignments
-    const now = new Date().toISOString();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase as any)
-      .from('companies')
-      .update({
-        product_type:        'professional',
-        package_type:        'professional',
-        package_assigned_at: now,
-        updated_at:          now,
-      })
-      .eq('id', userRow.company_id);
-
-    if (updateErr) {
-      console.error('[api/billing/upgrade] update error', updateErr);
-      return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
-    }
-
-    const serviceClient = getSupabaseServiceClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedAssignments, error: assignUpdateErr } = await (serviceClient as any)
-      .from('plan_assignments')
-      .update({
-        plan_id:        'professional',
-        effective_from: now,
-        updated_at:     now,
-        metadata:       { source: 'self_serve' },
-      })
-      .eq('entity_id', userRow.company_id)
-      .eq('entity_type', 'company')
-      .eq('status', 'active')
-      .select('id');
-
-    if (assignUpdateErr) {
-      console.error('[api/billing/upgrade] plan_assignments update error', assignUpdateErr);
-      return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
-    }
-
-    if (!updatedAssignments || updatedAssignments.length === 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: assignInsertErr } = await (serviceClient as any)
-        .from('plan_assignments')
-        .insert({
-          entity_id:      userRow.company_id,
-          entity_type:    'company',
-          plan_id:        'professional',
-          status:         'active',
-          effective_from: now,
-          updated_at:     now,
-          metadata:       { source: 'self_serve' },
-        });
-
-      if (assignInsertErr) {
-        console.error('[api/billing/upgrade] plan_assignments insert error', assignInsertErr);
-        return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
+    if (error) {
+      const message = error.message ?? '';
+      if (message.includes('ALREADY_PROFESSIONAL')) {
+        return NextResponse.json({ error: 'Already on Professional', code: 'ALREADY_PROFESSIONAL' }, { status: 409 });
       }
+      if (message.includes('COMPANY_ID_MISSING')) {
+        return NextResponse.json({ error: 'No company found', code: 'COMPANY_ID_MISSING' }, { status: 400 });
+      }
+      if (message.includes('FORBIDDEN')) {
+        return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+      }
+      console.error('[api/billing/upgrade] rpc error', error);
+      return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
     }
-
-    // Audit log
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('billing_audit').insert({
-      company_id:  userRow.company_id,
-      actor_id:    user.id,
-      old_package: currentPlan,
-      new_package: 'professional',
-      provider:    'local',
-      event_type:  'plan_changed',
-      from_plan:   currentPlan,
-      to_plan:     'professional',
-      changed_by:  user.id,
-      metadata:    { source: 'self_serve' },
-    });
 
     return NextResponse.json({
       product_type: 'professional',
