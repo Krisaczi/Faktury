@@ -263,13 +263,13 @@ function EditVendorDialog({
           Edit Vendor
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-4 overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit Vendor</DialogTitle>
           <DialogDescription>Update vendor details. Changes are recorded in the audit log.</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-2">
-          <div className="col-span-2 space-y-1.5">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-1 py-2 sm:grid-cols-2">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Vendor Name</Label>
             <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
@@ -304,7 +304,7 @@ function EditVendorDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Street</Label>
             <Input value={form.address_street} onChange={(e) => setForm((f) => ({ ...f, address_street: e.target.value }))} />
           </div>
@@ -332,7 +332,7 @@ function EditVendorDialog({
             <Label>Website</Label>
             <Input value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://" />
           </div>
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Internal notes..." />
           </div>
