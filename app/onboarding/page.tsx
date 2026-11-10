@@ -495,7 +495,20 @@ export default function OnboardingPage() {
   }
 
   // Step 2 submit — saves product selection, then show summary
-  function handleProductSubmit(p: ProductType) {
+  async function handleProductSubmit(p: ProductType) {
+    if (!companyId) return;
+    setError(null);
+    setSubmitting(true);
+
+    const result = await finalizeProduct({ companyId, productType: p });
+
+    setSubmitting(false);
+
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
     setProduct(p);
     setStep(3);
   }
