@@ -59,20 +59,44 @@ export async function POST() {
       return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
     }
 
-    // Upsert plan_assignments (canonical source)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { data: updatedAssignments, error: assignUpdateErr } = await (supabase as any)
       .from('plan_assignments')
-      .upsert({
-        entity_id:      userRow.company_id,
-        entity_type:    'company',
+      .update({
         plan_id:        'professional',
-        status:         'active',
         effective_from: now,
         updated_at:     now,
         metadata:       { source: 'self_serve' },
-      }, { onConflict: 'entity_id,entity_type' })
-      .eq('status', 'active');
+      })
+      .eq('entity_id', userRow.company_id)
+      .eq('entity_type', 'company')
+      .eq('status', 'active')
+      .select('id');
+
+    if (assignUpdateErr) {
+      console.error('[api/billing/upgrade] plan_assignments update error', assignUpdateErr);
+      return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
+    }
+
+    if (!updatedAssignments || updatedAssignments.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: assignInsertErr } = await (supabase as any)
+        .from('plan_assignments')
+        .insert({
+          entity_id:      userRow.company_id,
+          entity_type:    'company',
+          plan_id:        'professional',
+          status:         'active',
+          effective_from: now,
+          updated_at:     now,
+          metadata:       { source: 'self_serve' },
+        });
+
+      if (assignInsertErr) {
+        console.error('[api/billing/upgrade] plan_assignments insert error', assignInsertErr);
+        return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
+      }
+    }
 
     // Audit log
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
