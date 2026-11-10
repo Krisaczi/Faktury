@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient, getSupabaseServiceClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,8 +59,9 @@ export async function POST() {
       return NextResponse.json({ error: 'Database error', code: 'DB_ERROR' }, { status: 500 });
     }
 
+    const serviceClient = getSupabaseServiceClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedAssignments, error: assignUpdateErr } = await (supabase as any)
+    const { data: updatedAssignments, error: assignUpdateErr } = await (serviceClient as any)
       .from('plan_assignments')
       .update({
         plan_id:        'professional',
@@ -80,7 +81,7 @@ export async function POST() {
 
     if (!updatedAssignments || updatedAssignments.length === 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: assignInsertErr } = await (supabase as any)
+      const { error: assignInsertErr } = await (serviceClient as any)
         .from('plan_assignments')
         .insert({
           entity_id:      userRow.company_id,
