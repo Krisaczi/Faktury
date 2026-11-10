@@ -171,8 +171,13 @@ export default function VendorsPage() {
       }
       setDialogOpen(false);
       setForm(defaultForm);
-    } catch {
-      setFormError('Nie udało się dodać dostawcy, spróbuj ponownie.');
+    } catch (err) {
+      const message = typeof err === 'object' && err !== null && 'message' in err ? String(err.message) : '';
+      setFormError(
+        message.includes('PLAN_VENDOR_LIMIT_REACHED')
+          ? 'Osiągnięto limit dostawców dla Twojego planu. Przejdź na Professional, aby dodawać bez limitów.'
+          : 'Nie udało się dodać dostawcy, spróbuj ponownie.',
+      );
     } finally {
       setSaving(false);
     }
