@@ -46,6 +46,7 @@ import {
   ExternalLink,
   TriangleAlert as AlertTriangle,
   RefreshCw,
+  ArrowRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StateCard } from '@/components/ui/state-card';
@@ -99,6 +100,7 @@ export default function VendorsPage() {
   const [form,       setForm]       = useState<VendorForm>(defaultForm);
   const [saving,     setSaving]     = useState(false);
   const [formError,  setFormError]  = useState('');
+  const [limitReached, setLimitReached] = useState(false);
   const [ceidgStatus, setCeidgStatus] = useState<CeidgStatus | null>(null);
   const [ceidgAcknowledged, setCeidgAcknowledged] = useState(true);
   const { state: lookupState, lookup, scheduleLookup, reset: resetCeidg } = useCeidgLookup();
@@ -107,6 +109,7 @@ export default function VendorsPage() {
     if (!dialogOpen) return;
     setForm(defaultForm);
     setFormError('');
+    setLimitReached(false);
     setCeidgStatus(null);
     setCeidgAcknowledged(true);
     resetCeidg();
@@ -138,6 +141,7 @@ export default function VendorsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    setLimitReached(false);
     if (!form.name.trim()) { setFormError('Nazwa firmy jest wymagana'); return; }
     if (form.nip && !/^\d{10}$/.test(form.nip)) { setFormError('NIP musi zawierać 10 cyfr'); return; }
     if (form.bank_account_number.trim()) {
@@ -173,8 +177,10 @@ export default function VendorsPage() {
       setForm(defaultForm);
     } catch (err) {
       const message = typeof err === 'object' && err !== null && 'message' in err ? String(err.message) : '';
+      const isLimit = message.includes('PLAN_VENDOR_LIMIT_REACHED');
+      setLimitReached(isLimit);
       setFormError(
-        message.includes('PLAN_VENDOR_LIMIT_REACHED')
+        isLimit
           ? 'Osiągnięto limit dostawców dla Twojego planu. Przejdź na Professional, aby dodawać bez limitów.'
           : 'Nie udało się dodać dostawcy, spróbuj ponownie.',
       );
@@ -209,7 +215,17 @@ export default function VendorsPage() {
               {formError && (
                 <div role="alert" className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 px-3 py-2.5 rounded-lg border border-red-200 dark:border-red-800">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  {formError}
+                  <div className="flex-1">
+                    <p>{formError}</p>
+                    {limitReached && (
+                      <Button asChild size="sm" className="mt-2 bg-blue-600 hover:bg-blue-700 text-white">
+                        <Link href="/pricing">
+                          Zobacz plan Professional
+                          <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="space-y-2">
