@@ -6,8 +6,6 @@ const updateSchema = z.object({
   name:     z.string().min(2, 'Company name must be at least 2 characters').max(200).optional(),
   nip:      z.string().max(20).optional().nullable(),
   currency: z.enum(['PLN', 'EUR', 'USD', 'GBP', 'CZK', 'HUF']).optional(),
-  invoice_numbering_mode: z.enum(['auto', 'manual']).optional(),
-  logo_path: z.string().max(300).nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -50,14 +48,6 @@ export async function POST(req: NextRequest) {
     if (parsed.data.name     !== undefined) updates.name     = parsed.data.name;
     if (parsed.data.nip      !== undefined) updates.nip      = parsed.data.nip;
     if (parsed.data.currency !== undefined) updates.currency = parsed.data.currency;
-    if (parsed.data.invoice_numbering_mode !== undefined) updates.invoice_numbering_mode = parsed.data.invoice_numbering_mode;
-    if (parsed.data.logo_path !== undefined) {
-      const logoPath = parsed.data.logo_path;
-      if (logoPath !== null && !logoPath.startsWith(`${userRecord.company_id}/`)) {
-        return NextResponse.json({ error: 'Invalid logo path' }, { status: 422 });
-      }
-      updates.logo_path = logoPath;
-    }
 
     const { data: company, error } = await supabase
       .from('companies')

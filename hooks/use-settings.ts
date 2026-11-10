@@ -81,8 +81,6 @@ export interface CompanyUpdateInput {
   name?: string;
   nip?: string | null;
   currency?: string;
-  invoice_numbering_mode?: 'auto' | 'manual';
-  logo_path?: string | null;
 }
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────────
@@ -100,7 +98,17 @@ export function useCompanySettings() {
     return result.company;
   }
 
-  return { data, error, isLoading, mutate, updateCompany };
+  async function updateNumberingMode(mode: 'auto' | 'manual'): Promise<void> {
+    await apiPost<{ invoice_numbering_mode: string }>('/api/companies/numbering-mode', { mode });
+    await mutate();
+  }
+
+  async function updateLogoPath(path: string | null): Promise<void> {
+    await apiPost<{ logo_path: string | null }>('/api/companies/logo', { logo_path: path });
+    await mutate();
+  }
+
+  return { data, error, isLoading, mutate, updateCompany, updateNumberingMode, updateLogoPath };
 }
 
 export function useBillingStatus() {

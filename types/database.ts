@@ -1539,6 +1539,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
+      set_invoice_numbering_mode: {
+        Args: { p_mode: string };
+        Returns: string;
+      };
+      set_company_logo_path: {
+        Args: { p_path?: string };
+        Returns: string;
+      };
     };
     Enums: {
     user_role: 

@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Image as ImageIcon, Loader as Loader2, Trash2, Upload, Info, CircleCheck as CheckCircle } from 'lucide-react';
+import { Image as ImageIcon, Loader as Loader2, Trash2, Upload, CircleCheck as CheckCircle } from 'lucide-react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useCompanySettings } from '@/hooks/use-settings';
 
@@ -24,8 +24,8 @@ const EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-export function CompanyLogoCard({ isAdmin }: { isAdmin: boolean }) {
-  const { data, isLoading, updateCompany } = useCompanySettings();
+export function CompanyLogoCard() {
+  const { data, isLoading, updateLogoPath } = useCompanySettings();
   const company = data?.company;
   const logoPath = company?.logo_path ?? null;
   const supabase = getSupabaseBrowserClient();
@@ -77,7 +77,7 @@ export function CompanyLogoCard({ isAdmin }: { isAdmin: boolean }) {
       if (logoPath && logoPath !== path) {
         await supabase.storage.from(LOGO_BUCKET).remove([logoPath]);
       }
-      await updateCompany({ logo_path: path });
+      await updateLogoPath(path);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
@@ -95,7 +95,7 @@ export function CompanyLogoCard({ isAdmin }: { isAdmin: boolean }) {
     try {
       const { error: removeErr } = await supabase.storage.from(LOGO_BUCKET).remove([logoPath]);
       if (removeErr) throw new Error('Nie udało się usunąć logo.');
-      await updateCompany({ logo_path: null });
+      await updateLogoPath(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
@@ -142,8 +142,7 @@ export function CompanyLogoCard({ isAdmin }: { isAdmin: boolean }) {
             )}
           </div>
 
-          {isAdmin && (
-            <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
               <input
                 ref={inputRef}
                 type="file"
@@ -175,17 +174,10 @@ export function CompanyLogoCard({ isAdmin }: { isAdmin: boolean }) {
                   Usuń logo
                 </Button>
               )}
-            </div>
-          )}
+          </div>
         </div>
 
         <p className="text-xs text-slate-400">PNG, JPG lub WebP, maks. 2 MB. Najlepiej wygląda logo o proporcjach zbliżonych do poziomych.</p>
-        {!isAdmin && (
-          <p className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5" />
-            Tylko właściciel może zmienić logo firmy.
-          </p>
-        )}
       </CardContent>
     </Card>
   );

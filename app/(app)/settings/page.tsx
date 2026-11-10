@@ -817,8 +817,8 @@ function OwnerBypassAuditCard() {
 }
 
 // ─── Numbering Mode Card ──────────────────────────────────────────────────────
-function NumberingModeCard({ isAdmin }: { isAdmin: boolean }) {
-  const { data, isLoading, updateCompany } = useCompanySettings();
+function NumberingModeCard() {
+  const { data, isLoading, updateNumberingMode } = useCompanySettings();
   const mode = data?.company?.invoice_numbering_mode ?? 'auto';
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -826,7 +826,7 @@ function NumberingModeCard({ isAdmin }: { isAdmin: boolean }) {
   async function handleModeChange(newMode: 'auto' | 'manual') {
     setSaving(true);
     try {
-      await updateCompany({ invoice_numbering_mode: newMode });
+      await updateNumberingMode(newMode);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -860,7 +860,7 @@ function NumberingModeCard({ isAdmin }: { isAdmin: boolean }) {
           <Select
             value={mode}
             onValueChange={(v) => handleModeChange(v as 'auto' | 'manual')}
-            disabled={!isAdmin || saving}
+            disabled={saving}
           >
             <SelectTrigger>
               <SelectValue />
@@ -874,12 +874,6 @@ function NumberingModeCard({ isAdmin }: { isAdmin: boolean }) {
         <p className="text-xs text-slate-400">
           Użytkownicy mogą zmienić tryb podczas tworzenia konkretnej faktury.
         </p>
-        {!isAdmin && (
-          <p className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5" />
-            Tylko właściciel może zmienić to ustawienie.
-          </p>
-        )}
       </CardContent>
     </Card>
   );
@@ -939,13 +933,13 @@ export default function SettingsPage() {
             <CompanyInfoCard isAdmin={isAdmin} />
 
             {/* Company Logo */}
-            <CompanyLogoCard isAdmin={isAdmin} />
+            <CompanyLogoCard />
 
             {/* Company Address */}
             <CompanyAddressCard role={role} />
 
             {/* Invoice Numbering Mode */}
-            <NumberingModeCard isAdmin={isAdmin} />
+            <NumberingModeCard />
 
             {/* Ingestion Email */}
              {/* <IngestionEmailCard />*/}
