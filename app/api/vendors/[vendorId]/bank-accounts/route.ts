@@ -36,6 +36,9 @@ export async function POST(
         bank_account_number: normalizeIban(rawIban),
         bank_name: bankName,
         source: 'manual',
+        approved: true,
+        approved_at: new Date().toISOString(),
+        approved_by: user.id,
       })
       .select('id, bank_account_number, bank_name, source, created_at')
       .single();

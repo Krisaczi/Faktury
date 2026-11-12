@@ -1378,6 +1378,9 @@ export type Database = {
           source: string;
           verified_on_white_list: boolean;
           verification_date: string | null;
+          approved: boolean;
+          approved_at: string | null;
+          approved_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1389,6 +1392,9 @@ export type Database = {
           source?: string;
           verified_on_white_list?: boolean;
           verification_date?: string | null;
+          approved?: boolean;
+          approved_at?: string | null;
+          approved_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1398,8 +1404,41 @@ export type Database = {
           source?: string;
           verified_on_white_list?: boolean;
           verification_date?: string | null;
+          approved?: boolean;
+          approved_at?: string | null;
+          approved_by?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      vendor_bank_account_audit: {
+        Row: {
+          id: string;
+          company_id: string;
+          vendor_id: string;
+          invoice_id: string | null;
+          action: 'account_added' | 'kept_for_invoice';
+          old_accounts: string[];
+          new_account: string;
+          white_list_status: 'VALID' | 'INVALID' | 'NOT_FOUND' | 'ERROR';
+          vendor_updated: boolean;
+          user_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          vendor_id: string;
+          invoice_id?: string | null;
+          action: 'account_added' | 'kept_for_invoice';
+          old_accounts?: string[];
+          new_account: string;
+          white_list_status: 'VALID' | 'INVALID' | 'NOT_FOUND' | 'ERROR';
+          vendor_updated: boolean;
+          user_id?: string | null;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       white_list_audit: {
@@ -1464,6 +1503,14 @@ export type Database = {
           revenue: number;
           expenses: number;
         }[];
+      };
+      record_vendor_bank_account_decision: {
+        Args: {
+          p_invoice_id: string;
+          p_action: 'account_added' | 'kept_for_invoice';
+          p_white_list_status: string;
+        };
+        Returns: { vendor_id: string; vendor_updated: boolean };
       };
       get_invoice_timeseries: {
         Args: Record<string, never>;

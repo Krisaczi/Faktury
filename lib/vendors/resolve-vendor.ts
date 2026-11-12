@@ -19,8 +19,6 @@ export interface VendorData {
   addressStreet?: string | null;
   addressZip?: string | null;
   addressCity?: string | null;
-  bankAccountNumber?: string | null;
-  bankName?: string | null;
 }
 
 type Client = SupabaseClient<Database>;
@@ -43,62 +41,6 @@ function stripNip(raw: string | null | undefined): string | null {
   return stripped || null;
 }
 
-function normalizeAccountNumber(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const stripped = raw.replace(/\s+/g, '');
-  return stripped || null;
-}
-
-async function upsertVendorBankAccount(
-  supabase: Client,
-  vendorId: string,
-  accountNumber: string,
-  bankName?: string | null,
-  source: string = 'invoice'
-): Promise<void> {
-  const normalized = normalizeAccountNumber(accountNumber);
-  if (!normalized) return;
-
-  const table = supabase.from('vendor_bank_accounts' as never) as never;
-  const selectBuilder = (table as unknown as {
-    select: (cols: string) => {
-      eq: (col: string, val: string) => {
-        eq: (col: string, val: string) => {
-          maybeSingle: () => Promise<{ data: { id: string } | null }>;
-        };
-      };
-    };
-  });
-
-  const { data: existing } = await selectBuilder
-    .select('id')
-    .eq('vendor_id', vendorId)
-    .eq('bank_account_number', normalized)
-    .maybeSingle();
-
-  if (existing) {
-    if (bankName) {
-      const updateBuilder = (table as unknown as {
-        update: (data: Record<string, unknown>) => {
-          eq: (col: string, val: string) => Promise<unknown>;
-        };
-      });
-      await updateBuilder.update({ bank_name: bankName }).eq('id', existing.id);
-    }
-    return;
-  }
-
-  const insertBuilder = (table as unknown as {
-    insert: (data: Record<string, unknown>) => Promise<unknown>;
-  });
-  await insertBuilder.insert({
-    vendor_id: vendorId,
-    bank_account_number: normalized,
-    bank_name: bankName ?? null,
-    source,
-  });
-}
-
 export async function resolveVendor(
   supabase: Client,
   companyId: string,
@@ -114,14 +56,13 @@ export async function resolveVendor(
     ...(vendor.addressStreet  ? { address_street:      vendor.addressStreet }  : {}),
     ...(vendor.addressZip     ? { address_zip:          vendor.addressZip }     : {}),
     ...(vendor.addressCity    ? { address_city:         vendor.addressCity }    : {}),
-    ...(vendor.bankAccountNumber ? { bank_account_number: vendor.bankAccountNumber } : {}),
   };
 
   // ── 1. Look up by NIP ──────────────────────────────────────────────────────
   if (nip) {
     const { data: existing } = await supabase
       .from('vendors')
-      .select('id, name, address_street, address_zip, address_city, bank_account_number')
+      .select('id, name, address_street, address_zip, address_city')
       .eq('company_id', companyId)
       .eq('nip', nip)
       .maybeSingle();
@@ -133,7 +74,6 @@ export async function resolveVendor(
         address_street?: string;
         address_zip?: string;
         address_city?: string;
-        bank_account_number?: string;
       } = {};
 
       // Update name if the stored name is just the NIP (placeholder from backfill)
@@ -144,16 +84,11 @@ export async function resolveVendor(
       if (!existing.address_street      && patch.address_street)      updates.address_street      = patch.address_street;
       if (!existing.address_zip         && patch.address_zip)         updates.address_zip         = patch.address_zip;
       if (!existing.address_city        && patch.address_city)        updates.address_city        = patch.address_city;
-      if (!existing.bank_account_number && patch.bank_account_number) updates.bank_account_number = patch.bank_account_number;
 
       if (Object.keys(updates).length > 0) {
         await supabase.from('vendors').update(updates).eq('id', existing.id);
       }
 
-      // Save bank account to vendor_bank_accounts table
-      if (vendor.bankAccountNumber) {
-        await upsertVendorBankAccount(supabase, existing.id, vendor.bankAccountNumber, vendor.bankName);
-      }
       return existing.id;
     }
   }
@@ -168,9 +103,6 @@ export async function resolveVendor(
       .maybeSingle();
 
     if (byName) {
-      if (vendor.bankAccountNumber) {
-        await upsertVendorBankAccount(supabase, byName.id, vendor.bankAccountNumber, vendor.bankName);
-      }
       return byName.id;
     }
   }
@@ -193,9 +125,6 @@ export async function resolveVendor(
     .single();
 
   if (created) {
-    if (vendor.bankAccountNumber) {
-      await upsertVendorBankAccount(supabase, created.id, vendor.bankAccountNumber, vendor.bankName);
-    }
     return created.id;
   }
 
@@ -208,9 +137,6 @@ export async function resolveVendor(
       .eq('nip', nip)
       .maybeSingle();
     if (existing?.id) {
-      if (vendor.bankAccountNumber) {
-        await upsertVendorBankAccount(supabase, existing.id, vendor.bankAccountNumber, vendor.bankName);
-      }
       return existing.id;
     }
     return null;

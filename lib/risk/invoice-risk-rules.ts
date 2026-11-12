@@ -104,27 +104,26 @@ function checkDuplicate(current: RiskInvoice, nip: string, history: RiskInvoice[
   }];
 }
 
-function checkBankAccountChange(current: RiskInvoice, nip: string, history: RiskInvoice[]): RiskFinding[] {
+function checkBankAccountChange(current: RiskInvoice, approvedAccounts: string[]): RiskFinding[] {
   const account = normalizeAccount(current.bankAccount);
   if (!account) return [];
 
-  const known = new Set(
-    history
-      .filter((h) => normalizeNip(h.sellerNip) === nip)
-      .map((h) => normalizeAccount(h.bankAccount))
-      .filter(Boolean)
-  );
-  if (known.size === 0 || known.has(account)) return [];
+  const approved = Array.from(new Set(approvedAccounts.map(normalizeAccount).filter(Boolean)));
+  if (approved.includes(account)) return [];
+
+  const message = approved.length > 0
+    ? `This supplier previously used other bank accounts. This invoice uses account ${maskAccount(account)}. Review before payment.`
+    : `This invoice uses account ${maskAccount(account)}, which is not on the supplier's approved bank accounts. Review before payment.`;
 
   return [{
     ruleCode: 'supplier_bank_account_changed',
     ruleName: 'Supplier Bank Account Changed',
     severity: 'high',
     score: 75,
-    message: `This supplier previously used other bank accounts. This invoice uses account ${maskAccount(account)}. Review before payment.`,
+    message,
     details: {
       currentAccount: maskAccount(account),
-      previousAccounts: Array.from(known, maskAccount),
+      previousAccounts: approved.map(maskAccount),
     },
   }];
 }
@@ -181,7 +180,11 @@ export interface RiskCheckResults {
   findings: RiskFinding[];
 }
 
-export function evaluateInvoiceRisk(current: RiskInvoice, history: RiskInvoice[]): RiskCheckResults {
+export function evaluateInvoiceRisk(
+  current: RiskInvoice,
+  history: RiskInvoice[],
+  approvedBankAccounts: string[],
+): RiskCheckResults {
   const nip = normalizeNip(current.sellerNip);
   const nipValid = nip !== '' && isValidNip(nip);
 
@@ -189,7 +192,6 @@ export function evaluateInvoiceRisk(current: RiskInvoice, history: RiskInvoice[]
   const historyFindings = nipValid
     ? [
         ...checkDuplicate(current, nip, history),
-        ...checkBankAccountChange(current, nip, history),
         ...checkMasterDataChange(current, nip, history),
       ]
     : [];
@@ -200,6 +202,7 @@ export function evaluateInvoiceRisk(current: RiskInvoice, history: RiskInvoice[]
     findings: [
       ...nipFindings,
       ...historyFindings,
+      ...checkBankAccountChange(current, approvedBankAccounts),
       ...checkMissingBankAccount(current),
       ...checkHighValue(current),
     ],

@@ -355,36 +355,5 @@ export async function runWhiteListVerification(
       .eq('id', invoiceId);
   }
 
-  // ── Vendor bank account integration ──────────────────────────────────────
-  if (result.status === 'VALID' && vendorId) {
-    const cleanAccount = normalizeAccount(bankAccount);
-
-    // Check if this bank account already exists for the vendor
-    const { data: existing } = await supabase
-      .from('vendor_bank_accounts')
-      .select('id')
-      .eq('vendor_id', vendorId)
-      .eq('bank_account_number', cleanAccount)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from('vendor_bank_accounts')
-        .update({
-          verified_on_white_list: true,
-          verification_date: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase.from('vendor_bank_accounts').insert({
-        vendor_id: vendorId,
-        bank_account_number: cleanAccount,
-        source: 'invoice',
-        verified_on_white_list: true,
-        verification_date: new Date().toISOString(),
-      });
-    }
-  }
-
   return result;
 }

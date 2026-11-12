@@ -1,4 +1,5 @@
 import type { getSupabaseServerClient } from '@/lib/supabase/server';
+import { verifyOnWhiteList } from '@/lib/white-list/verify';
 import {
   evaluateInvoiceRisk,
   highestSeverity,
@@ -20,10 +21,11 @@ interface InvoiceRow {
   seller_nip: string | null;
   seller_name: string | null;
   bank_account: string | null;
+  vendor_id: string | null;
 }
 
 const INVOICE_COLUMNS =
-  'id, created_at, invoice_number, invoice_date, total_amount, amount, seller_nip, seller_name, bank_account';
+  'id, created_at, invoice_number, invoice_date, total_amount, amount, seller_nip, seller_name, bank_account, vendor_id';
 
 function toRiskInvoice(row: InvoiceRow): RiskInvoice {
   return {
@@ -35,6 +37,42 @@ function toRiskInvoice(row: InvoiceRow): RiskInvoice {
     sellerNip: row.seller_nip,
     sellerName: row.seller_name,
     bankAccount: row.bank_account,
+  };
+}
+
+function normalizeAccount(raw: string): string {
+  return raw.replace(/[\s-]/g, '').toUpperCase();
+}
+
+function maskAccount(account: string): string {
+  return `...${account.slice(-4)}`;
+}
+
+async function loadVendorBankContext(
+  supabase: Supabase,
+  vendorId: string | null,
+): Promise<{ approvedAccounts: string[]; vendorName: string | null }> {
+  if (!vendorId) return { approvedAccounts: [], vendorName: null };
+
+  const [accountsResult, vendorResult] = await Promise.all([
+    supabase
+      .from('vendor_bank_accounts')
+      .select('bank_account_number')
+      .eq('vendor_id', vendorId)
+      .eq('approved', true),
+    supabase.from('vendors').select('name').eq('id', vendorId).maybeSingle(),
+  ]);
+
+  if (accountsResult.error) {
+    throw new Error(`Risk engine could not load approved bank accounts: ${accountsResult.error.message}`);
+  }
+  if (vendorResult.error) {
+    throw new Error(`Risk engine could not load vendor: ${vendorResult.error.message}`);
+  }
+
+  return {
+    approvedAccounts: (accountsResult.data ?? []).map((row) => row.bank_account_number),
+    vendorName: vendorResult.data?.name ?? null,
   };
 }
 
@@ -56,7 +94,8 @@ export async function runInvoiceRiskEngine(
     .single();
   if (rowError || !row) throw new Error(`Risk engine could not load invoice: ${rowError?.message ?? 'not found'}`);
 
-  const current = toRiskInvoice(row as InvoiceRow);
+  const invoiceRow = row as InvoiceRow;
+  const current = toRiskInvoice(invoiceRow);
   const nip = normalizeNip(current.sellerNip);
 
   let history: RiskInvoice[] = [];
@@ -72,7 +111,31 @@ export async function runInvoiceRiskEngine(
     history = (rows as InvoiceRow[] ?? []).map(toRiskInvoice);
   }
 
-  const { findings, nipValid } = evaluateInvoiceRisk(current, history);
+  const { approvedAccounts, vendorName } = await loadVendorBankContext(supabase, invoiceRow.vendor_id);
+  const { findings, nipValid } = evaluateInvoiceRisk(current, history, approvedAccounts);
+
+  const bankFinding = findings.find((f) => f.ruleCode === 'supplier_bank_account_changed');
+  if (bankFinding && current.bankAccount) {
+    const whiteList = await verifyOnWhiteList(nip, current.bankAccount, current.invoiceDate);
+    bankFinding.details = {
+      ...bankFinding.details,
+      vendorId: invoiceRow.vendor_id,
+      vendorName,
+      newAccount: normalizeAccount(current.bankAccount),
+      whiteList: {
+        status: whiteList.status,
+        companyName: whiteList.companyName,
+        message: whiteList.message,
+      },
+    };
+    console.info('InvoiceRiskEngine Bank Account Check', {
+      invoiceId,
+      'Vendor ID': invoiceRow.vendor_id,
+      'Detected Account': maskAccount(normalizeAccount(current.bankAccount)),
+      'Known Accounts': approvedAccounts.map((a) => maskAccount(normalizeAccount(a))),
+      'White List Result': whiteList.status,
+    });
+  }
 
   const { error: deleteError } = await supabase
     .from('invoice_risk_findings')
