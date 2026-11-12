@@ -14,6 +14,7 @@ export type IssuedInvoiceItemRow =
 export const ISSUED_INVOICE_STATUSES = [
   'draft',
   'issued',
+  'ready_for_ksef',
   'sent_to_ksef',
   'accepted',
   'rejected',
@@ -241,7 +242,8 @@ function round2(n: number): number {
 
 export const STATUS_LABELS: Record<IssuedInvoiceStatus, string> = {
   draft:        'Szkic',
-  issued:       'Wystawiona',
+  issued:       'Do walidacji',
+  ready_for_ksef: 'Gotowa do KSeF',
   sent_to_ksef: 'Wysłana do KSeF',
   accepted:     'Zaakceptowana',
   rejected:     'Odrzucona',
@@ -255,12 +257,18 @@ export const KSEF_STATUS_LABELS: Record<KsefStatus, string> = {
   rejected:   'Odrzucona',
 };
 
-/** Returns true when the invoice may still be edited (no KSeF submission yet). */
+/** Editable until submitted to KSeF. Legacy 'issued' rows are editable and must be re-validated. */
+export const EDITABLE_INVOICE_STATUSES = ['draft', 'issued', 'ready_for_ksef'] as const satisfies readonly IssuedInvoiceStatus[];
+
 export function isEditable(status: IssuedInvoiceStatus): boolean {
-  return status === 'draft';
+  return (EDITABLE_INVOICE_STATUSES as readonly string[]).includes(status);
 }
 
-/** Returns true when the invoice can be submitted to KSeF. */
+/** Only validated invoices may be submitted to KSeF. */
 export function isSubmittable(status: IssuedInvoiceStatus): boolean {
-  return status === 'issued';
+  return status === 'ready_for_ksef';
+}
+
+export function isDeletable(status: IssuedInvoiceStatus): boolean {
+  return status === 'draft';
 }

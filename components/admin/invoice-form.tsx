@@ -7,7 +7,7 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Send, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info, MapPin, AlertTriangle, RefreshCw, Settings as SettingsIcon, Lock, FileText } from 'lucide-react';
+import { Plus, Trash2, Save, ShieldCheck, Loader, Building2, User, Calendar, CreditCard, Hash, ChevronDown, CircleAlert as AlertCircle, Info, MapPin, AlertTriangle, RefreshCw, Settings as SettingsIcon, Lock, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,8 @@ import { CustomerPicker, type Customer } from '@/components/invoice/customer-pic
 import { useInvoiceUsage } from '@/hooks/use-invoice-usage';
 import { CircleAlert as LimitIcon, TrendingUp } from 'lucide-react';
 import { BillingAddressSchema, validateBillingAddress, type BillingAddress } from '@/lib/invoice-address';
+import type { InvoiceValidationIssue } from '@/lib/invoices/validate-invoice';
+import { InvoiceValidationSummary } from '@/components/admin/invoice-validation-summary';
 
 // ─── Local form schema (mirrors InvoiceFormValues) ────────────────────────────
 
@@ -133,7 +135,8 @@ const PAYMENT_LABELS = {
 export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMode, sellerDefaults, buyerDefaults, initialCustomer, sellerAddressDetails, sellerAddressMeta, sellerRole }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [intent, setIntent] = useTransitionState<'draft' | 'issue'>('draft');
+  const [intent, setIntent] = useTransitionState<'draft' | 'validate'>('draft');
+  const [validationIssues, setValidationIssues] = useState<InvoiceValidationIssue[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
   const [buyerTouched, setBuyerTouched] = useState(false);
   const usage = useInvoiceUsage();
@@ -205,7 +208,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
   const priceMin = isCorrection ? undefined : '0';
 
   const onSubmit = useCallback(
-    (intentValue: 'draft' | 'issue') =>
+    (intentValue: 'draft' | 'validate') =>
       handleSubmit(async (data: LocalFormValues) => {
         const normalize = (v: string | null | undefined) =>
           v && v.trim() !== '' ? v.trim() : undefined;
@@ -234,13 +237,24 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
               : await updateInvoice(invoiceId!, payload, intentValue);
 
           if (!result.ok) {
-            toast.error('Błąd zapisu', { description: result.error });
+            setValidationIssues(result.issues ?? []);
+            if (result.id && mode === 'create') {
+              toast.error('Szkic zapisany, ale faktura nie jest gotowa', {
+                description: result.issues
+                  ? `Brakuje: ${result.issues.map((i) => i.label).join(', ')}`
+                  : result.error,
+              });
+              router.push(`/admin/invoices/${result.id}/edit`);
+              return;
+            }
+            toast.error(result.issues ? 'Faktura nie jest gotowa do KSeF' : 'Błąd zapisu', { description: result.error });
             return;
           }
 
+          setValidationIssues([]);
           toast.success(
-            intentValue === 'issue' ? 'Faktura wystawiona' : 'Zapisano szkic',
-            { description: intentValue === 'issue' ? 'Numer faktury został nadany.' : 'Faktura zapisana jako szkic.' },
+            intentValue === 'validate' ? 'Faktura gotowa do wysłania' : 'Zapisano szkic',
+            { description: intentValue === 'validate' ? 'Możesz teraz wysłać fakturę do KSeF.' : 'Faktura zapisana jako szkic.' },
           );
           router.push(`/admin/invoices/${result.id}`);
         });
@@ -834,6 +848,7 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
       )}
 
       {/* ── Action bar ────────────────────────────────────────────────── */}
+      {validationIssues.length > 0 && <InvoiceValidationSummary issues={validationIssues} />}
       <div className="sticky bottom-0 z-10 flex items-center justify-between gap-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 px-0 py-4">
         <div className="flex items-center gap-3">
           {/* Summary */}
@@ -863,16 +878,16 @@ export function InvoiceForm({ mode, invoiceId, defaultValues, defaultNumberingMo
           <Button
             type="button"
             disabled={isPending || (usage.isLimited && usage.atLimit)}
-            onClick={() => { setIntent('issue'); onSubmit('issue'); }}
+            onClick={() => { setIntent('validate'); onSubmit('validate'); }}
             className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-600/20"
             title={usage.isLimited && usage.atLimit ? 'Osiągnięto miesięczny limit faktur' : undefined}
           >
-            {isPending && intent === 'issue' ? (
+            {isPending && intent === 'validate' ? (
               <Loader className="w-4 h-4 animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4" />
             )}
-            Wystaw fakturę
+            Zwaliduj fakturę
           </Button>
         </div>
       </div>

@@ -53,7 +53,7 @@ export async function GET(
       .from('issued_invoices')
       .select(`
         id, company_id, invoice_number, status, currency,
-        issue_date, sale_date, due_date, payment_method,
+        issue_date, sale_date, due_date, payment_method, split_payment_mechanism,
         seller_name, seller_nip, seller_address, seller_bank_account,
         buyer_name, buyer_nip, buyer_address, buyer_email,
         net_total, vat_total, gross_total, notes,
@@ -77,7 +77,7 @@ export async function GET(
         .from('platform_invoices')
         .select(`
           id, invoice_number, invoice_date, status, payment_method, due_date,
-          currency, metadata, issued_by,
+          currency, metadata, issued_by, split_payment_mechanism,
           ksef_number, ksef_status, ksef_response, ksef_reference_no,
           ksef_submitted_at, ksef_last_attempt_at,
           ksef_submission_id
@@ -129,6 +129,7 @@ export async function GET(
         corrected_invoice_number: invoice.corrected_invoice_number ?? null,
         corrected_invoice_date:   invoice.corrected_invoice_date ?? null,
         correction_reason:        invoice.correction_reason ?? null,
+        specialProcedure:         { splitPaymentMechanism: invoice.split_payment_mechanism === true },
       };
 
       // Build XML from issued_invoices via buildKsefPayload
@@ -184,6 +185,7 @@ export async function GET(
         corrected_invoice_number: meta.corrected_invoice_number ?? null,
         corrected_invoice_date:   meta.corrected_invoice_date ?? null,
         correction_reason:        meta.correction_reason ?? null,
+        specialProcedure:         { splitPaymentMechanism: invoice.split_payment_mechanism === true },
       };
 
       // Build XML from platform_invoices

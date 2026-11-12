@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { canWriteInvoice, type AppRole } from '@/lib/permissions';
 import { InvoiceForm } from '@/components/admin/invoice-form';
 import { PageHeader, Stack } from '@/components/ui/layout-primitives';
-import type { IssuedInvoiceWithItems } from '@/types/issued-invoice';
+import { isEditable, type IssuedInvoiceWithItems } from '@/types/issued-invoice';
 import type { VatRate } from '@/types/issued-invoice';
 import type { Customer } from '@/components/invoice/customer-picker';
 import type { BillingAddress } from '@/lib/invoice-address';
@@ -98,9 +98,8 @@ export default async function EditInvoicePage({
   const invoice = await fetchInvoice(params.id);
   if (!invoice) notFound();
 
-  // Only drafts are editable
-  if (invoice.status !== 'draft') {
-    notFound();
+  if (!isEditable(invoice.status)) {
+    redirect(`/admin/invoices/${params.id}`);
   }
 
   const numberingMode = (invoice.numbering_mode ?? 'automatic') as 'manual' | 'automatic';

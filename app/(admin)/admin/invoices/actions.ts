@@ -10,8 +10,13 @@ import {
   IssuedInvoiceItemSchema,
   computeItemAmounts,
   computeInvoiceTotals,
+  isDeletable,
+  isEditable,
+  isSubmittable,
+  EDITABLE_INVOICE_STATUSES,
   type IssuedInvoiceInput,
 } from '@/types/issued-invoice';
+import { findSubmissionIssues, type InvoiceValidationIssue } from '@/lib/invoices/validate-invoice';
 import { buildKsefPayload } from '@/lib/ksef';
 import { submitToKsef, checkKsefStatus as pollKsefStatus, generateIdempotencyKey } from '@/lib/ksef/submit';
 import {
@@ -28,7 +33,6 @@ import {
   BillingAddressSchema,
   companyAddressToBilling,
   billingAddressToString,
-  validateBillingAddress,
   type BillingAddress,
   type CompanyAddressRow,
 } from '@/lib/invoice-address';
@@ -38,7 +42,7 @@ import {
 /** Derive action-level server result (never throws on validation errors) */
 export type ActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  | { ok: false; id?: string; error: string; fieldErrors?: Record<string, string[]>; issues?: InvoiceValidationIssue[] };
 
 /** Fetch the current user with their role and company. Throws on auth failure. */
 async function requireInvoicingUser() {
@@ -146,12 +150,12 @@ function buildItems(rawItems: InvoiceFormValues['items']) {
 
 export async function createInvoice(
   values: InvoiceFormValues,
-  intent: 'draft' | 'issue',
+  intent: 'draft' | 'validate',
 ): Promise<ActionResult> {
   try {
     const { user, companyId, role, packageType, isOwner: ownerFlag } = await requireInvoicingUser();
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do tworzenia faktur.' };
-    if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
+    if (intent === 'validate' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
     const parsed = FormSchemaWithOverride.safeParse(values);
     if (!parsed.success) {
@@ -166,25 +170,12 @@ export async function createInvoice(
     const items = buildItems(data.items);
     const totals = computeInvoiceTotals(items);
 
-    // Monthly invoice limit check (only for 'issue' intent, not drafts)
-    if (intent === 'issue') {
-      const limitCheck = await checkInvoiceLimit(companyId, { userId: user.id, isOwner: ownerFlag });
-      if (!limitCheck.allowed) {
-        return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
-      }
-    }
-
     const isManual = data.autoGenerateNumber === false;
     const numberingMode = isManual ? 'manual' : 'automatic';
 
-    const invoiceNumber =
-      intent === 'issue'
-        ? (isManual
-            ? (data.invoice_number || await generateInvoiceNumber(companyId))
-            : await generateInvoiceNumber(companyId))
-        : (isManual && data.invoice_number
-            ? data.invoice_number
-            : `SZKIC-${Date.now()}`);
+    const invoiceNumber = isManual && data.invoice_number
+      ? data.invoice_number
+      : `SZKIC-${Date.now()}`;
 
     const supabase = await getSupabaseServerClient();
 
@@ -223,30 +214,6 @@ export async function createInvoice(
       billingSource = 'company_settings';
     }
 
-    // Validate required address fields before issue (drafts allowed with incomplete address)
-    if (intent === 'issue') {
-      const { valid, missingFields } = validateBillingAddress(billingSnapshot);
-      if (!valid) {
-        // Audit the blocked attempt
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('invoice_audit').insert({
-          invoice_id: null as any,
-          company_id: companyId,
-          actor_id: user.id,
-          actor_role: role,
-          event: 'address_missing_blocked_issue',
-          source: billingSource,
-          after: billingSnapshot as any,
-          reason: `Missing fields: ${missingFields.join(', ')}`,
-        });
-        return {
-          ok: false,
-          error: `Brak adresu firmy — uzupełnij „Adres firmy" w Ustawieniach przed wystawieniem faktury. Brakujące pola: ${missingFields.join(', ')}`,
-          fieldErrors: { seller_address: ['Adres firmy jest niekompletny'] },
-        };
-      }
-    }
-
     const sellerAddressString = billingAddressToString(billingSnapshot);
     const nowIso = new Date().toISOString();
 
@@ -257,7 +224,7 @@ export async function createInvoice(
         company_id:          companyId,
         invoice_number:      invoiceNumber,
         numbering_mode:      numberingMode,
-        status:              intent === 'issue' ? 'issued' : 'draft',
+        status:              'draft',
         document_type:       data.document_type ?? 'STANDARD',
         corrected_invoice_number: data.corrected_invoice_number ?? null,
         corrected_invoice_date:   data.corrected_invoice_date ?? null,
@@ -288,6 +255,7 @@ export async function createInvoice(
         notes:               data.notes ?? null,
         split_payment_mechanism: data.split_payment_mechanism ?? false,
         created_by:          user.id,
+        updated_by:          user.id,
         billing_address_snapshot:     billingSnapshot as any,
         billing_address_source:       billingSource,
         billing_address_last_synced_at: nowIso,
@@ -320,13 +288,18 @@ export async function createInvoice(
       after:       billingSnapshot as any,
     });
 
-    // Consume an override slot if the company has active allowances
-    if (intent === 'issue') {
-      await consumeOverride(companyId);
+    const createdId = invoice.id as string;
+    if (intent === 'validate') {
+      const validation = await validateInvoiceRecord(
+        { supabase, companyId, userId: user.id, role, ownerFlag },
+        createdId,
+      );
+      revalidatePath('/admin/invoices');
+      return validation;
     }
 
     revalidatePath('/admin/invoices');
-    return { ok: true, id: invoice.id as string };
+    return { ok: true, id: createdId };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
   }
@@ -337,12 +310,12 @@ export async function createInvoice(
 export async function updateInvoice(
   id: string,
   values: InvoiceFormValues,
-  intent: 'draft' | 'issue',
+  intent: 'draft' | 'validate',
 ): Promise<ActionResult> {
   try {
     const { user, companyId, role, packageType, isOwner: ownerFlag } = await requireInvoicingUser();
     if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do edycji faktur.' };
-    if (intent === 'issue' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
+    if (intent === 'validate' && !canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
 
     const parsed = FormSchemaWithOverride.safeParse(values);
     if (!parsed.success) {
@@ -366,16 +339,8 @@ export async function updateInvoice(
       .maybeSingle();
 
     if (!existing) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
-    if (existing.status !== 'draft') {
-      return { ok: false, error: 'Tylko faktury w stanie "Szkic" mogą być edytowane.' };
-    }
-
-    // Monthly invoice limit check (only when transitioning draft → issued)
-    if (intent === 'issue' && existing.status === 'draft') {
-      const limitCheck = await checkInvoiceLimit(companyId, { userId: user.id, isOwner: ownerFlag });
-      if (!limitCheck.allowed) {
-        return { ok: false, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
-      }
+    if (!isEditable(existing.status)) {
+      return { ok: false, error: 'Ta faktura została wysłana do KSeF i nie może być zmieniana. Wystaw fakturę korygującą.' };
     }
 
     const items = buildItems(data.items);
@@ -399,28 +364,6 @@ export async function updateInvoice(
       billingSource = 'company_settings';
     }
 
-    // Validate required address fields before issue
-    if (intent === 'issue') {
-      const { valid, missingFields } = validateBillingAddress(billingSnapshot);
-      if (!valid) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('invoice_audit').insert({
-          invoice_id: id,
-          company_id: companyId,
-          actor_id: user.id,
-          actor_role: role,
-          event: 'address_missing_blocked_issue',
-          source: billingSource,
-          after: billingSnapshot as any,
-          reason: `Missing fields: ${missingFields.join(', ')}`,
-        });
-        return {
-          ok: false,
-          error: `Brak adresu firmy — uzupełnij „Adres firmy" w Ustawieniach przed wystawieniem faktury. Brakujące pola: ${missingFields.join(', ')}`,
-          fieldErrors: { seller_address: ['Adres firmy jest niekompletny'] },
-        };
-      }
-    }
 
     const sellerAddressString = billingAddressToString(billingSnapshot);
     const nowIso = new Date().toISOString();
@@ -428,12 +371,7 @@ export async function updateInvoice(
     const isManual = data.autoGenerateNumber === false;
     const numberingMode = isManual ? 'manual' : 'automatic';
 
-    const newNumber =
-      intent === 'issue' && existing.status === 'draft'
-        ? (isManual
-            ? (data.invoice_number || await generateInvoiceNumber(companyId))
-            : await generateInvoiceNumber(companyId))
-        : existing.invoice_number;
+    const newNumber = isManual ? (data.invoice_number || existing.invoice_number) : existing.invoice_number;
 
     // Uniqueness check for manual invoice numbers (exclude current invoice)
     if (data.autoGenerateNumber === false && data.invoice_number && data.invoice_number !== existing.invoice_number) {
@@ -454,12 +392,13 @@ export async function updateInvoice(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase as any)
+    const { data: updated, error: updateErr } = await (supabase as any)
       .from('issued_invoices')
       .update({
         invoice_number:      newNumber,
         numbering_mode:      numberingMode,
-        status:              intent === 'issue' ? 'issued' : 'draft',
+        status:              'draft',
+        updated_by:          user.id,
         document_type:       data.document_type ?? 'STANDARD',
         corrected_invoice_number: data.corrected_invoice_number ?? null,
         corrected_invoice_date:   data.corrected_invoice_date ?? null,
@@ -494,9 +433,13 @@ export async function updateInvoice(
         billing_address_last_synced_at: nowIso,
         updated_at:          new Date().toISOString(),
       })
-      .eq('id', id);
+      .eq('id', id)
+      .in('status', EDITABLE_INVOICE_STATUSES)
+      .select('id')
+      .maybeSingle();
 
     if (updateErr) return { ok: false, error: updateErr.message };
+    if (!updated) return { ok: false, error: 'Faktura została właśnie wysłana lub zmieniona. Odśwież stronę.' };
 
     // Replace all items atomically: delete old, insert new
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -524,13 +467,164 @@ export async function updateInvoice(
       after:       billingSnapshot as any,
     });
 
-    // Consume an override slot if we just issued the invoice
-    if (intent === 'issue' && existing.status === 'draft') {
-      await consumeOverride(companyId);
+    if (intent === 'validate') {
+      const validation = await validateInvoiceRecord(
+        { supabase, companyId, userId: user.id, role, ownerFlag },
+        id,
+      );
+      revalidatePath('/admin/invoices');
+      revalidatePath(`/admin/invoices/${id}`);
+      return validation;
     }
 
     revalidatePath('/admin/invoices');
     revalidatePath(`/admin/invoices/${id}`);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
+}
+
+// ─── Validate & delete draft ──────────────────────────────────────────────────
+
+type InvoiceContext = {
+  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>;
+  companyId: string;
+  userId: string;
+  role: AppRole;
+  ownerFlag: boolean;
+};
+
+/**
+ * Checks a draft against the submission rules and, when it passes, marks it
+ * ready for KSeF. Assigns the official number for automatic numbering and
+ * consumes a monthly invoice slot the first time the invoice becomes ready.
+ */
+async function validateInvoiceRecord(ctx: InvoiceContext, id: string): Promise<ActionResult> {
+  const { supabase, companyId, userId, role, ownerFlag } = ctx;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+
+  const { data: invoice } = await db
+    .from('issued_invoices')
+    .select('*')
+    .eq('id', id)
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  if (!invoice) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
+  if (invoice.status === 'ready_for_ksef') return { ok: true, id };
+  if (!isEditable(invoice.status)) {
+    return { ok: false, id, error: 'Ta faktura została już wysłana do KSeF i nie może być walidowana. Wystaw fakturę korygującą.' };
+  }
+
+  const { data: items } = await db
+    .from('issued_invoice_items')
+    .select('name, quantity, unit_price_net, vat_rate')
+    .eq('invoice_id', id)
+    .order('position', { ascending: true });
+
+  const issues = findSubmissionIssues(invoice, items ?? []);
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      id,
+      error: 'Faktura nie może zostać wysłana do KSeF. Uzupełnij brakujące dane.',
+      issues,
+    };
+  }
+
+  // Legacy 'issued' rows already consumed a monthly slot when they were issued
+  const alreadyCounted = invoice.status === 'issued';
+  if (!alreadyCounted) {
+    const limitCheck = await checkInvoiceLimit(companyId, { userId, isOwner: ownerFlag });
+    if (!limitCheck.allowed) {
+      return { ok: false, id, error: limitCheck.reason ?? 'Osiągnięto miesięczny limit faktur.' };
+    }
+  }
+
+  const needsNumber = invoice.numbering_mode !== 'manual'
+    && (!invoice.invoice_number || String(invoice.invoice_number).startsWith('SZKIC-'));
+  const invoiceNumber = needsNumber ? await generateInvoiceNumber(companyId) : invoice.invoice_number;
+
+  const { data: updated, error: updateErr } = await db
+    .from('issued_invoices')
+    .update({
+      status:         'ready_for_ksef',
+      invoice_number: invoiceNumber,
+      updated_by:     userId,
+      updated_at:     new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', invoice.status)
+    .select('id')
+    .maybeSingle();
+
+  if (updateErr) return { ok: false, id, error: updateErr.message };
+  if (!updated) return { ok: false, id, error: 'Faktura została właśnie zmieniona. Odśwież stronę i spróbuj ponownie.' };
+
+  if (!alreadyCounted) await consumeOverride(companyId);
+
+  await db.from('invoice_audit').insert({
+    invoice_id: id,
+    company_id: companyId,
+    actor_id:   userId,
+    actor_role: role,
+    event:      'validated_ready_for_ksef',
+    source:     'validation',
+    after:      { invoice_number: invoiceNumber },
+  });
+
+  return { ok: true, id };
+}
+
+export async function validateInvoice(id: string): Promise<ActionResult> {
+  try {
+    const { user, companyId, role, packageType, isOwner: ownerFlag } = await requireInvoicingUser();
+    if (!canIssueInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do wystawiania faktur.' };
+
+    const supabase = await getSupabaseServerClient();
+    const result = await validateInvoiceRecord({ supabase, companyId, userId: user.id, role, ownerFlag }, id);
+    revalidatePath('/admin/invoices');
+    revalidatePath(`/admin/invoices/${id}`);
+    return result;
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
+  }
+}
+
+export async function deleteDraft(id: string): Promise<ActionResult> {
+  try {
+    const { companyId, role, packageType } = await requireInvoicingUser();
+    if (!canWriteInvoice(role, packageType)) return { ok: false, error: 'Brak uprawnień do usuwania faktur.' };
+
+    const supabase = await getSupabaseServerClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any;
+
+    const { data: existing } = await db
+      .from('issued_invoices')
+      .select('id, status')
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (!existing) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
+    if (!isDeletable(existing.status)) return { ok: false, error: 'Usunąć można tylko szkic faktury.' };
+
+    const { data: deleted, error } = await db
+      .from('issued_invoices')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .eq('status', 'draft')
+      .select('id')
+      .maybeSingle();
+
+    if (error) return { ok: false, error: error.message };
+    if (!deleted) return { ok: false, error: 'Nie masz uprawnień do usunięcia tego szkicu.' };
+
+    revalidatePath('/admin/invoices');
     return { ok: true, id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Nieznany błąd.' };
@@ -560,12 +654,11 @@ export type KsefActionResult =
  */
 export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
   try {
-    const { companyId, role, packageType } = await requireInvoicingUser();
+    const { user, companyId, role, packageType } = await requireInvoicingUser();
     if (!canSendToKsefRole(role, packageType)) return { ok: false, error: 'Brak uprawnień do wysyłania faktur do KSeF.' };
 
     const supabase = await getSupabaseServerClient();
 
-    // Guard: only issued invoices may be sent
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: inv } = await (supabase as any)
       .from('issued_invoices')
@@ -575,10 +668,13 @@ export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
       .maybeSingle();
 
     if (!inv) return { ok: false, error: 'Faktura nie istnieje lub brak dostępu.' };
-    if (inv.status === 'draft') return { ok: false, error: 'Wystaw fakturę przed wysłaniem do KSeF.' };
     if (inv.status === 'sent_to_ksef') return { ok: false, error: 'Faktura jest już wysłana do KSeF.' };
     if (inv.status === 'accepted') return { ok: false, error: 'Faktura jest już zaakceptowana przez KSeF.' };
     if (inv.status === 'cancelled') return { ok: false, error: 'Nie można wysłać anulowanej faktury.' };
+    if (inv.status === 'rejected') return { ok: false, error: 'Faktura została odrzucona przez KSeF. Wystaw fakturę korygującą.' };
+    if (!isSubmittable(inv.status)) {
+      return { ok: false, error: 'Najpierw zwaliduj fakturę. Tylko zwalidowana faktura może zostać wysłana do KSeF.' };
+    }
 
     // Build + sign FA(2) XML
     const payload = await buildKsefPayload(invoiceId);
@@ -638,6 +734,8 @@ export async function sendToKsef(invoiceId: string): Promise<KsefActionResult> {
         status:             result.status === 'accepted' ? 'accepted' : 'sent_to_ksef',
         ksef_status:        result.status,
         ksef_sent_at:       nowIso,
+        submitted_to_ksef_at: nowIso,
+        updated_by:         user.id,
         ksef_reference_no:  result.ksefNumber ?? inv.ksef_reference_no ?? null,
         ksef_error_message: result.error ?? null,
         updated_at:         nowIso,

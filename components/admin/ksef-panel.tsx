@@ -173,7 +173,7 @@ export function KsefPanel({
 
   // ─ Derived state ────────────────────────────────────────────────────────────
 
-  const canSend = allowSend && (localInvStatus === 'issued' || localInvStatus === 'rejected');
+  const canSend = allowSend && localInvStatus === 'ready_for_ksef';
   const canCheck = allowSend && !!referenceNo && (ksefStatus === 'pending' || ksefStatus === 'processing');
 
   const ksefCfg = ksefStatus ? KSEF_STATUS_CONFIG[ksefStatus] : null;
