@@ -13,6 +13,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useCeidgLookup } from '@/hooks/use-ceidg-lookup';
+import { CeidgBlockingWarning, CeidgLookupStatus } from '@/components/ceidg/ceidg-lookup-status';
+import {
+  formatCeidgStreetCity,
+  isCeidgStatusBlocking,
+  mapCeidgToFormValues,
+  type CeidgStatus,
+} from '@/lib/ceidg/ceidg-company';
 
 export interface Customer {
   id:            string;
@@ -277,9 +285,13 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
   const [zip, setZip] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [ceidgStatus, setCeidgStatus] = useState<CeidgStatus | null>(null);
+  const [ceidgCheckedAt, setCeidgCheckedAt] = useState<string | null>(null);
+  const [ceidgAcknowledged, setCeidgAcknowledged] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const { state: lookupState, lookup: lookupCeidg, scheduleLookup, reset: resetCeidg } = useCeidgLookup();
 
   // Reset form when modal opens
   useEffect(() => {
@@ -290,10 +302,38 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
       setZip('');
       setEmail('');
       setPhone('');
+      setCeidgStatus(null);
+      setCeidgCheckedAt(null);
+      setCeidgAcknowledged(true);
       setErrors({});
       setSubmitError('');
+      resetCeidg();
     }
-  }, [open, defaultName]);
+  }, [open, defaultName, resetCeidg]);
+
+  useEffect(() => {
+    if (lookupState.phase !== 'found') return;
+    const { company, checkedAt } = lookupState;
+    const values = mapCeidgToFormValues(company);
+    setName(values.name);
+    setAddress(formatCeidgStreetCity(values));
+    setZip(values.postalCode);
+    setEmail(values.email);
+    setPhone(values.phone);
+    setCeidgStatus(company.status);
+    setCeidgCheckedAt(checkedAt);
+    setCeidgAcknowledged(!isCeidgStatusBlocking(company.status));
+    setErrors({});
+  }, [lookupState]);
+
+  const onNipChange = (raw: string) => {
+    const value = raw.replace(/\D/g, '').slice(0, 10);
+    setNip(value);
+    setCeidgStatus(null);
+    setCeidgCheckedAt(null);
+    setCeidgAcknowledged(true);
+    scheduleLookup(value);
+  };
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -320,6 +360,10 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (ceidgStatus && isCeidgStatusBlocking(ceidgStatus) && !ceidgAcknowledged) {
+      setSubmitError('Potwierdź zapis klienta ze statusem CEIDG, aby kontynuować.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError('');
 
@@ -334,6 +378,8 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
           zip:     zip.trim(),
           email:   email.trim() || undefined,
           phone:   phone.trim() || undefined,
+          ceidgStatus,
+          ceidgCheckedAt,
         }),
       });
 
@@ -393,11 +439,17 @@ function CreateCustomerModal({ open, onOpenChange, onCreated, defaultName }: Cre
             </Label>
             <Input
               value={nip}
-              onChange={(e) => setNip(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={(e) => onNipChange(e.target.value)}
               placeholder="1234567890"
               className={cn('font-mono', errors.nip && 'border-red-400')}
             />
             {errors.nip && <p className="text-xs text-red-500">{errors.nip}</p>}
+            <CeidgLookupStatus nip={nip} lookupState={lookupState} status={ceidgStatus} onLookup={lookupCeidg} />
+            <CeidgBlockingWarning
+              status={ceidgStatus}
+              acknowledged={ceidgAcknowledged}
+              onAcknowledge={setCeidgAcknowledged}
+            />
           </div>
 
           {/* Address */}
