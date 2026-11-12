@@ -79,6 +79,7 @@ import {
   type InvoiceCompany,
 } from '@/hooks/use-invoice-detail';
 import { InvoicePdfPreviewCard } from '@/components/invoice/invoice-pdf-preview-card';
+import { RiskFindingsCard } from '@/components/invoice/risk-findings-card';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { BBox } from '@/types/invoice-item';
 import type { WhiteListStatus } from '@/hooks/use-invoice-detail';
@@ -1255,6 +1256,8 @@ export default function InvoiceDetailPage() {
                       <MetaRow label="Numer konta z faktury" value={formatIBAN(invoice?.bank_account_number ?? invoice?.bank_account ?? null)} mono />
                     </CardContent>
                   </Card>
+
+                  {invoice?.id && <RiskFindingsCard invoiceId={invoice.id} />}
 
                   {/* White List verification */}
                   <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">

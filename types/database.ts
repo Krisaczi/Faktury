@@ -436,6 +436,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      invoice_risk_findings: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          company_id: string;
+          rule_code: string;
+          rule_name: string;
+          severity: 'low' | 'medium' | 'high' | 'critical';
+          score: number;
+          message: string;
+          details: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          company_id: string;
+          rule_code: string;
+          rule_name: string;
+          severity: 'low' | 'medium' | 'high' | 'critical';
+          score: number;
+          message: string;
+          details?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       upload_sessions: {
         Row: {
           id: string;

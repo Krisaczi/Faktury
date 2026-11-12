@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { parseXmlInvoices } from '@/lib/parsers/xml-invoice-parser';
 import { resolveVendor } from '@/lib/vendors/resolve-vendor';
+import { runInvoiceRiskEngine } from '@/lib/risk/run-invoice-risk';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -61,8 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create parse job' }, { status: 500 });
     }
 
-    // Run parsing asynchronously (fire-and-forget via EdgeRuntime if available, else inline)
-    parseAndIngest({
+    await parseAndIngest({
       supabase,
       fileUrl,
       uploadSessionId,
@@ -70,9 +70,9 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       jobId: job.id,
       fileType,
-    }).catch((err) => console.error('[parse-invoice] background error', err));
+    });
 
-    return NextResponse.json({ jobId: job.id, status: 'processing' });
+    return NextResponse.json({ jobId: job.id, status: 'completed' });
   } catch (err) {
     console.error('[parse-invoice]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -163,68 +163,15 @@ async function parseAndIngest({
 
         invoicesCreated++;
 
-        // Basic risk flags
-        const flags: { flag_type: string; severity: 'info' | 'low' | 'medium' | 'high' | 'critical'; message: string }[] = [];
-
-        if (!inv.sellerNip) {
-          flags.push({ flag_type: 'missing_seller_nip', severity: 'medium', message: 'Seller NIP not found in XML' });
-        }
-        if (!inv.bankAccount) {
-          flags.push({ flag_type: 'missing_bank_account', severity: 'medium', message: 'Bank account not present in invoice' });
-        }
-        if (inv.totalAmount && inv.totalAmount > 50000) {
-          flags.push({ flag_type: 'high_value', severity: 'high', message: `High-value invoice: ${inv.currency ?? 'PLN'} ${inv.totalAmount}` });
-        }
-
-        // Duplicate-after-first check: find the earliest invoice with same number + seller NIP
-        if (inv.invoiceNumber && inv.sellerNip) {
-          const { data: earlierInvoice } = await supabase
-            .from('invoices')
-            .select('id, created_at')
-            .eq('company_id', companyId)
-            .eq('invoice_number', inv.invoiceNumber)
-            .eq('seller_nip', inv.sellerNip)
-            .neq('id', invoice.id)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-          if (earlierInvoice) {
-            const gapSeconds =
-              (Date.now() -
-                new Date((earlierInvoice as { created_at: string }).created_at).getTime()) / 1000;
-            if (gapSeconds > 60) {
-              flags.push({
-                flag_type: 'duplicate_invoice_after_first',
-                severity: 'high',
-                message: `Duplicate invoice detected — an earlier copy of invoice number "${inv.invoiceNumber}" already exists for vendor NIP ${inv.sellerNip}.`,
-              });
-            }
-          }
-        }
-
-        if (flags.length > 0) {
-          for (const flag of flags) {
-            const { error: flagError } = await supabase.from('risk_flags').insert({
-              invoice_id: invoice.id,
-              type: flag.flag_type,
-              severity: flag.severity,
-              message: flag.message,
-            });
-            if (!flagError) flagsCreated++;
-          }
-
-          // Update overall_risk
-          const severityOrder = ['info', 'low', 'medium', 'high', 'critical'] as const;
-          type SeverityLevel = typeof severityOrder[number];
-          const maxSeverity = flags.reduce<SeverityLevel>((acc, f) => {
-            return severityOrder.indexOf(f.severity) > severityOrder.indexOf(acc) ? f.severity : acc;
-          }, 'low') as 'low' | 'medium' | 'high' | 'critical';
-
-          await supabase
-            .from('invoices')
-            .update({ overall_risk: maxSeverity })
-            .eq('id', invoice.id);
+        try {
+          const risk = await runInvoiceRiskEngine(supabase, companyId, invoice.id);
+          flagsCreated += risk.findings.length;
+        } catch (riskErr) {
+          errorCount++;
+          errors.push({
+            message: riskErr instanceof Error ? riskErr.message : 'Risk analysis failed',
+            context: inv.invoiceNumber,
+          });
         }
       }
 
