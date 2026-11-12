@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: logoPath, error } = await supabase.rpc('set_company_logo_path', {
-      p_path: parsed.data.logo_path ?? undefined,
+      p_path: parsed.data.logo_path,
     });
 
     if (error) {

@@ -1592,7 +1592,7 @@ export type Database = {
         Returns: string;
       };
       set_company_logo_path: {
-        Args: { p_path?: string };
+        Args: { p_path?: string | null };
         Returns: string;
       };
     };
