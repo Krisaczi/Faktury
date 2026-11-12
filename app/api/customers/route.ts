@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyPackage } from '@/lib/packages/get-company-package';
 import { canManageCustomers } from '@/lib/permissions';
 import { ceidgFieldsSchema } from '@/lib/ceidg/ceidg-company';
-import { normalizeIban, optionalIbanSchema } from '@/lib/validations/iban';
+import { optionalIbanSchema, toIban } from '@/lib/validations/iban';
 
 // ─── GET /api/customers?search=&page=&limit=&sort= ────────────────────────────
 
@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
       website:    website || null,
       email:      email || null,
       phone:      phone || null,
-      bank_account_number: bankAccountNumber ? normalizeIban(bankAccountNumber) : null,
+      bank_account_number: bankAccountNumber ? toIban(bankAccountNumber) : null,
       ceidg_status:     ceidgStatus ?? null,
       ceidg_checked_at: ceidgCheckedAt ?? null,
     })

@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { getCompanyPackage } from '@/lib/packages/get-company-package';
 import { canManageCustomers } from '@/lib/permissions';
 import { ceidgFieldsSchema } from '@/lib/ceidg/ceidg-company';
-import { normalizeIban, optionalIbanSchema } from '@/lib/validations/iban';
+import { optionalIbanSchema, toIban } from '@/lib/validations/iban';
 
 const ZIP_REGEX = /^\d{2}-\d{3}$/;
 
@@ -100,7 +100,7 @@ export async function PUT(
       city,
       email:      email || null,
       phone:      phone || null,
-      bank_account_number: bankAccountNumber ? normalizeIban(bankAccountNumber) : null,
+      bank_account_number: bankAccountNumber ? toIban(bankAccountNumber) : null,
       building_number:  buildingNumber || null,
       apartment_number: apartmentNumber || null,
       regon:      regon || null,

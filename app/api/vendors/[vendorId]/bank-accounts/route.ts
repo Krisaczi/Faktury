@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { normalizeIban, validateIban } from '@/lib/validations/iban';
+import { toIban, validateIban } from '@/lib/validations/iban';
 
 export async function POST(
   req: NextRequest,
@@ -33,7 +33,7 @@ export async function POST(
       .from('vendor_bank_accounts')
       .insert({
         vendor_id: params.vendorId,
-        bank_account_number: normalizeIban(rawIban),
+        bank_account_number: toIban(rawIban),
         bank_name: bankName,
         source: 'manual',
         approved: true,

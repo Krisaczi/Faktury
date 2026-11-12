@@ -24,9 +24,15 @@ export function normalizeIban(input: string): string {
   return input.replace(/\s+/g, '').toUpperCase();
 }
 
+/** Canonical stored form: no spaces, uppercase, a bare 26-digit Polish NRB gets the "PL" prefix. */
+export function toIban(input: string): string {
+  const clean = normalizeIban(input);
+  return /^\d{26}$/.test(clean) ? `PL${clean}` : clean;
+}
+
 /** Format IBAN in 4-character groups for display. */
 export function formatIban(input: string): string {
-  const clean = normalizeIban(input);
+  const clean = toIban(input);
   return clean.replace(/(.{4})/g, '$1 ').trim();
 }
 
@@ -44,7 +50,7 @@ export function maskIban(input: string): string {
  * Returns an error key (for i18n) or null if valid.
  */
 export function validateIban(input: string): string | null {
-  const iban = normalizeIban(input);
+  const iban = toIban(input);
 
   if (!iban) return 'IBAN jest wymagany.';
   if (iban.length < 15) return 'IBAN jest zbyt krótki.';

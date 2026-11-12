@@ -1,7 +1,7 @@
 'use server';
 
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { validateIban, validateBic, normalizeIban } from '@/lib/validations/iban';
+import { validateIban, validateBic, toIban } from '@/lib/validations/iban';
 import type { AppRole } from '@/lib/permissions';
 import type {
   BankAccountRow,
@@ -121,7 +121,7 @@ export async function createCompanyBankAccount(
       return { ok: false, error: 'Nazwa posiadacza konta jest wymagana.', fieldErrors: { account_holder_name: 'Wymagane' } };
     }
 
-    const iban = normalizeIban(input.iban);
+    const iban = toIban(input.iban);
 
     // If is_default, unset other defaults first
     if (input.is_default) {

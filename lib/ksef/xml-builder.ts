@@ -18,6 +18,7 @@ import { KSEF_RODZAJ_FAKTURY } from '@/types/issued-invoice';
 import { format, parseISO } from 'date-fns';
 import { P13_FIELDS, P14_FIELDS, VALID_P12_VALUES } from './fa3-schema';
 import { computeVatSummary, buildVatSummaryXml, getActiveCategories } from './vat-summary-engine';
+import { toIban } from '@/lib/validations/iban';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -265,8 +266,7 @@ function buildPlatnosc(inv: IssuedInvoiceWithItems): string {
     : '';
 
   const linked = inv.company_bank_account;
-  const rawAccount = (linked?.iban ?? inv.seller_bank_account ?? '').trim();
-  const nrRb = rawAccount.replace(/^PL/i, '').replace(/\s/g, '');
+  const nrRb = toIban(linked?.iban ?? inv.seller_bank_account ?? '');
   const swift = linked?.bic?.trim().replace(/\s/g, '') ?? '';
   const bankName = linked?.bank_name?.trim() ?? '';
   const bankParts = [
