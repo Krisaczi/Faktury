@@ -19,6 +19,7 @@ export type Database = {
           subscription_status: string;
           product_type: 'starter' | 'professional';
           package_type: string | null;
+          plan: string;
           package_changed_at: string | null;
           street: string | null;
           address_line2: string | null;
@@ -46,6 +47,7 @@ export type Database = {
           subscription_status?: string;
           product_type?: 'starter' | 'professional';
           package_type?: string | null;
+          plan?: string;
           package_changed_at?: string | null;
           street?: string | null;
           address_line2?: string | null;

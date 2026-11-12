@@ -178,36 +178,40 @@ export async function finalizeProduct(params: {
 }): Promise<ActionResult<{ companyId: string }>> {
   const { companyId, productType } = params;
 
+  if (productType !== 'starter' && productType !== 'professional') {
+    return { ok: false, error: 'Invalid plan selected' };
+  }
+
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: 'Sesja wygasła. Zaloguj się ponownie.' };
 
-  // Verify caller owns this company
-  const { data: row } = await supabase
-    .from('users')
-    .select('company_id')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (row?.company_id !== companyId) {
-    return { ok: false, error: 'Brak uprawnień do tej firmy.' };
-  }
-
-  const now = new Date();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from('companies')
-    .update({
-      product_type:        productType,
-      package_type:        productType,
-      subscription_status: 'active',
-      onboarding_step:     'product_selected',
-      updated_at:          now.toISOString(),
-    })
-    .eq('id', companyId);
+  const { error } = await (supabase as any).rpc('set_company_product_at_onboarding', {
+    p_product: productType,
+  });
 
   if (error) return { ok: false, error: error.message };
+
+  const { data: saved, error: readError } = await supabase
+    .from('companies')
+    .select('product_type, plan')
+    .eq('id', companyId)
+    .maybeSingle();
+
+  if (readError) return { ok: false, error: readError.message };
+  if (!saved || saved.plan !== productType || saved.product_type !== productType) {
+    console.error('PLAN_PERSISTENCE_MISMATCH', {
+      companyId,
+      selectedPlan: productType,
+      savedPlan: saved?.plan ?? null,
+      savedProductType: saved?.product_type ?? null,
+    });
+    return {
+      ok: false,
+      error: 'Wybrany plan nie został zapisany. Spróbuj ponownie.',
+    };
+  }
 
   return { ok: true, data: { companyId } };
 }
