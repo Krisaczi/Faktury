@@ -41,6 +41,7 @@ import {
 } from '@/hooks/use-dashboard';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { FinancialOverview } from '@/components/dashboard/financial-overview';
 import {
   SkeletonKpiCard,
   SkeletonActivityFeed,
@@ -246,6 +247,8 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
           )
         )}
       </Grid>
+
+      <FinancialOverview currency={currency} />
 
       {/* Chart + Activity */}
       <Grid cols={{ base: 1, lg: 3 }} gap="4">

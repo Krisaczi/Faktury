@@ -1447,6 +1447,24 @@ export type Database = {
           flagged_amount_sum: number;
         }[];
       };
+      get_financial_summary: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          revenue: number;
+          expenses: number;
+          profit: number;
+          revenue_count: number;
+          expense_count: number;
+        }[];
+      };
+      get_financial_trend: {
+        Args: { p_from: string; p_to: string; p_bucket: string };
+        Returns: {
+          bucket: string;
+          revenue: number;
+          expenses: number;
+        }[];
+      };
       get_invoice_timeseries: {
         Args: Record<string, never>;
         Returns: {
