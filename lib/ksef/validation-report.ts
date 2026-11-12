@@ -156,8 +156,8 @@ export function generateValidationReport(
 
   // ── Section 3: Mathematical Validation ──
   const mathChecks: ValidationDetailCheck[] = [];
-  const p13SumMatches = xmlValidation.summaryCheck?.consistent ?? false;
   const p15Diff = Math.round((summary.p15 - (invoice.gross_total ?? 0)) * 100) / 100;
+  const netDiff = Math.round((summary.totalNet - (invoice.net_total ?? 0)) * 100) / 100;
 
   mathChecks.push({
     name: 'P_15 = SUM(P_13_*) + SUM(P_14_*)',
@@ -167,18 +167,19 @@ export function generateValidationReport(
   });
   mathChecks.push({
     name: 'SUM(P_13_*) matches invoice net_total',
-    status: xmlValidation.errors.some(e => e.rule === 'summary_net_total_mismatch') ? 'fail' : 'pass',
+    status: netDiff !== 0 || xmlValidation.errors.some(e => e.rule === 'summary_net_total_mismatch') ? 'fail' : 'pass',
     message: `SUM(P_13_*) = ${summary.totalNet.toFixed(2)}, net_total = ${(invoice.net_total ?? 0).toFixed(2)}`,
+    detail: netDiff !== 0 ? `Difference: ${netDiff.toFixed(2)}` : undefined,
   });
   mathChecks.push({
     name: 'P_15 matches invoice gross_total',
-    status: xmlValidation.errors.some(e => e.rule === 'summary_gross_total_mismatch') ? 'fail' : 'pass',
+    status: p15Diff !== 0 || xmlValidation.errors.some(e => e.rule === 'summary_gross_total_mismatch') ? 'fail' : 'pass',
     message: `P_15 = ${summary.p15.toFixed(2)}, gross_total = ${(invoice.gross_total ?? 0).toFixed(2)}`,
     detail: p15Diff !== 0 ? `Difference: ${p15Diff.toFixed(2)}` : undefined,
   });
   sections.push({
     name: 'Mathematical Validation',
-    status: p13SumMatches && p15Diff === 0 ? 'pass' : 'fail',
+    status: mathChecks.some(c => c.status === 'fail') ? 'fail' : 'pass',
     checks: mathChecks,
   });
 
