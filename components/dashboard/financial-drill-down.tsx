@@ -23,8 +23,8 @@ interface Props {
 }
 
 const COPY: Record<DrillDownKind, { title: string; counterparty: string }> = {
-  revenue: { title: 'Revenue: issued invoices', counterparty: 'Buyer' },
-  expenses: { title: 'Expenses: received invoices', counterparty: 'Seller' },
+  revenue: { title: 'Przychody: wystawione faktury', counterparty: 'Buyer' },
+  expenses: { title: 'Wydatki: otrzymane faktury', counterparty: 'Seller' },
 };
 
 export function FinancialDrillDown({ kind, range, currency, onClose }: Props) {
@@ -52,20 +52,20 @@ export function FinancialDrillDown({ kind, range, currency, onClose }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading && <p className="py-6 text-sm text-slate-500">Loading invoices...</p>}
-        {error && <p role="alert" className="py-6 text-sm text-red-600">These invoices could not be loaded.</p>}
+        {isLoading && <p className="py-6 text-sm text-slate-500">Wczytywanie faktur...</p>}
+        {error && <p role="alert" className="py-6 text-sm text-red-600">Nie udało się wczytać tych faktur.</p>}
         {data && data.length === 0 && (
-          <p className="py-6 text-sm text-slate-500 dark:text-slate-400">No data available for selected period.</p>
+          <p className="py-6 text-sm text-slate-500 dark:text-slate-400">Brak danych dla wybranego okresu.</p>
         )}
         {data && data.length > 0 && (
           <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Number</th>
+                  <th className="px-3 py-2 font-medium">Numer</th>
                   <th className="px-3 py-2 font-medium">{copy.counterparty}</th>
-                  <th className="px-3 py-2 font-medium">Date</th>
-                  <th className="px-3 py-2 text-right font-medium">Amount</th>
+                  <th className="px-3 py-2 font-medium">Data</th>
+                  <th className="px-3 py-2 text-right font-medium">Kwota</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,7 +82,7 @@ export function FinancialDrillDown({ kind, range, currency, onClose }: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t border-slate-200 dark:border-slate-700 font-semibold">
-                  <td className="px-3 py-2" colSpan={3}>Total</td>
+                  <td className="px-3 py-2" colSpan={3}>Łącznie</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmt(total)}</td>
                 </tr>
               </tfoot>

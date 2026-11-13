@@ -118,30 +118,30 @@ export function FinancialOverview({ currency }: Props) {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <SummaryCard
-          title="Revenue"
+          title="Przychód"
           value={formatAmount(data?.revenue ?? 0, currency)}
           tone="positive"
           icon={ArrowUpRight}
           loading={loading}
           onClick={() => setDrillDown('revenue')}
-          hint="Issued invoices in period"
+          hint="Faktury wystawione w danym okresie"
         />
         <SummaryCard
-          title="Expenses"
+          title="Wydatki"
           value={formatAmount(data?.expenses ?? 0, currency)}
           tone="negative"
           icon={ArrowDownRight}
           loading={loading}
           onClick={() => setDrillDown('expenses')}
-          hint="Received invoices in period"
+          hint="Faktury otrzymane w danym okresie"
         />
         <SummaryCard
-          title="Estimated Profit"
+          title="Szacowany zysk"
           value={formatAmount(profit, currency)}
           tone={profit >= 0 ? 'positive' : 'negative'}
           icon={TrendingUp}
           loading={loading}
-          hint="Revenue minus expenses"
+          hint="Przychody minus koszty"
         />
       </div>
 
