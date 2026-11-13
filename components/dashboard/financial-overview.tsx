@@ -17,12 +17,12 @@ import {
 import { FinancialDrillDown, type DrillDownKind } from './financial-drill-down';
 
 const PERIODS: { value: FinancialPeriod; label: string }[] = [
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'quarter', label: 'Quarter' },
-  { value: 'year', label: 'Year' },
-  { value: 'ytd', label: 'YTD' },
-  { value: 'custom', label: 'Custom Range' },
+  { value: 'week', label: 'Tydzień' },
+  { value: 'month', label: 'Miesiąc' },
+  { value: 'quarter', label: 'Kwartał' },
+  { value: 'year', label: 'Rok' },
+  { value: 'ytd', label: 'Bieżący rok' },
+  { value: 'custom', label: 'Wybierz zakres' },
 ];
 
 function formatAmount(amount: number, currency: string) {
@@ -66,9 +66,9 @@ export function FinancialOverview({ currency }: Props) {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 id="financial-overview-title" className="text-lg font-semibold text-slate-900 dark:text-white">
-            Financial Overview
+            Przegląd Twoich finansów
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Revenue, expenses and estimated profit</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Przychody, wydatki i szacowany zysk</p>
         </div>
         <div role="group" aria-label="Time period" className="flex flex-wrap gap-1.5">
           {PERIODS.map((p) => (
@@ -89,7 +89,7 @@ export function FinancialOverview({ currency }: Props) {
       {period === 'custom' && (
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-            Date From
+            Data od
             <Input
               type="date"
               value={customRange.from}
@@ -99,7 +99,7 @@ export function FinancialOverview({ currency }: Props) {
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-            Date To
+            Data do
             <Input
               type="date"
               value={customRange.to}
@@ -110,7 +110,7 @@ export function FinancialOverview({ currency }: Props) {
           </label>
           {range && range.from > range.to && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              The start date must be before the end date.
+              Data rozpoczęcia musi przypadać przed datą zakończenia.
             </p>
           )}
         </div>
@@ -147,23 +147,23 @@ export function FinancialOverview({ currency }: Props) {
 
       {summary.error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          Financial data could not be loaded. Try changing the period.
+          Nie udało się wczytać danych finansowych. Spróbuj zmienić okres.
         </p>
       )}
       {isEmpty && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">No data available for selected period.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Brak danych dla wybranego okresu.</p>
       )}
 
       <Card className="border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-            Revenue vs Expenses
+            Przychody a wydatki
           </CardTitle>
         </CardHeader>
         <CardContent className="h-72">
           {chartData.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
-              No data available for selected period.
+              Brak danych dla wybranego okresu.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">

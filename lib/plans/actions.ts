@@ -19,7 +19,7 @@ export const PLANS: PlanInfo[] = [
   {
     id:          'starter',
     name:        'Starter',
-    description: 'Plan podstawowy — fakturowanie (10/mies.), raporty ryzyka (limit), 1 użytkownik.',
+    description: 'Plan podstawowy — fakturowanie (10/mies.), raporty ryzyka (limit).',
     monthlyPrice: 0,
     limits: {
       vendors_limit:     25,
@@ -33,7 +33,7 @@ export const PLANS: PlanInfo[] = [
   {
     id:          'professional',
     name:        'Professional',
-    description: 'Pełne fakturowanie, nielimitowani dostawcy, nielimitowane raporty, do 3 użytkowników.',
+    description: 'Pełne fakturowanie, nielimitowani dostawcy, nielimitowane raporty.',
     monthlyPrice: 4900,
     limits: {
       vendors_limit:     null,

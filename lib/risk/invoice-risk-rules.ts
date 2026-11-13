@@ -56,10 +56,10 @@ function checkMissingNip(nip: string): RiskFinding[] {
   if (nip) return [];
   return [{
     ruleCode: 'missing_supplier_nip',
-    ruleName: 'Missing Supplier NIP',
+    ruleName: 'Brak numeru NIP dostawcy',
     severity: 'high',
     score: 80,
-    message: 'The supplier tax identifier (NIP) is missing from this invoice.',
+    message: 'Na tej fakturze brakuje numeru identyfikacji podatkowej (NIP) dostawcy.',
     details: {},
   }];
 }
@@ -68,10 +68,10 @@ function checkInvalidNip(nip: string): RiskFinding[] {
   if (!nip || isValidNip(nip)) return [];
   return [{
     ruleCode: 'invalid_supplier_nip',
-    ruleName: 'Invalid Supplier NIP',
+    ruleName: 'Nieprawidłowy NIP dostawcy',
     severity: 'critical',
     score: 100,
-    message: `Supplier NIP "${nip}" is invalid. A NIP must contain exactly 10 digits and a valid checksum.`,
+    message: `Numer NIP dostawcy „${nip}” jest nieprawidłowy. Numer NIP musi składać się z dokładnie 10 cyfr i zawierać poprawną sumę kontrolną.`,
     details: { nip, length: nip.length },
   }];
 }
@@ -93,10 +93,10 @@ function checkDuplicate(current: RiskInvoice, nip: string, history: RiskInvoice[
 
   return [{
     ruleCode: 'duplicate_invoice',
-    ruleName: 'Duplicate Invoice',
+    ruleName: 'Duplikat',
     severity: 'high',
     score: 100,
-    message: `A matching invoice already exists (number ${current.invoiceNumber}, same supplier, date and amount). Confidence 100%.`,
+    message: `Istnieje już pasująca faktura (numer ${current.invoiceNumber}, ten sam dostawca, data i kwota). Pewność: 100%.`,
     details: {
       matchedInvoiceIds: matches.map((m) => m.id),
       matchedFields: ['supplier_nip', 'invoice_number', 'invoice_date', 'gross_total'],
@@ -112,12 +112,12 @@ function checkBankAccountChange(current: RiskInvoice, approvedAccounts: string[]
   if (approved.includes(account)) return [];
 
   const message = approved.length > 0
-    ? `This supplier previously used other bank accounts. This invoice uses account ${maskAccount(account)}. Review before payment.`
-    : `This invoice uses account ${maskAccount(account)}, which is not on the supplier's approved bank accounts. Review before payment.`;
+    ? `Ten dostawca korzystał wcześniej z innych rachunków bankowych. Na tej fakturze wskazano rachunek ${maskAccount(account)}. Przed dokonaniem płatności prosimy o weryfikację..`
+    : `Na tej fakturze wskazano rachunek ${maskAccount(account)}$, który nie znajduje się na liście zatwierdzonych rachunków bankowych dostawcy. Przed dokonaniem płatności należy zweryfikować te dane.`;
 
   return [{
     ruleCode: 'supplier_bank_account_changed',
-    ruleName: 'Supplier Bank Account Changed',
+    ruleName: 'Zmiana rachunku bankowego dostawcy',
     severity: 'high',
     score: 75,
     message,
@@ -142,10 +142,10 @@ function checkMasterDataChange(current: RiskInvoice, nip: string, history: RiskI
 
   return [{
     ruleCode: 'supplier_master_data_changed',
-    ruleName: 'Supplier Master Data Changed',
+    ruleName: 'Zmieniono podstawowe dane dostawcy',
     severity: 'medium',
     score: 50,
-    message: `The supplier name on this invoice ("${current.sellerName}") differs from earlier invoices for the same NIP ("${knownNames[0]}").`,
+    message: `Nazwa dostawcy na tej fakturze („${current.sellerName}”) różni się od nazwy na wcześniejszych fakturach dla tego samego numeru NIP („${knownNames[0]}").`,
     details: { currentName: current.sellerName, previousNames: knownNames },
   }];
 }
@@ -154,10 +154,10 @@ function checkMissingBankAccount(current: RiskInvoice): RiskFinding[] {
   if (normalizeAccount(current.bankAccount)) return [];
   return [{
     ruleCode: 'missing_bank_account',
-    ruleName: 'Missing Bank Account',
+    ruleName: 'Brak numeru konta',
     severity: 'medium',
     score: 50,
-    message: 'No bank account number was found on this invoice.',
+    message: 'Na tej fakturze nie znaleziono numeru rachunku bankowego.',
     details: {},
   }];
 }
@@ -166,10 +166,10 @@ function checkHighValue(current: RiskInvoice): RiskFinding[] {
   if (current.totalAmount === null || current.totalAmount <= HIGH_VALUE_THRESHOLD) return [];
   return [{
     ruleCode: 'high_value_invoice',
-    ruleName: 'High-Value Invoice',
+    ruleName: 'Faktura na wysoką kwotę',
     severity: 'high',
     score: 75,
-    message: `Invoice total ${current.totalAmount.toFixed(2)} exceeds ${HIGH_VALUE_THRESHOLD.toLocaleString('en-US')}.`,
+    message: `Suma faktury ${current.totalAmount.toFixed(2)} przekracza ${HIGH_VALUE_THRESHOLD.toLocaleString('en-US')}.`,
     details: { totalAmount: current.totalAmount },
   }];
 }

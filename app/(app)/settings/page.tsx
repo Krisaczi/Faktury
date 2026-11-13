@@ -446,8 +446,8 @@ function BillingCard({ role }: { role: string }) {
                   <p className="text-xs text-slate-500 mt-1.5">
                     {isKnownPlan
                       ? (productType === 'professional'
-                        ? 'Maks. 3 użytkowników, nielimitowana liczba dostawców i generowanych raportów, możliwość wystawiania faktur w KSeF.'
-                        : '1 użytkownik, 25 dostawców, 10 faktur miesięcznie, 10 raportów miesięcznie.')
+                        ? 'Nielimitowana możliwość wystawiania faktur w KSeF, dowolna liczba dostawców i generowanych raportów, .'
+                        : '10 faktur miesięcznie, 25 dostawców, 10 raportów miesięcznie.')
                       : `Plan „${productType}” nie jest rozpoznawany. Skontaktuj się z właścicielem platformy.`}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">

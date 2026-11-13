@@ -380,9 +380,9 @@ export default function VendorsPage() {
       {!isLoading && vendors.length > 0 && (
         <Grid cols={{ base: 3 }} gap="3">
           {[
-            { label: 'Total',        value: vendors.length,                                        color: 'text-slate-900 dark:text-white' },
-            { label: 'Active',       value: vendors.filter((v) => v.status === 'active').length,       color: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Under Review', value: vendors.filter((v) => v.status === 'under_review').length, color: 'text-amber-600 dark:text-amber-400' },
+            { label: 'Liczba dostawców',        value: vendors.length,                                        color: 'text-slate-900 dark:text-white' },
+            { label: 'Aktywni',       value: vendors.filter((v) => v.status === 'active').length,       color: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'W trakcie weryfikacji', value: vendors.filter((v) => v.status === 'under_review').length, color: 'text-amber-600 dark:text-amber-400' },
           ].map(({ label, value, color }) => (
             <div key={label} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <p className={cn('text-2xl font-bold tabular', color)}>{value}</p>

@@ -187,9 +187,9 @@ export function DashboardClient({ firstName, companyName, currency }: Props) {
       iconColor: 'text-emerald-600 dark:text-emerald-400',
     },
     {
-      title:     'Risk Coverage',
+      title:     'Sprawdzone faktury',
       value:     `${100 - pctFlagged}%`,
-      sub:       'invoices cleared',
+      sub:       'poprawnych faktur',
       icon:      TrendingUp,
       iconBg:    'bg-slate-100 dark:bg-slate-800',
       iconColor: 'text-slate-600 dark:text-slate-400',

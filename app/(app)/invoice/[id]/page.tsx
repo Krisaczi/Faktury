@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
+import { pl } from 'date-fns/locale';
 import {
   ArrowLeft,
   Download,
@@ -89,6 +90,11 @@ import type { WhiteListStatus } from '@/hooks/use-invoice-detail';
 function fmt(date: string | null | undefined) {
   if (!date) return '—';
   try { return format(parseISO(date), 'MMM d, yyyy'); } catch { return date; }
+}
+
+function fmtFlagDate(date: string | null | undefined) {
+  if (!date) return '—';
+  try { return format(parseISO(date), 'd MMM yyyy, HH:mm', { locale: pl }); } catch { return date; }
 }
 
 function fmtDateTime(date: string | null | undefined) {
@@ -480,7 +486,7 @@ function FlagCard({
         <span className="text-sm font-medium text-slate-800 dark:text-slate-200 flex-1 min-w-0 truncate">
           {flag.message}
         </span>
-        <span className="text-xs text-slate-400 hidden sm:block flex-shrink-0">{fmt(flag.created_at)}</span>
+        <span className="text-xs text-slate-400 hidden sm:block flex-shrink-0">{fmtFlagDate(flag.created_at)}</span>
         {expanded
           ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
           : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -500,12 +506,12 @@ function FlagCard({
             </div>
             <div>
               <span className="font-medium text-slate-600 dark:text-slate-300">Utworzono: </span>
-              {fmt(flag.created_at)}
+              {fmtFlagDate(flag.created_at)}
             </div>
             {flag.acknowledged_at && (
               <div>
                 <span className="font-medium text-slate-600 dark:text-slate-300">Czynności: </span>
-                {fmt(flag.acknowledged_at)}
+                {fmtFlagDate(flag.acknowledged_at)}
               </div>
             )}
           </div>

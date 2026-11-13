@@ -55,7 +55,7 @@ const PRODUCTS: {
     price:    '149,00',
     icon:     Zap,
     color:    'blue',
-    features: ['1 użytkownik', '25 dostawców', '10 raportów / miesiąc', 'Import faktur XML', 'Analiza ryzyka'],
+    features: ['10 faktur miesięcznie', '25 dostawców', '10 raportów / miesiąc', 'Import faktur XML', 'Analiza ryzyka'],
   },
   {
     type:     'professional',
@@ -63,7 +63,7 @@ const PRODUCTS: {
     price:    '499,00',
     icon:     Star,
     color:    'amber',
-    features: ['Do 3 użytkowników', 'Nieograniczeni dostawcy', 'Nieograniczone raporty', 'Import faktur XML', 'Analiza ryzyka', 'Wystawianie faktur (KSeF)'],
+    features: ['Nieograniczona liczba faktur', 'Dowolna liczba dostawców', 'Nieograniczone raporty', 'Import faktur XML', 'Analiza ryzyka', ],
   },
 ];
 
